@@ -2,7 +2,7 @@
 
 Browse the edit script that retexo predicts for each of the 1,490 references of the Loci Similes benchmark: which reuse
 word comes from which source word, and by which operation (`COPY`, `INFLECT`, `SUBST`, `SPLIT`, `MERGE`; `FRAME`, `INS`
-and `DEL` for words without a link). Published with the documentation at https://julianschelb.github.io/retexo/demo/.
+and `DEL` for words without a link). Published with the [documentation](https://julianschelb.github.io/retexo/) at [julianschelb.github.io/retexo/demo](https://julianschelb.github.io/retexo/demo/).
 
 A static page (Vite, React, Tailwind CSS), built from the Hugging Face datasets.
 
