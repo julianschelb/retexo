@@ -83,7 +83,7 @@ nav:
   - Data Format: data-format.md
   - Labels: labels.md
   - CLI Reference: cli.md
-  - Demo: demo.md
+  - Web Demo: web-demo.md
   - API Reference:
     - Overview: api/index.md
     - Export: api/export.md

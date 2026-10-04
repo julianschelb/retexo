@@ -44,7 +44,7 @@ for link in pair["links"]:
 - [Data Format](data-format.md): the released predictions, field by field
 - [Labels](labels.md): the operations and what they mean
 - [CLI Reference](cli.md): `retexo export` and the annotation app
-- [Demo](demo.md): the web demo and how it is built
+- [Web Demo](web-demo.md): the web demo and how it is built
 - [API Reference](api/index.md)
 - [Development](development.md)
 

@@ -54,7 +54,12 @@ jobs:
           npm run build
 
       - name: Put the demo under /demo/
-        run: cp -r webapp/dist site/demo
+        run: |
+          mkdir -p site/demo
+          cp -r webapp/dist/. site/demo/
+          test -f site/demo/index.html
+          test -f site/demo/data/graph.json
+          test -f site/demo/data/scripts.json
 
       - uses: actions/configure-pages@v5
 
