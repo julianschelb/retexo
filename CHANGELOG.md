@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (unreleased)
+## v0.1.0 (2026-10-04)
 
 - Initial package, taken from the experiment repository: the stretch-and-link pointer, the synthetic-pair generator,
   the active-learning loop, the baselines it is compared with, and the scorer.

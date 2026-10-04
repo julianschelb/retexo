@@ -1,6 +1,7 @@
 name: Publish to PyPI
 
-# Runs when a GitHub release is published (tag v<version>), or by hand to try the build on TestPyPI.
+# Runs when a GitHub release is published (tag v<version>) and uploads to PyPI; by hand it can only try TestPyPI.
+# The pypi environment requires the owner's approval and accepts only v* tags (Settings, Environments).
 #
 # One-time setup, on pypi.org (and test.pypi.org for the manual run):
 #   Account -> Publishing -> "Add a new pending publisher"
@@ -15,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Where to publish"
+        description: "Where to publish (the real PyPI is reached only through a release)"
         type: choice
-        options: [testpypi, pypi]
+        options: [testpypi]
         default: testpypi
 
 jobs:
@@ -74,7 +75,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: build
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
