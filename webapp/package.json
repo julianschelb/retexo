@@ -1,5 +1,5 @@
 {
-  "name": "loci-similes-demo-page",
+  "name": "retexo-review-app",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,8 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "d3-force": "^3.0.0",
-    "d3-polygon": "^3.0.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

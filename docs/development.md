@@ -17,7 +17,7 @@ poe test-cov      # pytest with coverage
 poe lint          # ruff
 poe docs          # serve the docs at http://127.0.0.1:8000
 poe docs-build    # build the docs to site/
-poe webapp        # run the demo page in development mode
+poe webapp        # run the review app in development mode
 ```
 
 ## Tests
@@ -38,7 +38,7 @@ dependency.
 ## Documentation
 
 The docs are built with [MkDocs](https://www.mkdocs.org/), the Material theme and mkdocstrings, from `docs/` and the
-docstrings (Google style). The demo page in `webapp/` is built separately and published under `/demo/` next to them.
+docstrings (Google style). The review app in `webapp/` is built separately and published under `/demo/` next to them.
 
 ## Commits and releases
 

@@ -1,4 +1,4 @@
-"""The demo's data step: released records in, the viewer's payload out."""
+"""The review app's data step: released records and the labels dataset in, the app's records out."""
 
 import importlib.util
 import json
@@ -23,39 +23,52 @@ def prepare():
 
 
 @pytest.fixture(scope="module")
-def frame():
+def scripts():
     return pd.DataFrame(list(read_predictions(FIXTURE)))
 
 
-def test_every_pair_becomes_one_script(prepare, frame):
-    payload = prepare.build_scripts(frame)
-    assert payload["model"]["pairs"] == len(frame)
-    assert [p["id"] for p in payload["pairs"]] == list(frame.sort_values(["benchmark_id", "id"])["id"])
+@pytest.fixture(scope="module")
+def labels(scripts):
+    """A labels frame with the columns the app reads, one row per reference."""
+    rows = []
+    for record in scripts.itertuples(index=False):
+        row = {"id": record.benchmark_id}
+        for prefix, side in (("corpus", record.source), ("query", record.reuse)):
+            text = " ".join(side["tokens"])
+            row.update({f"{prefix}_text": text, f"{prefix}_text_original": text.upper(), f"{prefix}_text_english": None})
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
-def test_script_lists_have_one_entry_per_later_word(prepare, frame):
-    for pair in prepare.build_scripts(frame)["pairs"]:
-        n = len(pair["later"])
-        assert all(len(pair["pred"][key]) == n for key in ("links", "ops", "relations", "confidence"))
+def test_every_script_becomes_one_record(prepare, scripts, labels):
+    records = prepare.build_records(scripts, labels)
+    assert [r["id"] for r in records] == list(scripts.sort_values(["benchmark_id", "id"])["id"])
 
 
-def test_ops_follow_the_records(prepare, frame):
-    payload = {p["id"]: p for p in prepare.build_scripts(frame)["pairs"]}
-    for record in frame.itertuples(index=False):
-        script = payload[record.id]["pred"]
-        for link in record.links:
-            assert script["links"][link["reuse"]] == link["source"]
-            assert script["ops"][link["reuse"]] == link["label"]
-        for span in record.frame:
-            assert all(script["ops"][r] == "FRAME" for r in range(span["start"], span["end"]))
-        for r in record.insertions:
-            assert script["ops"][r] == "INS" and script["links"][r] == -1
+def test_a_record_has_what_the_app_reads(prepare, scripts, labels):
+    for record in prepare.build_records(scripts, labels):
+        assert record["pair_label"] in ("cit", "cf")
+        for side in (record["source"], record["reuse"]):
+            assert set(side) == {"author", "work", "citation", "tokens", "text", "text_original", "text_english"}
+        for link in record["pred"]["links"]:
+            assert set(link) == {"r", "s", "op", "p", "relation"}
+            assert 0 <= link["r"] < len(record["reuse"]["tokens"]) and 0 <= link["s"] < len(record["source"]["tokens"])
 
 
-def test_the_payload_is_json(prepare, frame):
-    json.dumps(prepare.build_scripts(frame))
+def test_links_and_spans_follow_the_released_record(prepare, scripts, labels):
+    payload = {r["id"]: r for r in prepare.build_records(scripts, labels)}
+    for released in scripts.itertuples(index=False):
+        pred = payload[released.id]["pred"]
+        assert [(l["r"], l["s"], l["op"]) for l in pred["links"]] == [
+            (l["reuse"], l["source"], l["label"]) for l in released.links]
+        assert [(s["start"], s["end"]) for s in pred["frame_spans"]] == [(s["start"], s["end"]) for s in released.frame]
 
 
-def test_citations_lose_their_angle_brackets(prepare):
-    assert prepare._cite("<verg. aen. 6.847.1>") == "verg. aen. 6.847.1"
-    assert prepare._cite(None) == ""
+def test_texts_come_from_the_labels_and_missing_ones_are_null(prepare, scripts, labels):
+    record = prepare.build_records(scripts, labels)[0]
+    assert record["source"]["text_original"] == record["source"]["text"].upper()
+    assert record["source"]["text_english"] is None
+
+
+def test_the_records_are_json(prepare, scripts, labels):
+    json.dumps(prepare.build_records(scripts, labels), ensure_ascii=False)

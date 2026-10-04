@@ -1,6 +1,6 @@
 name: Deploy docs and demo
 
-# The documentation is the site root; the demo page is built from webapp/ and published under /demo/.
+# The documentation is the site root; the review app is built from webapp/ and published under /demo/.
 # Settings -> Pages -> Source must be "GitHub Actions".
 
 on:
@@ -39,7 +39,7 @@ jobs:
           pip install mkdocs mkdocs-material "mkdocstrings[python]"
           mkdocs build --strict
 
-      - name: Prepare the demo data from the Hugging Face Hub
+      - name: Prepare the app's data from the Hugging Face Hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}   # optional; the datasets are public
         run: |
@@ -47,19 +47,18 @@ jobs:
           python webapp/scripts/download_data.py --data-dir webapp/data
           python webapp/scripts/prepare_data.py --data-dir webapp/data --out-dir webapp/public/data
 
-      - name: Build the demo page
+      - name: Build the review app
         working-directory: webapp
         run: |
           npm ci
           npm run build
 
-      - name: Put the demo under /demo/
+      - name: Put the review app under /demo/
         run: |
           mkdir -p site/demo
           cp -r webapp/dist/. site/demo/
           test -f site/demo/index.html
-          test -f site/demo/data/graph.json
-          test -f site/demo/data/scripts.json
+          test -f site/demo/data/records.jsonl
 
       - uses: actions/configure-pages@v5
 

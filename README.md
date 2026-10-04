@@ -18,7 +18,7 @@ annotator corrects.
 
 - **Predicted edit scripts** for all 1,490 references of the [Loci Similes](https://arxiv.org/abs/2601.07533) benchmark:
   [Hugging Face dataset](https://huggingface.co/datasets/julian-schelb/latin-classical-intertextuality-edit-scripts)
-- **Interactive demo** with the script of every reference drawn as curves between the passages:
+- **Review app** to browse the script of every reference, drawn as arrows between the passages:
   [julianschelb.github.io/retexo/demo](https://julianschelb.github.io/retexo/demo/)
 - **Documentation:** [julianschelb.github.io/retexo](https://julianschelb.github.io/retexo/)
 
@@ -67,7 +67,7 @@ src/retexo_gui/     Gradio demo and annotation app (gui extra)
 tests/              pytest suite
 examples/           notebooks on the operations, the generator, the passage class and the decoder
 docs/               documentation (MkDocs)
-webapp/             the demo page (React, Vite), published under /demo/
+webapp/             the review app (React, Vite), published under /demo/
 ```
 
 The experiments behind the paper live in a separate repository that installs retexo as a dependency.

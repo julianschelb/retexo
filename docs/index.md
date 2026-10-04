@@ -16,7 +16,7 @@ annotator corrects.
 - **[Predicted edit scripts](data-format.md)** for all 1,490 references of the
   [Loci Similes](https://huggingface.co/collections/julian-schelb/datasets-for-latin-intertextuality-search) benchmark,
   published on the Hugging Face Hub.
-- **[An interactive demo](https://julianschelb.github.io/retexo/demo/)** that draws the script of every reference as curves between the two passages.
+- **[A review app](https://julianschelb.github.io/retexo/demo/)** to browse the script of every reference, drawn as arrows between the two passages.
 - **The `retexo` package**: the model, the synthetic-pair generator, the active-learning loop, the baselines it is
   compared with, and the scorer.
 
@@ -44,7 +44,7 @@ for link in pair["links"]:
 - [Data Format](data-format.md): the released predictions, field by field
 - [Labels](labels.md): the operations and what they mean
 - [CLI Reference](cli.md): `retexo export` and the annotation app
-- [Web Demo](web-demo.md): the web demo and how it is built
+- [Review App](web-demo.md): the web app and how it is built
 - [API Reference](api/index.md)
 - [Development](development.md)
 

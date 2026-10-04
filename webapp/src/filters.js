@@ -1,60 +1,67 @@
-// Filter model shared by the graph, the filter bar and the document browser.
-export const EMPTY_FILTERS = { qAuthor: null, qWork: null, sAuthor: null, sWork: null, type: null };
+// Filtering and sorting of the pair list.
+export const EMPTY_FILTERS = {
+  query: "",
+  label: "all",          // all | cit | cf
+  sourceAuthor: "", sourceWork: "", reuseAuthor: "", reuseWork: "",
+  hasSubst: false, hasInflect: false,   // in the predicted script
+  sort: "id",
+};
 
-/** Convert a graph selection (author / work / edge) into filters. */
-export function filtersFromSelection(sel, graph) {
-  if (!sel) return EMPTY_FILTERS;
-  const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
-  if (sel.kind === "author") {
-    return sel.side === "query" ? { ...EMPTY_FILTERS, qAuthor: sel.id } : { ...EMPTY_FILTERS, sAuthor: sel.id };
+export const SORTS = [
+  ["id", "Pair id"],
+  ["confidence", "Least confident prediction first"],
+  ["source", "Source citation"],
+  ["reuse", "Reuse citation"],
+  ["length", "Longest reuse passage first"],
+];
+
+export function activeCount(f) {
+  return ["label", "sourceAuthor", "sourceWork", "reuseAuthor", "reuseWork", "hasSubst", "hasInflect"]
+    .filter((k) => (k === "label" ? f.label !== "all" : Boolean(f[k]))).length;
+}
+
+// Sorted distinct values of one side's author, or its works (under an author, when one is chosen).
+export function options(records, side, field, author = "") {
+  const values = new Set();
+  for (const r of records) {
+    if (field === "work" && author && r[side].author !== author) continue;
+    if (r[side][field]) values.add(r[side][field]);
   }
-  if (sel.kind === "work") {
-    const n = byId[sel.id];
-    return n.side === "query"
-      ? { ...EMPTY_FILTERS, qAuthor: n.author, qWork: n.work }
-      : { ...EMPTY_FILTERS, sAuthor: n.author, sWork: n.work };
-  }
-  const q = byId[sel.source];
-  const s = byId[sel.target];
-  return { ...EMPTY_FILTERS, qAuthor: q.author, qWork: q.work, sAuthor: s.author, sWork: s.work };
+  return [...values].sort((a, b) => a.localeCompare(b));
 }
 
-/** Derive the graph highlight from the filters. */
-export function selectionFromFilters(f, graph) {
-  if (!graph) return null;
-  const name = (id) => graph.authors.find((a) => a.id === id)?.name ?? id;
-  if (f.qWork && f.sWork) return { kind: "edge", source: `query:${f.qWork}`, target: `source:${f.sWork}`, label: `${f.qWork} → ${f.sWork}` };
-  if (f.qWork) return { kind: "work", id: `query:${f.qWork}`, label: f.qWork };
-  if (f.sWork) return { kind: "work", id: `source:${f.sWork}`, label: f.sWork };
-  if (f.qAuthor) return { kind: "author", id: f.qAuthor, side: "query", label: name(f.qAuthor) };
-  if (f.sAuthor) return { kind: "author", id: f.sAuthor, side: "source", label: name(f.sAuthor) };
-  return null;
+const hasOp = (record, op) => (record.pred?.links ?? []).some((e) => e.op === op);
+
+function matchesQuery(record, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return [record.id, record.source.citation, record.reuse.citation, record.source.text, record.reuse.text]
+    .some((s) => s?.toLowerCase().includes(q));
 }
 
-export function applyFilters(refs, f) {
-  return refs.filter(
-    (r) =>
-      (!f.qAuthor || r.q.author === f.qAuthor) &&
-      (!f.qWork || r.q.work === f.qWork) &&
-      (!f.sAuthor || r.s.author === f.sAuthor) &&
-      (!f.sWork || r.s.work === f.sWork) &&
-      (!f.type || r.type === f.type)
-  );
-}
+const minConfidence = (r) => Math.min(1, ...(r.pred?.links ?? []).map((e) => e.p ?? 1));
 
-// URL hash <-> filters, so filtered views can be shared.
-const KEYS = ["qAuthor", "qWork", "sAuthor", "sWork", "type"];
+const COMPARE = {
+  id: (a, b) => a.id.localeCompare(b.id),
+  confidence: (a, b) => minConfidence(a.record) - minConfidence(b.record),
+  source: (a, b) => a.record.source.citation.localeCompare(b.record.source.citation, undefined, { numeric: true }),
+  reuse: (a, b) => a.record.reuse.citation.localeCompare(b.record.reuse.citation, undefined, { numeric: true }),
+  length: (a, b) => b.record.reuse.tokens.length - a.record.reuse.tokens.length,
+};
 
-export function filtersToHash(f) {
-  const p = new URLSearchParams();
-  KEYS.forEach((k) => f[k] && p.set(k, f[k]));
-  const s = p.toString();
-  return s ? `#${s}` : "";
-}
-
-export function filtersFromHash(hash) {
-  const p = new URLSearchParams(hash.replace(/^#/, ""));
-  const f = { ...EMPTY_FILTERS };
-  KEYS.forEach((k) => { if (p.get(k)) f[k] = p.get(k); });
-  return f;
+export function applyFilters(records, f) {
+  const kept = records.filter((r) =>
+    matchesQuery(r, f.query) &&
+    (f.label === "all" || r.pair_label === f.label) &&
+    (!f.sourceAuthor || r.source.author === f.sourceAuthor) &&
+    (!f.sourceWork || r.source.work === f.sourceWork) &&
+    (!f.reuseAuthor || r.reuse.author === f.reuseAuthor) &&
+    (!f.reuseWork || r.reuse.work === f.reuseWork) &&
+    (!f.hasSubst || hasOp(r, "SUBST")) &&
+    (!f.hasInflect || hasOp(r, "INFLECT")));
+  const compare = COMPARE[f.sort] ?? COMPARE.id;
+  // ties fall back to the id, so the order is stable
+  return kept.map((record) => ({ id: record.id, record }))
+    .sort((a, b) => compare(a, b) || a.id.localeCompare(b.id))
+    .map((x) => x.record);
 }

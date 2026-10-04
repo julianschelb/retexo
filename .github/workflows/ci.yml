@@ -55,7 +55,7 @@ jobs:
       - run: mkdocs build --strict
 
   webapp:
-    name: Demo page build
+    name: Review app build
     runs-on: ubuntu-latest
     defaults:
       run:
