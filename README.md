@@ -63,7 +63,7 @@ See the [documentation](https://julianschelb.github.io/retexo/labels/) for the c
 
 ```
 src/retexo/         the package: model, generator, active learning, baselines, scorer
-src/retexo_gui/     annotation and review app (gui extra)
+src/retexo_gui/     Gradio demo and annotation app (gui extra)
 tests/              pytest suite
 examples/           notebooks on the operations, the generator, the passage class and the decoder
 docs/               documentation (MkDocs)

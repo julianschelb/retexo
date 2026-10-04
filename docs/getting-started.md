@@ -14,7 +14,7 @@ Optional extras:
 |---|---|---|
 | `lexical` | CLTK, spaCy, Stanza, NLTK, gensim | the symbolic typer and the lexical evidence of the model |
 | `llm` | Anthropic client, PEFT | the language-model baselines |
-| `gui` | Gradio | the annotation and review app |
+| `gui` | Gradio | the Gradio demo and the annotation app |
 | `plots` | Matplotlib | learning-curve plots |
 
 ```bash

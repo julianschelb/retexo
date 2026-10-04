@@ -676,6 +676,7 @@ def main():
                              "assignment (+0.076 macro); 'argmax' is the "
                              "unconstrained behaviour it replaced")
     parser.add_argument("--share", action="store_true")
+    parser.add_argument("--host", default="127.0.0.1", help="interface to listen on; 0.0.0.0 exposes the demo to the network")
     parser.add_argument("--port", type=int, default=7860)
     args = parser.parse_args()
     engine = Engine(args.model or None, args.stepwise or None,
@@ -687,7 +688,7 @@ def main():
     if engine.pointer:
         print(f"pointer: {engine.pointer.name}", flush=True)
     build(engine).launch(share=args.share, server_port=args.port,
-                         server_name="0.0.0.0")
+                         server_name=args.host)
     return 0
 
 

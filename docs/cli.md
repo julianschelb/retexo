@@ -25,9 +25,23 @@ is a record that contradicts itself, for example a deletion that a link claims.
 
 ## `retexo-gui`
 
-The annotation and review app, which needs the `gui` extra:
+A Gradio demo: two Latin passages in, an edit script and an alignment out. It runs with the symbolic typer alone, or with
+a trained typed-pointer checkpoint. It needs the `gui` extra.
 
 ```bash
 pip install "retexo[gui] @ git+https://github.com/julianschelb/retexo"
-retexo-gui
+retexo-gui                                  # the symbolic typer alone
+retexo-gui --typed-pointer runs/ours_f4     # with a trained checkpoint
+```
+
+It listens on `127.0.0.1:7860` by default; `--host 0.0.0.0` exposes it to the network.
+
+## Annotation app
+
+A Gradio app in which an annotator corrects pre-annotated scripts word by word, with the model's proposal and its
+confidence beside every cell. It reads the word-level annotation from `$RETEXO_HOME/data/gold_full`, which is not part of
+this repository, and writes the corrections per annotator.
+
+```bash
+python -m retexo_gui.annotate --annotator NAME
 ```
