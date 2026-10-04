@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 from huggingface_hub import snapshot_download
+from huggingface_hub.errors import RepositoryNotFoundError
 
 DATASETS = {
     "corpus": "julian-schelb/latin-classical-intertextuality-corpus",
@@ -21,17 +22,27 @@ DATASETS = {
 }
 
 
+#: The page still builds without these; its section says that they are missing.
+OPTIONAL = {"edit_scripts"}
+
+
 def download(data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     token = os.environ.get("HF_TOKEN") or None  # optional; datasets are public
     for name, repo_id in DATASETS.items():
         print(f"Downloading {repo_id} ...")
-        local = snapshot_download(
-            repo_id=repo_id,
-            repo_type="dataset",
-            allow_patterns=["data/*.parquet"],
-            token=token,
-        )
+        try:
+            local = snapshot_download(
+                repo_id=repo_id,
+                repo_type="dataset",
+                allow_patterns=["data/*.parquet"],
+                token=token,
+            )
+        except RepositoryNotFoundError:
+            if name not in OPTIONAL:
+                raise
+            print(f"  not found on the Hub; the page is built without {name}")
+            continue
         parts = sorted(Path(local).glob("data/*.parquet"))
         df = pd.concat((pd.read_parquet(p) for p in parts), ignore_index=True)
         out = data_dir / f"{name}.parquet"

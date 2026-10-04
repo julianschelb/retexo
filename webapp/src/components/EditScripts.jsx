@@ -12,7 +12,7 @@ const OPS = {
 };
 const ORDER = ["COPY", "INFLECT", "SUBST", "SPLIT", "MERGE", "FRAME", "INS"];
 
-const cite = (id) => id.replace(/^p0*/, "pair ");
+const cite = (id) => `pair ${parseInt(id.replace(/^p/, ""), 10)}`;
 
 function Chip({ op, children }) {
   const o = OPS[op] ?? OPS.INS;
@@ -130,6 +130,7 @@ export default function EditScripts({ data }) {
     return () => window.removeEventListener("resize", measure);
   }, [pair, source]);
 
+  if (data === false) return <p className="text-muted">The predicted edit scripts are not part of this build.</p>;
   if (!data) return <p className="text-muted">Loading edit scripts…</p>;
   if (!pair) return <p className="text-muted">No pairs.</p>;
 

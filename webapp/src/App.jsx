@@ -31,7 +31,7 @@ export default function App() {
     load("graph.json").then(setGraph).catch(() => {});
     load("references.json").then(setRefs).catch(() => {});
     load("docs.json").then(setDocsIndex).catch(() => {});
-    load("scripts.json").then(setScripts).catch(() => {});
+    load("scripts.json").then((d) => setScripts(d ?? false)).catch(() => setScripts(false));
   }, []);
 
   // Keep the URL hash in sync so filtered views can be shared.
