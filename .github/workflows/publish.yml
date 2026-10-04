@@ -1,0 +1,87 @@
+name: Publish to PyPI
+
+# Runs when a GitHub release is published (tag v<version>), or by hand to try the build on TestPyPI.
+#
+# One-time setup, on pypi.org (and test.pypi.org for the manual run):
+#   Account -> Publishing -> "Add a new pending publisher"
+#   Project name: retexo   Owner: julianschelb   Repository: retexo
+#   Workflow: publish.yml  Environment: pypi (TestPyPI: testpypi)
+# and create the matching environments under Settings -> Environments in the GitHub repository.
+# No token is stored anywhere: the upload is authorized by GitHub's OIDC identity (trusted publishing).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to publish"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check that the tag matches the package version
+        if: github.event_name == 'release'
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          test "v$version" = "${{ github.event.release.tag_name }}" || { echo "tag ${{ github.event.release.tag_name }} does not match version $version"; exit 1; }
+
+      - name: Build
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+
+      - name: Install the wheel into a clean environment and import it
+        run: |
+          python -m venv /tmp/check
+          /tmp/check/bin/pip install --quiet --find-links dist --no-deps retexo
+          /tmp/check/bin/python -c "import retexo, retexo.export, retexo.cli; print('retexo', retexo.__version__)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

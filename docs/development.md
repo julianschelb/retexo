@@ -40,7 +40,22 @@ dependency.
 The docs are built with [MkDocs](https://www.mkdocs.org/), the Material theme and mkdocstrings, from `docs/` and the
 docstrings (Google style). The review app in `webapp/` is built separately and published under `/demo/` next to them.
 
-## Commits and releases
+## Commits
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). Versioning is configured for
-`python-semantic-release` in `pyproject.toml`; the release workflow needs a `GH_TOKEN` secret and is not enabled yet.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
+
+## Releasing
+
+Releases are manual and published to PyPI by GitHub Actions through trusted publishing, so no token is stored.
+
+1. Set the new version in `pyproject.toml` and in `src/retexo/__init__.py` (a test checks that they agree) and add a
+   section for it to `CHANGELOG.md`.
+2. Merge to `main` once CI is green.
+3. Create a GitHub release with the tag `v<version>`. The `Publish to PyPI` workflow builds the sdist and wheel, installs
+   the wheel into a clean environment to check that it imports, and uploads it.
+
+To try a build first, run the workflow by hand and choose `testpypi`.
+
+One-time setup: add retexo as a pending trusted publisher on pypi.org (and on test.pypi.org), with the owner
+`julianschelb`, the repository `retexo`, the workflow `publish.yml` and the environment `pypi` (`testpypi` for the test
+index), and create the same environments under Settings, Environments in the GitHub repository.

@@ -11,6 +11,19 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10,<3.15"
 keywords = ["latin", "intertextuality", "text reuse", "word alignment", "edit scripts", "digital humanities"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Latin",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
 dependencies = [
     "numpy (>=1.24.0,<3.0.0)",
     "scipy (>=1.10.0,<2.0.0)",
@@ -28,6 +41,8 @@ Documentation = "https://julianschelb.github.io/retexo/"
 Repository = "https://github.com/julianschelb/retexo"
 Demo = "https://julianschelb.github.io/retexo/demo/"
 Dataset = "https://huggingface.co/datasets/julian-schelb/latin-classical-intertextuality-edit-scripts"
+Changelog = "https://github.com/julianschelb/retexo/blob/main/CHANGELOG.md"
+Issues = "https://github.com/julianschelb/retexo/issues"
 
 [project.optional-dependencies]
 gui = [
@@ -57,7 +72,8 @@ dev = [
     "mkdocstrings[python] (>=0.24.0)",
     "ruff (>=0.8.0)",
     "pre-commit (>=3.5.0)",
-    "python-semantic-release (>=9.0.0)",
+    "build",
+    "twine",
 ]
 
 [project.scripts]
@@ -100,26 +116,3 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E9", "F63", "F7", "F82"]
-
-# ---------- Semantic Release ----------
-
-[tool.semantic_release]
-version_toml = ["pyproject.toml:project.version"]
-version_variables = ["src/retexo/__init__.py:__version__"]
-branch = "main"
-build_command = "pip install build && python -m build"
-commit_message = "chore(release): v{version} [skip ci]"
-tag_format = "v{version}"
-
-[tool.semantic_release.changelog]
-exclude_commit_patterns = [
-    "chore\\(release\\):",
-]
-
-[tool.semantic_release.remote]
-type = "github"
-token = { env = "GH_TOKEN" }
-
-[tool.semantic_release.publish]
-dist_glob_patterns = ["dist/*"]
-upload_to_vcs_release = true
