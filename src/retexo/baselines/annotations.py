@@ -13,7 +13,7 @@ not the same word, a MORPH that shares no stem). ``AnnotationAgreement``
 scores one set of records against another: links, operations given a shared
 link, frames.
 
-    python -m retexo.baselines.annotations data/gold_full/corrections/claude_2026-09-15.jsonl
+    python -m retexo.baselines.annotations data/gold_full/corrections/<annotator>.jsonl
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class AnnotationReader:
     Example:
         ```python
         gold = {r.id: r for r in RecordCodec.gold_records()}
-        records, skipped = AnnotationReader(gold).load(Path("data/gold_full/corrections/claude_2026-09-15.jsonl"))
+        records, skipped = AnnotationReader(gold).load(Path("data/gold_full/corrections/<annotator>.jsonl"))
         ```
     """
 
