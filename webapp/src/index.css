@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Design tokens: palette of julian-schelb.com */
+@theme {
+  --font-sans: "Nunito", ui-rounded, "SF Pro Rounded", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: #fcfbf7;
+  --color-surface: #ffffff;
+  --color-ink: #292433;
+  --color-ink-2: #4c4457;
+  --color-muted: #837c8e;
+  --color-line: #e9e5dc;
+  --color-line-soft: #f2efe8;
+  --color-accent: #5b4cb0;
+  --color-accent-soft: #ece8f8;
+  --color-pop: #c05f21;
+  --color-pop-soft: #fdeeda;
+
+  --shadow-card: 0 2px 4px rgba(41, 36, 51, 0.05), 0 12px 28px rgba(41, 36, 51, 0.08);
+  --shadow-card-lg: 0 6px 14px rgba(41, 36, 51, 0.08), 0 24px 55px rgba(41, 36, 51, 0.13);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  font-size: 17px;
+  line-height: 1.62;
+  font-weight: 500;
+}

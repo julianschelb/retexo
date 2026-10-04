@@ -1,0 +1,73 @@
+name: Deploy docs and demo
+
+# The documentation is the site root; the demo page is built from webapp/ and published under /demo/.
+# Settings -> Pages -> Source must be "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Build the documentation
+        run: |
+          pip install mkdocs mkdocs-material "mkdocstrings[python]"
+          mkdocs build --strict
+
+      - name: Prepare the demo data from the Hugging Face Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}   # optional; the datasets are public
+        run: |
+          pip install -r webapp/requirements.txt
+          python webapp/scripts/download_data.py --data-dir webapp/data
+          python webapp/scripts/prepare_data.py --data-dir webapp/data --out-dir webapp/public/data
+
+      - name: Build the demo page
+        working-directory: webapp
+        run: |
+          npm ci
+          npm run build
+
+      - name: Put the demo under /demo/
+        run: cp -r webapp/dist site/demo
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

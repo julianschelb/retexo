@@ -1,0 +1,125 @@
+[project]
+name = "retexo"
+version = "0.1.0"
+description = "Retexo explains Latin text reuse word by word: it aligns a reusing passage to its source and names the operation behind every link."
+authors = [
+    {name = "Julian Schelb", email = "julian.schelb@uni-konstanz.de"},
+    {name = "Michael Wittweiler", email = "michael.wittweiler@sglp.uzh.ch"},
+    {name = "Marie Revellio"},
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10,<3.15"
+keywords = ["latin", "intertextuality", "text reuse", "word alignment", "edit scripts", "digital humanities"]
+dependencies = [
+    "numpy (>=1.24.0,<3.0.0)",
+    "scipy (>=1.10.0,<2.0.0)",
+    "pandas (>=2.0.0,<3.0.0)",
+    "scikit-learn (>=1.3.0,<2.0.0)",
+    "torch (>=2.0.0,<3.0.0)",
+    "transformers (>=4.30.0,<5.0.0)",
+    "huggingface-hub (>=0.20.0)",
+    "locisimiles (>=2.1.3)",
+]
+
+[project.urls]
+Homepage = "https://julianschelb.github.io/retexo/"
+Documentation = "https://julianschelb.github.io/retexo/"
+Repository = "https://github.com/julianschelb/retexo"
+Demo = "https://julianschelb.github.io/retexo/demo/"
+Dataset = "https://huggingface.co/datasets/julian-schelb/latin-classical-intertextuality-edit-scripts"
+
+[project.optional-dependencies]
+gui = [
+    "gradio (>=5.49.1)",
+]
+lexical = [
+    # The symbolic typer and the lexical evidence look words up in these resources.
+    "cltk (>=1.1.0,<2.0.0) ; python_version < '3.13'",
+    "spacy (>=3.5.0,<4.0.0)",
+    "stanza (>=1.7.0)",
+    "nltk (>=3.8.0)",
+    "gensim (>=4.3.0,<5.0.0)",
+]
+llm = [
+    "anthropic (>=0.30.0)",
+    "peft (>=0.10.0)",
+]
+plots = [
+    "matplotlib (>=3.7.0)",
+]
+dev = [
+    "pytest (>=8.0.0,<10.0.0)",
+    "pytest-cov (>=4.0.0)",
+    "poethepoet (>=0.24.0)",
+    "mkdocs (>=1.5.0)",
+    "mkdocs-material (>=9.0.0)",
+    "mkdocstrings[python] (>=0.24.0)",
+    "ruff (>=0.8.0)",
+    "pre-commit (>=3.5.0)",
+    "python-semantic-release (>=9.0.0)",
+]
+
+[project.scripts]
+retexo = "retexo.cli:main"
+retexo-gui = "retexo_gui.app:main"
+
+[tool.poetry]
+packages = [
+    {include = "retexo", from = "src"},
+    {include = "retexo_gui", from = "src"},
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
+pythonpath = ["src"]
+
+[tool.poe.tasks]
+test = "pytest"
+test-cov = "pytest --cov=retexo --cov-report=term-missing"
+lint = "ruff check src/ tests/"
+docs = "mkdocs serve"
+docs-build = "mkdocs build"
+webapp = "npm --prefix webapp run dev"
+
+# ---------- Ruff ----------
+# The research code was written without a formatter; CI checks for errors only (syntax errors, undefined names).
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
+
+# ---------- Semantic Release ----------
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["src/retexo/__init__.py:__version__"]
+branch = "main"
+build_command = "pip install build && python -m build"
+commit_message = "chore(release): v{version} [skip ci]"
+tag_format = "v{version}"
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = [
+    "chore\\(release\\):",
+]
+
+[tool.semantic_release.remote]
+type = "github"
+token = { env = "GH_TOKEN" }
+
+[tool.semantic_release.publish]
+dist_glob_patterns = ["dist/*"]
+upload_to_vcs_release = true
