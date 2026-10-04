@@ -3,6 +3,7 @@
 [![CI](https://github.com/julianschelb/retexo/actions/workflows/ci.yml/badge.svg)](https://github.com/julianschelb/retexo/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-julianschelb.github.io%2Fretexo-blue)](https://julianschelb.github.io/retexo/)
 [![Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20dataset-edit--scripts-yellow)](https://huggingface.co/datasets/julian-schelb/latin-classical-intertextuality-edit-scripts)
+[![PyPI](https://img.shields.io/pypi/v/retexo)](https://pypi.org/project/retexo/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/julianschelb/retexo/blob/main/LICENSE)
 
 **Word-level explanations of text reuse in Latin literature.**
@@ -25,7 +26,7 @@ annotator corrects.
 ## Quick start
 
 ```bash
-pip install "retexo @ git+https://github.com/julianschelb/retexo"
+pip install retexo
 ```
 
 Read the predictions, with the Hugging Face `datasets` library:

@@ -5,7 +5,7 @@
 Retexo needs Python 3.10 or later.
 
 ```bash
-pip install "retexo @ git+https://github.com/julianschelb/retexo"
+pip install retexo
 ```
 
 Optional extras:
@@ -18,7 +18,7 @@ Optional extras:
 | `plots` | Matplotlib | learning-curve plots |
 
 ```bash
-pip install "retexo[lexical] @ git+https://github.com/julianschelb/retexo"
+pip install "retexo[lexical]"
 ```
 
 For development, see [Development](development.md).

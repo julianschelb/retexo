@@ -29,7 +29,7 @@ A Gradio demo: two Latin passages in, an edit script and an alignment out. It ru
 a trained typed-pointer checkpoint. It needs the `gui` extra.
 
 ```bash
-pip install "retexo[gui] @ git+https://github.com/julianschelb/retexo"
+pip install "retexo[gui]"
 retexo-gui                                  # the symbolic typer alone
 retexo-gui --typed-pointer runs/ours_f4     # with a trained checkpoint
 ```

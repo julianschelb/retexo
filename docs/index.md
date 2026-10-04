@@ -23,7 +23,7 @@ annotator corrects.
 ## Quick start
 
 ```bash
-pip install "retexo @ git+https://github.com/julianschelb/retexo"
+pip install retexo
 ```
 
 Read the predictions, with the Hugging Face `datasets` library:
