@@ -81,7 +81,9 @@ class SpanEncoder:
         ```
     """
 
-    def __init__(self, model_name: str, *, device: str = "cpu", max_length: int = DEFAULT_MAX_LENGTH):
+    def __init__(
+        self, model_name: str, *, device: str = "cpu", max_length: int = DEFAULT_MAX_LENGTH
+    ):
         self.model_name = model_name
         self.device = device
         self.max_length = max_length
@@ -102,10 +104,12 @@ class SpanEncoder:
         return self._model.parameters()
 
     def train(self) -> None:
-        self._ensure_backend(); self._model.train()
+        self._ensure_backend()
+        self._model.train()
 
     def eval(self) -> None:
-        self._ensure_backend(); self._model.eval()
+        self._ensure_backend()
+        self._model.eval()
 
     def _ensure_backend(self) -> None:
         if self._model is not None:
@@ -121,22 +125,32 @@ class SpanEncoder:
 
             vocab = huggingface_hub.hf_hub_download(self.model_name, "vocab.txt")
             self._latin_encoder = SubwordTextEncoder.from_file(vocab)
-            specials = {s: i for i, s in enumerate(self._latin_encoder._subtokens) if s in ("[CLS]", "[SEP]")}
+            specials = {
+                s: i
+                for i, s in enumerate(self._latin_encoder._subtokens)
+                if s in ("[CLS]", "[SEP]")
+            }
             self._cls, self._sep = specials["[CLS]"], specials["[SEP]"]
-            self.q_id, self.qend_id = len(self._latin_encoder._subtokens), len(self._latin_encoder._subtokens) + 1
+            self.q_id, self.qend_id = (
+                len(self._latin_encoder._subtokens),
+                len(self._latin_encoder._subtokens) + 1,
+            )
             self.vocab_size = self.qend_id + 1
             cls_id = self._cls
         else:
             self._pair_encoder = PairEncoder.build(self.model_name)
             added = self._pair_encoder.tokenizer.add_special_tokens(
-                {"additional_special_tokens": [Q_TOKEN, QEND_TOKEN]})
+                {"additional_special_tokens": [Q_TOKEN, QEND_TOKEN]}
+            )
             self.vocab_size = len(self._pair_encoder.tokenizer)
-            self.q_id, self.qend_id = self._pair_encoder.tokenizer.convert_tokens_to_ids([Q_TOKEN, QEND_TOKEN])
+            self.q_id, self.qend_id = self._pair_encoder.tokenizer.convert_tokens_to_ids(
+                [Q_TOKEN, QEND_TOKEN]
+            )
             cls_id = self._pair_encoder.tokenizer.cls_token_id
             if not added:
                 return
         self._model.resize_token_embeddings(self.vocab_size)
-        with torch.no_grad():                                    # the two new tokens start as [CLS]
+        with torch.no_grad():  # the two new tokens start as [CLS]
             embeddings = self._model.get_input_embeddings().weight
             embeddings[self.q_id] = embeddings[cls_id]
             embeddings[self.qend_id] = embeddings[cls_id]
@@ -164,7 +178,7 @@ class SpanEncoder:
 
     @staticmethod
     def _mark(words: List[str], i: int) -> List[str]:
-        return words[:i] + [Q_TOKEN, words[i], QEND_TOKEN] + words[i + 1:]
+        return words[:i] + [Q_TOKEN, words[i], QEND_TOKEN] + words[i + 1 :]
 
     def _encode_latin_bert(self, items):
         torch = self.torch
@@ -176,7 +190,7 @@ class SpanEncoder:
             ids.append(self.q_id)
             ids.extend(latin_bert_pieces(self._latin_encoder, query[i]))
             ids.append(self.qend_id)
-            for w in query[i + 1:]:
+            for w in query[i + 1 :]:
                 ids.extend(latin_bert_pieces(self._latin_encoder, w))
             ids.append(self._sep)
             boundary = len(ids)
@@ -199,8 +213,11 @@ class SpanEncoder:
             input_ids[i, : len(row)] = torch.tensor(row)
             attention[i, : len(row)] = 1
             token_types[i, : len(row_types)] = torch.tensor(row_types)
-        batch = {"input_ids": input_ids.to(self.device), "attention_mask": attention.to(self.device),
-                 "token_type_ids": token_types.to(self.device)}
+        batch = {
+            "input_ids": input_ids.to(self.device),
+            "attention_mask": attention.to(self.device),
+            "token_type_ids": token_types.to(self.device),
+        }
         return batch, spans_b
 
 
@@ -249,8 +266,9 @@ class SpanHeads:
 # =============================================================================
 
 
-def span_scores(start_logits, end_logits, spans_b: Sequence[Tuple[int, int]], max_words: int = DEFAULT_MAX_WORDS
-                ) -> QueryResult:
+def span_scores(
+    start_logits, end_logits, spans_b: Sequence[Tuple[int, int]], max_words: int = DEFAULT_MAX_WORDS
+) -> QueryResult:
     """The best span, searched over word-aligned subword ranges only (see the module
     docstring's first simplification), plus the null (``[CLS]``, position 0)."""
     import torch
@@ -264,8 +282,8 @@ def span_scores(start_logits, end_logits, spans_b: Sequence[Tuple[int, int]], ma
     best_omega = -1.0
     for wi in range(len(spans_b)):
         for wj in range(wi, min(wi + max_words, len(spans_b))):
-            k, l = spans_b[wi][0], spans_b[wj][1] - 1
-            omega = float(p_start[k] * p_end[l])
+            k, end = spans_b[wi][0], spans_b[wj][1] - 1
+            omega = float(p_start[k] * p_end[end])
             if omega > best_omega:
                 best_omega, best_words = omega, tuple(range(wi, wj + 1))
     return QueryResult(best_words, best_omega, s_null)
@@ -306,7 +324,11 @@ class SpanAligner(Baseline):
     def __init__(self, cfg: BaselineConfig):
         super().__init__(cfg)
         model_name = str(cfg.extra.get("model", cfg.base_model))
-        self.encoder = SpanEncoder(model_name, device=cfg.device, max_length=int(cfg.extra.get("max_length", DEFAULT_MAX_LENGTH)))
+        self.encoder = SpanEncoder(
+            model_name,
+            device=cfg.device,
+            max_length=int(cfg.extra.get("max_length", DEFAULT_MAX_LENGTH)),
+        )
         self.heads: Optional[SpanHeads] = None
         self.max_answer_words = int(cfg.extra.get("max_answer_words", DEFAULT_MAX_WORDS))
         self.train_on = str(cfg.extra.get("train_on", cfg.train_on))
@@ -333,7 +355,9 @@ class SpanAligner(Baseline):
             out.setdefault(query, target)
         return out
 
-    def queries_of(self, records: Sequence[Record]) -> List[Tuple[List[str], List[str], int, Optional[Tuple[int, int]]]]:
+    def queries_of(
+        self, records: Sequence[Record]
+    ) -> List[Tuple[List[str], List[str], int, Optional[Tuple[int, int]]]]:
         """One query per word of every record, both directions: ``(query_passage, context_passage, index, target)``."""
         sure_only = self.train_on == "sure"
         out = []
@@ -369,14 +393,17 @@ class SpanAligner(Baseline):
         starts, ends = [], []
         for (_, _, _, target), spans in zip(chunk, spans_b):
             if target is None or target[0] >= len(spans) or target[1] >= len(spans):
-                starts.append(0); ends.append(0)
+                starts.append(0)
+                ends.append(0)
             else:
-                starts.append(spans[target[0]][0]); ends.append(spans[target[1]][1] - 1)
+                starts.append(spans[target[0]][0])
+                ends.append(spans[target[1]][1] - 1)
         hidden = self.encoder.forward_hidden(batch)
         start_logits, end_logits = self.heads(hidden)
         loss_fn = torch.nn.CrossEntropyLoss()
-        return (loss_fn(start_logits, torch.tensor(starts, device=self.cfg.device))
-                + loss_fn(end_logits, torch.tensor(ends, device=self.cfg.device)))
+        return loss_fn(start_logits, torch.tensor(starts, device=self.cfg.device)) + loss_fn(
+            end_logits, torch.tensor(ends, device=self.cfg.device)
+        )
 
     def validation_loss(self, records: Sequence[Record]) -> Optional[float]:
         """The question loss on ``records`` (both directions, as trained; no gradient)."""
@@ -388,10 +415,13 @@ class SpanAligner(Baseline):
         total, n = 0.0, 0
         with torch.no_grad():
             for start in range(0, len(queries), self.batch_size):
-                total += float(self._query_loss(queries[start:start + self.batch_size])); n += 1
+                total += float(self._query_loss(queries[start : start + self.batch_size]))
+                n += 1
         return total / n if n else None
 
-    def fit(self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()) -> "SpanAligner":
+    def fit(
+        self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
+    ) -> SpanAligner:
         import torch
         from transformers import get_linear_schedule_with_warmup
 
@@ -402,24 +432,32 @@ class SpanAligner(Baseline):
         # schedule hands over one orientation (the same count of oriented examples as ours)
         from retexo.baselines.schedule import SharedSchedule
 
-        schedule = SharedSchedule(self, train, both_directions_built_in=True) if SharedSchedule.applies(self) else None
+        schedule = (
+            SharedSchedule(self, train, both_directions_built_in=True)
+            if SharedSchedule.applies(self)
+            else None
+        )
         synthetic = self.queries_of(schedule.synthetic_epoch()) if schedule is not None else []
         if schedule is not None:
             examples = self.queries_of(schedule.real_pass())
             if log:
                 log(f"[span_aligner] shared schedule {schedule.summary()}")
         self.heads = SpanHeads(self.encoder.hidden_size, device=self.cfg.device)
-        optimizer = torch.optim.AdamW([
-            {"params": self.encoder.parameters(), "lr": self.encoder_lr},
-            {"params": self.heads.parameters(), "lr": self.heads_lr},
-        ])
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": self.encoder.parameters(), "lr": self.encoder_lr},
+                {"params": self.heads.parameters(), "lr": self.heads_lr},
+            ]
+        )
         from retexo.baselines.early_stopping import EarlyStopping
 
         stopper = EarlyStopping.for_method(self, log=log)
         epochs = stopper.max_epochs if stopper is not None else self.epochs
         steps_per_epoch = max(1, -(-len(examples) // self.batch_size))
         total_steps = steps_per_epoch * epochs + -(-len(synthetic) // self.batch_size)
-        scheduler = get_linear_schedule_with_warmup(optimizer, max(1, total_steps // 10), total_steps)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, max(1, total_steps // 10), total_steps
+        )
         rng = random.Random(self.cfg.seed)
 
         def run_epoch(items, label: str, on_batch=None) -> None:
@@ -427,43 +465,65 @@ class SpanAligner(Baseline):
             rng.shuffle(items)
             total_loss, n_batches = 0.0, 0
             for start in range(0, len(items), self.batch_size):
-                chunk = items[start:start + self.batch_size]
+                chunk = items[start : start + self.batch_size]
                 loss = self._query_loss(chunk)
-                optimizer.zero_grad(); loss.backward(); optimizer.step(); scheduler.step()
-                total_loss += float(loss.detach()); n_batches += 1
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
+                total_loss += float(loss.detach())
+                n_batches += 1
                 if on_batch is not None:
                     on_batch(start + len(chunk), len(items))
             if log:
-                log(f"[span_aligner] epoch {label}: loss {total_loss / max(n_batches, 1):.4f} ({len(items)} questions)")
+                log(
+                    f"[span_aligner] epoch {label}: loss {total_loss / max(n_batches, 1):.4f} ({len(items)} questions)"
+                )
 
-        self.encoder.train(); self.heads.train()
+        self.encoder.train()
+        self.heads.train()
         monitor = stopper.monitor if stopper is not None else None
         if synthetic:
-            run_epoch(synthetic, "synthetic", monitor.progress("synthetic", int(self.cfg.extra.get("synthetic_evals", 4))) if monitor else None)
+            run_epoch(
+                synthetic,
+                "synthetic",
+                monitor.progress("synthetic", int(self.cfg.extra.get("synthetic_evals", 4)))
+                if monitor
+                else None,
+            )
             if monitor is not None:
                 monitor.evaluate("synthetic", fraction=1.0)
         for epoch in range(epochs):
             if schedule is not None and epoch > 0:
-                examples = self.queries_of(schedule.real_pass())      # a fresh synthetic draw every real pass
+                examples = self.queries_of(
+                    schedule.real_pass()
+                )  # a fresh synthetic draw every real pass
             run_epoch(examples, f"{epoch + 1}/{epochs}")
             if stopper is not None:
                 keep_going = stopper.step(epoch + 1, self.modules())
-                self.encoder.train(); self.heads.train()
+                self.encoder.train()
+                self.heads.train()
                 if not keep_going:
                     break
         if stopper is not None:
             stopper.restore(self.modules())
             stopper.release()
-        self.encoder.eval(); self.heads.eval()
+        self.encoder.eval()
+        self.heads.eval()
         return self
 
     def modules(self) -> Dict[str, Any]:
         """The fine-tuned encoder and the two span heads."""
-        return {"encoder": self.encoder._model, "heads": self.heads.layer if self.heads is not None else None}
+        return {
+            "encoder": self.encoder._model,
+            "heads": self.heads.layer if self.heads is not None else None,
+        }
 
     # ---------- inference ----------
 
-    def _score_direction(self, query_words: Sequence[str], context_words: Sequence[str]) -> List[QueryResult]:
+    def _score_direction(
+        self, query_words: Sequence[str], context_words: Sequence[str]
+    ) -> List[QueryResult]:
         if not query_words or not context_words:
             return [QueryResult((), 0.0, 1.0) for _ in query_words]
         import torch
@@ -471,13 +531,17 @@ class SpanAligner(Baseline):
         items = [(query_words, context_words, i) for i in range(len(query_words))]
         out = []
         for start in range(0, len(items), max(self.batch_size, 1) * 4):
-            chunk = items[start:start + max(self.batch_size, 1) * 4]
+            chunk = items[start : start + max(self.batch_size, 1) * 4]
             batch, spans_b = self.encoder.encode_queries(chunk)
             with torch.no_grad():
                 hidden = self.encoder.forward_hidden(batch)
                 start_logits, end_logits = self.heads(hidden)
             for row in range(len(chunk)):
-                out.append(span_scores(start_logits[row], end_logits[row], spans_b[row], self.max_answer_words))
+                out.append(
+                    span_scores(
+                        start_logits[row], end_logits[row], spans_b[row], self.max_answer_words
+                    )
+                )
         return out
 
     @staticmethod
@@ -494,7 +558,9 @@ class SpanAligner(Baseline):
         out = []
         for index, result in enumerate(results):
             for word in result.best_words[1:]:
-                out.append(Edge(r=word, s=index, op="") if reverse else Edge(r=index, s=word, op=""))
+                out.append(
+                    Edge(r=word, s=index, op="") if reverse else Edge(r=index, s=word, op="")
+                )
         return out
 
     def predict(self, records: List[Record]) -> List[Prediction]:
@@ -508,7 +574,9 @@ class SpanAligner(Baseline):
             rev = self._score_direction(record.source_tokens, record.reuse_tokens)
             pred.scores = [self._row(r) for r in fwd]
             pred.rev_scores = [self._row(r) for r in rev]
-            pred.extra = self._extra_edges(fwd, reverse=False) + self._extra_edges(rev, reverse=True)
+            pred.extra = self._extra_edges(fwd, reverse=False) + self._extra_edges(
+                rev, reverse=True
+            )
             out.append(pred)
         return out
 
@@ -522,14 +590,17 @@ class SpanAligner(Baseline):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         self.encoder._ensure_backend()
-        torch.save({
-            "model_name": self.encoder.model_name,
-            "encoder_state": self.encoder._model.state_dict(),
-            "heads_state": self.heads.layer.state_dict() if self.heads is not None else None,
-        }, path / "span_aligner.pt")
+        torch.save(
+            {
+                "model_name": self.encoder.model_name,
+                "encoder_state": self.encoder._model.state_dict(),
+                "heads_state": self.heads.layer.state_dict() if self.heads is not None else None,
+            },
+            path / "span_aligner.pt",
+        )
 
     @classmethod
-    def load(cls, path: Path, cfg: BaselineConfig) -> "SpanAligner":
+    def load(cls, path: Path, cfg: BaselineConfig) -> SpanAligner:
         import torch
 
         checkpoint = torch.load(Path(path) / "span_aligner.pt", map_location=cfg.device)

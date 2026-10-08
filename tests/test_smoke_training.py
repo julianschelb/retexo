@@ -15,12 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch  # noqa: E402
 
-from retexo.formulations.encoding import DERIVED_TAGS, ScriptEncoder  # noqa: E402
 from retexo.datasets.generation import (  # noqa: E402
     GenerationConfig,
     MockSubstitutionSource,
     SyntheticGenerator,
 )
+from retexo.formulations.encoding import DERIVED_TAGS, ScriptEncoder  # noqa: E402
 from retexo.operations import OperationRegistry  # noqa: E402
 
 SEEDS = [
@@ -50,14 +50,18 @@ def smoke_seq2seq(examples) -> None:
 
     added = tokenizer.add_tokens(ScriptEncoder.operation_tokens(OperationRegistry.default().tags()))
     model.resize_token_embeddings(len(tokenizer))
-    print(f"[seq2seq] {sum(p.numel() for p in model.parameters()):,} params, "
-          f"{added} operation tokens added")
+    print(
+        f"[seq2seq] {sum(p.numel() for p in model.parameters()):,} params, "
+        f"{added} operation tokens added"
+    )
 
     pairs = [ScriptEncoder.to_seq2seq(e["script"]) for e in examples[:16]]
-    batch = tokenizer([p[0] for p in pairs], padding=True, truncation=True,
-                      max_length=128, return_tensors="pt")
-    labels = tokenizer([p[1] for p in pairs], padding=True, truncation=True,
-                       max_length=128, return_tensors="pt").input_ids
+    batch = tokenizer(
+        [p[0] for p in pairs], padding=True, truncation=True, max_length=128, return_tensors="pt"
+    )
+    labels = tokenizer(
+        [p[1] for p in pairs], padding=True, truncation=True, max_length=128, return_tensors="pt"
+    ).input_ids
     labels[labels == tokenizer.pad_token_id] = -100
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
@@ -88,14 +92,19 @@ def smoke_token_classifier(examples) -> None:
     model = AutoModelForTokenClassification.from_pretrained(
         name, num_labels=len(vocabulary), ignore_mismatched_sizes=True
     )
-    print(f"[token-cls] {sum(p.numel() for p in model.parameters()):,} params, "
-          f"{len(vocabulary)} labels")
+    print(
+        f"[token-cls] {sum(p.numel() for p in model.parameters()):,} params, "
+        f"{len(vocabulary)} labels"
+    )
 
     encoded = [ScriptEncoder.to_token_labels(e["script"]) for e in examples[:16]]
     batch = tokenizer(
         [e["tokens"] for e in encoded],
-        is_split_into_words=True, padding=True, truncation=True,
-        max_length=64, return_tensors="pt",
+        is_split_into_words=True,
+        padding=True,
+        truncation=True,
+        max_length=64,
+        return_tensors="pt",
     )
     labels = torch.full(batch.input_ids.shape, -100)
     for row, item in enumerate(encoded):
@@ -106,7 +115,7 @@ def smoke_token_classifier(examples) -> None:
                 continue
             seen.add(word)
             tag = item["op_labels"][word]
-            if tag in vocabulary:          # insertions carry no operation label
+            if tag in vocabulary:  # insertions carry no operation label
                 labels[row, position] = vocabulary[tag]
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)

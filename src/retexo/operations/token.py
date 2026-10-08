@@ -339,7 +339,7 @@ class Form(_TokenOperation):
     typer's confidence in a member falls short."""
 
     tag = "FORM"
-    default_cost = 0.562      # mean of MORPH, POS, SPLIT, MERGE
+    default_cost = 0.562  # mean of MORPH, POS, SPLIT, MERGE
     detectable = False
 
     def detect(self, source: str, target: str, resources) -> Optional[str]:
@@ -353,7 +353,7 @@ class Sense(_TokenOperation):
     Priced at the members' mean; never detected."""
 
     tag = "SENSE"
-    default_cost = 0.725      # mean of SYN, SYN-DIST, HYPER, HYPO, ANT, NE-SUB
+    default_cost = 0.725  # mean of SYN, SYN-DIST, HYPER, HYPO, ANT, NE-SUB
     detectable = False
 
     def detect(self, source: str, target: str, resources) -> Optional[str]:

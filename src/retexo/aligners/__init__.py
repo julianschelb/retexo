@@ -4,6 +4,7 @@ one source per reuse word: the classical pointer-score assignment policies, the 
 agreement rules, the orthographic sameness predicates, the decoder that derives a full script
 from a typed alignment, the Sinkhorn and whole-script DP variants, and the contextual embedding
 aligner."""
+
 from __future__ import annotations
 
 from retexo.aligners.agreement import AgreementDecoder, PairSwap

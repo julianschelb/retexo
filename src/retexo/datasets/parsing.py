@@ -13,8 +13,8 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Sequence
 
-from retexo.operations import EditOperation, OperationRegistry
 from retexo.core.script import EditScript
+from retexo.operations import EditOperation, OperationRegistry
 
 
 class ScriptParser:

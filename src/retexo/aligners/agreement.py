@@ -41,18 +41,31 @@ class PairSwap:
     """
 
     #: relations that change name when the sides change
-    INVERT: ClassVar[Dict[str, str]] = {"HYPER": "HYPO", "HYPO": "HYPER", "SPLIT": "MERGE", "MERGE": "SPLIT"}
+    INVERT: ClassVar[Dict[str, str]] = {
+        "HYPER": "HYPO",
+        "HYPO": "HYPER",
+        "SPLIT": "MERGE",
+        "MERGE": "SPLIT",
+    }
 
     @staticmethod
     def example(example: ChangeExample) -> ChangeExample:
         """The pair with the roles exchanged: the source passage sits in the reuse
         slot, so the model scores p(reuse word | source word)."""
-        s, t = list(example.target_tokens), list(example.source_tokens)   # swapped on purpose
-        return ChangeExample(source_tokens=s, target_tokens=t, labels=[0] * len(t),
-                             operations=["COPY"] * len(t), n_operations=0,
-                             source_labels=[0] * len(s), source_operations=["COPY"] * len(s),
-                             alignments=[-1] * len(t), fine_operations=["INS"] * len(t),
-                             frame_labels=[0] * len(t), link_features=[None] * len(t))
+        s, t = list(example.target_tokens), list(example.source_tokens)  # swapped on purpose
+        return ChangeExample(
+            source_tokens=s,
+            target_tokens=t,
+            labels=[0] * len(t),
+            operations=["COPY"] * len(t),
+            n_operations=0,
+            source_labels=[0] * len(s),
+            source_operations=["COPY"] * len(s),
+            alignments=[-1] * len(t),
+            fine_operations=["INS"] * len(t),
+            frame_labels=[0] * len(t),
+            link_features=[None] * len(t),
+        )
 
     @classmethod
     def labelled(cls, example: ChangeExample) -> ChangeExample:
@@ -77,13 +90,19 @@ class PairSwap:
         consumed = {t for t in new_links if t >= 0}
         new_source_labels = [0 if t in consumed else 1 for t in range(len(new_s))]
         coarse = ["COPY" if (k == "NOP") else ("INS" if k == "INS" else "SUBST") for k in new_fine]
-        ex = ChangeExample(source_tokens=new_s, target_tokens=new_t,
-                           labels=[0 if op == "COPY" else 1 for op in coarse], operations=coarse,
-                           n_operations=sum(1 for op in coarse if op != "COPY"),
-                           source_labels=new_source_labels,
-                           source_operations=["DEL" if d else "COPY" for d in new_source_labels],
-                           alignments=new_links, fine_operations=new_fine,
-                           frame_labels=[0] * len(new_t), link_features=[None] * len(new_t))
+        ex = ChangeExample(
+            source_tokens=new_s,
+            target_tokens=new_t,
+            labels=[0 if op == "COPY" else 1 for op in coarse],
+            operations=coarse,
+            n_operations=sum(1 for op in coarse if op != "COPY"),
+            source_labels=new_source_labels,
+            source_operations=["DEL" if d else "COPY" for d in new_source_labels],
+            alignments=new_links,
+            fine_operations=new_fine,
+            frame_labels=[0] * len(new_t),
+            link_features=[None] * len(new_t),
+        )
         object.__setattr__(ex, "swapped_from", True)
         return ex
 
@@ -131,8 +150,11 @@ class AgreementDecoder:
         every candidate fails keeps only its null."""
         out = []
         for t, row in enumerate(rows):
-            kept = [(s, p) for s, p in row
-                    if s >= 0 and p > c and s < len(rows_rev) and cls.prob(rows_rev[s], t) > c]
+            kept = [
+                (s, p)
+                for s, p in row
+                if s >= 0 and p > c and s < len(rows_rev) and cls.prob(rows_rev[s], t) > c
+            ]
             out.append(sorted(kept + [(-1, cls.prob(row, -1))], key=lambda x: -x[1]))
         return out
 
@@ -142,7 +164,11 @@ class AgreementDecoder:
         out = []
         for t, row in enumerate(rows):
             s = cls.top(row)
-            kept = [(s, cls.prob(row, s))] if s >= 0 and s < len(rows_rev) and cls.top(rows_rev[s]) == t else []
+            kept = (
+                [(s, cls.prob(row, s))]
+                if s >= 0 and s < len(rows_rev) and cls.top(rows_rev[s]) == t
+                else []
+            )
             out.append(sorted(kept + [(-1, cls.prob(row, -1))], key=lambda x: -x[1]))
         return out
 
@@ -152,10 +178,13 @@ class AgreementDecoder:
         a source word whose column entropy, are both above tau (normalised by log n)."""
         out = []
         h_col = [cls.entropy(r) / max(math.log(max(len(r), 2)), 1e-9) for r in rows_rev]
-        for t, row in enumerate(rows):
+        for _t, row in enumerate(rows):
             h_row = cls.entropy(row) / max(math.log(max(len(row), 2)), 1e-9)
-            kept = [(s, p) for s, p in row if s >= 0
-                    and min(h_row, h_col[s] if s < len(h_col) else 1.0) <= tau]
+            kept = [
+                (s, p)
+                for s, p in row
+                if s >= 0 and min(h_row, h_col[s] if s < len(h_col) else 1.0) <= tau
+            ]
             out.append(sorted(kept + [(-1, cls.prob(row, -1))], key=lambda x: -x[1]))
         return out
 
@@ -176,6 +205,10 @@ class AgreementDecoder:
         for rows in zip(*restricted):
             keep = set.intersection(*[{s for s, _ in r if s >= 0} for r in rows])
             first = rows[0]
-            out.append(sorted([(s, p) for s, p in first if s in keep] + [(-1, cls.prob(first, -1))],
-                              key=lambda x: -x[1]))
+            out.append(
+                sorted(
+                    [(s, p) for s, p in first if s in keep] + [(-1, cls.prob(first, -1))],
+                    key=lambda x: -x[1],
+                )
+            )
         return out

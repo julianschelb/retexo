@@ -10,6 +10,7 @@ and one checkpoint that replaces the default backbone through
 objectives, the trainer and the probe (objective 1 implemented 2026-09-16;
 objectives 2 and 3 keep their interfaces).
 """
+
 from __future__ import annotations
 
 from retexo.pretraining.pool import PairPool, PoolBuilder, PoolPair
@@ -25,6 +26,15 @@ from retexo.pretraining.stage0 import (
 )
 
 __all__ = [
-    "ContrastiveLemmaPairs", "Counterparts", "GeometryProbe", "MaskedPairLM", "PairIdentification", "PairPool",
-    "PoolBuilder", "PoolPair", "ProbeResult", "Stage0Config", "Stage0Trainer",
+    "ContrastiveLemmaPairs",
+    "Counterparts",
+    "GeometryProbe",
+    "MaskedPairLM",
+    "PairIdentification",
+    "PairPool",
+    "PoolBuilder",
+    "PoolPair",
+    "ProbeResult",
+    "Stage0Config",
+    "Stage0Trainer",
 ]

@@ -38,12 +38,26 @@ REGIMES: Dict[str, Dict[str, Any]] = {
     "default": {},
     "synthetic_only": {"gold_passes": 0},
     "gold_only": {"size": 0},
-    "active": {"size": 0, "ids": ""},     # the active-learning dry run: the acquired pairs (``ids=<file>``), warm-started
+    "active": {
+        "size": 0,
+        "ids": "",
+    },  # the active-learning dry run: the acquired pairs (``ids=<file>``), warm-started
     "no_negatives": {"neg_ratio": 0.0, "negatives": "none"},
-    "dense": {"dense_rate": 0.3, "mlm_subst": 1, "pool_file": "data/records/synthetic_dense_f{fold}.jsonl"},
-    "llm_links": {"extra_pairs": "runs/e32_allusion/extra_pairs_nosub.json,runs/e32_mine/extra_pairs_nosub.json",
-                  "links_only": 1},
-    "self_train": {"rounds": 1, "tau": 0.9, "extra_records": "runs/self_train_f{fold}/round{round}.jsonl", "links_only": 1},
+    "dense": {
+        "dense_rate": 0.3,
+        "mlm_subst": 1,
+        "pool_file": "data/records/synthetic_dense_f{fold}.jsonl",
+    },
+    "llm_links": {
+        "extra_pairs": "runs/e32_allusion/extra_pairs_nosub.json,runs/e32_mine/extra_pairs_nosub.json",
+        "links_only": 1,
+    },
+    "self_train": {
+        "rounds": 1,
+        "tau": 0.9,
+        "extra_records": "runs/self_train_f{fold}/round{round}.jsonl",
+        "links_only": 1,
+    },
     "distill": {"extra_records": "runs/distill_f{fold}/labels.jsonl"},
     "curve": {"n": "all", "pretrain": 1},
     "v1_types": {"fine_operations": "v1"},
@@ -130,7 +144,7 @@ def curve_sample(records: Sequence[Record], n, seed: int = 0) -> List[Record]:
         ordered[label] = items
     total = len(records)
     chosen: List[Record] = []
-    for label, items in ordered.items():
+    for _label, items in ordered.items():
         share = int(round(n * len(items) / max(total, 1)))
         chosen.extend(items[:share])
     # rounding can leave the sample a pair short or long: fix at the largest stratum
@@ -138,7 +152,8 @@ def curve_sample(records: Sequence[Record], n, seed: int = 0) -> List[Record]:
     taken = {r.id for r in chosen}
     while len(chosen) < min(n, total):
         nxt = next(r for r in ordered[largest] if r.id not in taken)
-        chosen.append(nxt); taken.add(nxt.id)
+        chosen.append(nxt)
+        taken.add(nxt.id)
     while len(chosen) > n:
         chosen.pop()
     return chosen
@@ -174,7 +189,8 @@ class ExtraPairs:
                     frame_start = t if frame_start is None else frame_start
                     continue
                 if frame_start is not None:
-                    spans.append(_frame_span(frame_start, t)); frame_start = None
+                    spans.append(_frame_span(frame_start, t))
+                    frame_start = None
                 if s is None or s < 0:
                     continue
                 canon, detail = labels.canonical(op)
@@ -185,9 +201,21 @@ class ExtraPairs:
                 edges.append(Edge(t, int(s), canon, True, detail))
             if frame_start is not None:
                 spans.append(_frame_span(frame_start, len(target)))
-            out.append(Record(id=f"{level}/{row['id']}", level=level, fold=-1, source_work="", source_tokens=source,
-                              reuse_work="", reuse_tokens=target, pair_label=str(row.get("ref_type", "llm")).rstrip("."),
-                              links=edges, spans=spans, provenance={"links": "llm", "fine_ops": "llm" if not links_only else "none"}))
+            out.append(
+                Record(
+                    id=f"{level}/{row['id']}",
+                    level=level,
+                    fold=-1,
+                    source_work="",
+                    source_tokens=source,
+                    reuse_work="",
+                    reuse_tokens=target,
+                    pair_label=str(row.get("ref_type", "llm")).rstrip("."),
+                    links=edges,
+                    spans=spans,
+                    provenance={"links": "llm", "fine_ops": "llm" if not links_only else "none"},
+                )
+            )
         return out
 
 
@@ -230,8 +258,15 @@ class SelfTraining:
     """
 
     @staticmethod
-    def agreed_edges(record: Record, forward: Prediction, reverse: Optional[Prediction], *, tau: float,
-                     decode: Callable, tau_changed: Optional[float] = None) -> List[Edge]:
+    def agreed_edges(
+        record: Record,
+        forward: Prediction,
+        reverse: Optional[Prediction],
+        *,
+        tau: float,
+        decode: Callable,
+        tau_changed: Optional[float] = None,
+    ) -> List[Edge]:
         """``tau_changed`` (the changed-form teacher, 2026-09-27): links between different forms pass at this
         threshold instead of ``tau``; identical forms keep ``tau``."""
         from retexo.core.normalize import normalize
@@ -258,7 +293,14 @@ class SelfTraining:
         return out
 
     @staticmethod
-    def framed(record: Record, edges: Sequence[Edge], *, window: int = 2, slack: int = 3, min_links: int = 3) -> List[Edge]:
+    def framed(
+        record: Record,
+        edges: Sequence[Edge],
+        *,
+        window: int = 2,
+        slack: int = 3,
+        min_links: int = 3,
+    ) -> List[Edge]:
         """The changed-form teacher's pair filter: a changed-form edge stays only in a pair with at least
         ``min_links`` edges and with another kept edge in order within ``window`` reuse words (source offset in
         the same direction, within ``slack``) -- the kept frame of the error analysis. Identical forms always stay."""
@@ -267,48 +309,89 @@ class SelfTraining:
         out = []
         for e in edges:
             if normalize(record.reuse_tokens[e.r]) == normalize(record.source_tokens[e.s]):
-                out.append(e); continue
+                out.append(e)
+                continue
             if len(edges) < min_links:
                 continue
-            support = sum(1 for o in edges if o is not e and 0 < abs(o.r - e.r) <= window
-                          and (o.s - e.s > 0) == (o.r - e.r > 0) and o.s != e.s and abs((o.s - e.s) - (o.r - e.r)) <= slack)
+            support = sum(
+                1
+                for o in edges
+                if o is not e
+                and 0 < abs(o.r - e.r) <= window
+                and (o.s - e.s > 0) == (o.r - e.r > 0)
+                and o.s != e.s
+                and abs((o.s - e.s) - (o.r - e.r)) <= slack
+            )
             if support >= 1:
                 out.append(e)
         return out
 
     @classmethod
-    def filter(cls, records: Sequence[Record], forward: Sequence[Prediction], reverse: Optional[Sequence[Prediction]] = None,
-               *, tau: float = 0.9, decode: Optional[Callable] = None, tau_changed: Optional[float] = None,
-               frame_filter: bool = False) -> List[Record]:
+    def filter(
+        cls,
+        records: Sequence[Record],
+        forward: Sequence[Prediction],
+        reverse: Optional[Sequence[Prediction]] = None,
+        *,
+        tau: float = 0.9,
+        decode: Optional[Callable] = None,
+        tau_changed: Optional[float] = None,
+        frame_filter: bool = False,
+    ) -> List[Record]:
         from retexo.baselines.adapters import PredictionAdapter
         from retexo.baselines.decoder import BaselineDecoder
         from retexo.core.scriba import Scriba
 
-        decode = decode or (lambda rows, n_source: BaselineDecoder.decode_default(rows, theta=0.45, n_source=n_source))
+        decode = decode or (
+            lambda rows, n_source: BaselineDecoder.decode_default(
+                rows, theta=0.45, n_source=n_source
+            )
+        )
         scriba = Scriba()
         out = []
         for i, record in enumerate(records):
             fwd = forward[i]
             rev = reverse[i] if reverse is not None else None
-            edges = cls.agreed_edges(record, fwd, rev, tau=tau, decode=decode, tau_changed=tau_changed)
+            edges = cls.agreed_edges(
+                record, fwd, rev, tau=tau, decode=decode, tau_changed=tau_changed
+            )
             if frame_filter:
                 edges = cls.framed(record, edges)
             if not edges:
                 continue
-            probe = Prediction(links=[-1] * record.n_reuse, tags=[""] * record.n_reuse, frame=[0] * record.n_reuse)
+            probe = Prediction(
+                links=[-1] * record.n_reuse, tags=[""] * record.n_reuse, frame=[0] * record.n_reuse
+            )
             for edge in edges:
                 probe.links[edge.r] = edge.s
                 probe.tags[edge.r] = "SUBST"
             script = PredictionAdapter.to_script(record, probe)
-            if script is None or not scriba.verify(script, record.source_tokens, record.reuse_tokens):
+            if script is None or not scriba.verify(
+                script, record.source_tokens, record.reuse_tokens
+            ):
                 continue
-            out.append(replace(record, id=f"self/{record.id}", level="real_pairs", links=edges, spans=[],
-                               provenance={"links": "self-training", "fine_ops": "none", "tau": tau,
-                                           "tau_changed": tau_changed, "frame_filter": frame_filter}))
+            out.append(
+                replace(
+                    record,
+                    id=f"self/{record.id}",
+                    level="real_pairs",
+                    links=edges,
+                    spans=[],
+                    provenance={
+                        "links": "self-training",
+                        "fine_ops": "none",
+                        "tau": tau,
+                        "tau_changed": tau_changed,
+                        "frame_filter": frame_filter,
+                    },
+                )
+            )
         return out
 
     @staticmethod
-    def type_edges(records: Sequence[Record], predictions: Sequence[Prediction], *, mode: str, featurizer) -> List[Record]:
+    def type_edges(
+        records: Sequence[Record], predictions: Sequence[Prediction], *, mode: str, featurizer
+    ) -> List[Record]:
         """Give the kept link-only edges a type (the INFLECT follow-up of 2026-09-26). ``rule``: the shared rule
         typer's operation for every edge; ``own``: the model's own tag (its confident prediction, so the type head
         distils itself); ``agree``: identical forms stay COPY, a changed-form edge keeps the rule's type only where
@@ -319,7 +402,7 @@ class SelfTraining:
         from retexo.baselines.typer import RuleTyper
 
         def kind(tag: str) -> str:
-            tag = "COPY" if tag == "NOP" else tag          # the head says NOP where the rule says COPY
+            tag = "COPY" if tag == "NOP" else tag  # the head says NOP where the rule says COPY
             return tag if tag in ("COPY", "MORPH") else ("LEX" if tag else "")
 
         out = []
@@ -334,20 +417,38 @@ class SelfTraining:
                 tag = rule[edge.r] or "SUBST"
                 mine = own[edge.r] if edge.r < len(own) else ""
                 if mode == "own":
-                    tag = "COPY" if kind(mine) == "COPY" else mine if mine == "MORPH" else ("SUBST" if mine else "LINK")
+                    tag = (
+                        "COPY"
+                        if kind(mine) == "COPY"
+                        else mine
+                        if mine == "MORPH"
+                        else ("SUBST" if mine else "LINK")
+                    )
                 elif mode == "agree":
                     if kind(tag) == "COPY":
                         tag = "COPY"
                     elif kind(mine) != kind(tag):
-                        tag = "LINK"                # no agreement: the link trains, no type head does
+                        tag = "LINK"  # no agreement: the link trains, no type head does
                 edges.append(replace(edge, op=tag if tag in ("COPY", "MORPH", "LINK") else "SUBST"))
             if edges:
-                out.append(replace(record, links=edges, provenance={**record.provenance, "fine_ops": f"rule-{mode}"}))
+                out.append(
+                    replace(
+                        record,
+                        links=edges,
+                        provenance={**record.provenance, "fine_ops": f"rule-{mode}"},
+                    )
+                )
         return out
 
     @classmethod
-    def tune_tau(cls, dev: Sequence[Record], forward: Sequence[Prediction], reverse: Optional[Sequence[Prediction]] = None,
-                 *, grid: Sequence[float] = TAU_GRID) -> float:
+    def tune_tau(
+        cls,
+        dev: Sequence[Record],
+        forward: Sequence[Prediction],
+        reverse: Optional[Sequence[Prediction]] = None,
+        *,
+        grid: Sequence[float] = TAU_GRID,
+    ) -> float:
         """The threshold whose kept edges are most precise against the dev gold,
         breaking ties toward more edges (the note's stand-in for a full retrain per tau)."""
         from retexo.baselines.record import RecordInterface
@@ -357,9 +458,17 @@ class SelfTraining:
             right = total = 0
             for record, fwd, rev in zip(dev, forward, reverse or [None] * len(dev)):
                 gold = RecordInterface.links_of(record)[0]
-                for edge in cls.agreed_edges(record, fwd, rev, tau=tau, decode=lambda rows, n_source: [
-                        row[0][0] if row and row[0][0] >= 0 else -1 for row in rows]):
-                    total += 1; right += int(gold[edge.r] == edge.s)
+                for edge in cls.agreed_edges(
+                    record,
+                    fwd,
+                    rev,
+                    tau=tau,
+                    decode=lambda rows, n_source: [
+                        row[0][0] if row and row[0][0] >= 0 else -1 for row in rows
+                    ],
+                ):
+                    total += 1
+                    right += int(gold[edge.r] == edge.s)
             precision = right / max(total, 1)
             if (precision, total) > (best[0], best[1]):
                 best = (precision, total, tau)
@@ -387,16 +496,29 @@ class Distillation:
 
         out = []
         for record, pred in read_dump(Path(path)):
-            edges = [Edge(t, int(s), (pred.tags[t] if t < len(pred.tags) and pred.tags[t] else "SUBST"))
-                     for t, s in enumerate(pred.links) if s is not None and s >= 0]
+            edges = [
+                Edge(t, int(s), (pred.tags[t] if t < len(pred.tags) and pred.tags[t] else "SUBST"))
+                for t, s in enumerate(pred.links)
+                if s is not None and s >= 0
+            ]
             spans, start = [], None
             for t, flag in enumerate(list(pred.frame or []) + [0]):
                 if flag and start is None:
                     start = t
                 elif not flag and start is not None:
-                    spans.append(_frame_span(start, t)); start = None
-            out.append(replace(record, id=f"distill/{record.id}", level="real_pairs", links=edges, spans=spans, pred=None,
-                               provenance={"links": teacher, "fine_ops": f"{teacher}-rule-typer"}))
+                    spans.append(_frame_span(start, t))
+                    start = None
+            out.append(
+                replace(
+                    record,
+                    id=f"distill/{record.id}",
+                    level="real_pairs",
+                    links=edges,
+                    spans=spans,
+                    pred=None,
+                    provenance={"links": teacher, "fine_ops": f"{teacher}-rule-typer"},
+                )
+            )
         return out
 
     @staticmethod
@@ -404,8 +526,18 @@ class Distillation:
         out = []
         for record in labelled:
             pred = record.pred or {}
-            edges = [e if isinstance(e, Edge) else Edge(int(e["r"]), int(e["s"]), str(e.get("op", "SUBST")), True, str(e.get("detail", "")))
-                     for e in pred.get("edges", [])]
+            edges = [
+                e
+                if isinstance(e, Edge)
+                else Edge(
+                    int(e["r"]),
+                    int(e["s"]),
+                    str(e.get("op", "SUBST")),
+                    True,
+                    str(e.get("detail", "")),
+                )
+                for e in pred.get("edges", [])
+            ]
             frame = pred.get("frame") or []
             spans = []
             start = None
@@ -413,9 +545,19 @@ class Distillation:
                 if flag and start is None:
                     start = t
                 elif not flag and start is not None:
-                    spans.append(_frame_span(start, t)); start = None
-            out.append(replace(record, id=f"distill/{record.id}", level="real_pairs", links=edges, spans=spans, pred=None,
-                               provenance={"links": "full_system", "fine_ops": "full_system-gated"}))
+                    spans.append(_frame_span(start, t))
+                    start = None
+            out.append(
+                replace(
+                    record,
+                    id=f"distill/{record.id}",
+                    level="real_pairs",
+                    links=edges,
+                    spans=spans,
+                    pred=None,
+                    provenance={"links": "full_system", "fine_ops": "full_system-gated"},
+                )
+            )
         return out
 
 
@@ -435,17 +577,27 @@ class RegimeApplier:
     """
 
     @staticmethod
-    def apply(text: str, *, fold: int, train: Sequence[Record], log=None) -> Tuple[Dict[str, Any], List[Record]]:
+    def apply(
+        text: str, *, fold: int, train: Sequence[Record], log=None
+    ) -> Tuple[Dict[str, Any], List[Record]]:
         name, params = parse_regime(text)
         overrides = resolve(name, fold, **params)
         records = list(train)
         if name == "curve":
             records = curve_sample(records, overrides.get("n", "all"), seed=0)
-        if str(overrides.get("ids", "")).strip():          # an explicit set of training records, one id per line
-            keep = {line.strip() for line in Path(str(overrides["ids"])).read_text().splitlines() if line.strip()}
+        if str(
+            overrides.get("ids", "")
+        ).strip():  # an explicit set of training records, one id per line
+            keep = {
+                line.strip()
+                for line in Path(str(overrides["ids"])).read_text().splitlines()
+                if line.strip()
+            }
             records = [r for r in records if r.id in keep]
             if log:
-                log(f"[regime {name}] {len(records)} of {len(keep)} listed records found in the training folds")
+                log(
+                    f"[regime {name}] {len(records)} of {len(keep)} listed records found in the training folds"
+                )
         links_only = bool(int(overrides.get("links_only", 0)))
         for key in ("extra_pairs", "extra_records"):
             for path in [p for p in str(overrides.get(key, "")).split(",") if p.strip()]:
@@ -454,10 +606,16 @@ class RegimeApplier:
                     if log:
                         log(f"[regime {name}] {path} not found; that data is left out")
                     continue
-                extra = ExtraPairs.load(path, links_only=links_only) if path.suffix == ".json" else RecordCodec.load(path)
+                extra = (
+                    ExtraPairs.load(path, links_only=links_only)
+                    if path.suffix == ".json"
+                    else RecordCodec.load(path)
+                )
                 records.extend(extra)
                 if log:
                     log(f"[regime {name}] + {len(extra)} records from {path}")
         if log:
-            log(f"[regime {name}] {len(records)} training records; overrides {dict((k, v) for k, v in overrides.items() if k != 'regime')}")
+            log(
+                f"[regime {name}] {len(records)} training records; overrides {dict((k, v) for k, v in overrides.items() if k != 'regime')}"
+            )
         return overrides, records

@@ -32,10 +32,36 @@ PARSED = ("dep", "head", "upos")
 #: (1 = no, 2 = yes) -- the identity signal without a vocabulary, so it generalises to unseen lemmas.
 CROSS = ("shared", "sharedform")
 #: Table sizes without the padding row.
-SIZES = {"lemma": 30000, "pos": 32, "morph": 2048, "dep": 64, "head": 30000, "upos": 20, "shared": 2, "sharedform": 2}
+SIZES = {
+    "lemma": 30000,
+    "pos": 32,
+    "morph": 2048,
+    "dep": 64,
+    "head": 30000,
+    "upos": 20,
+    "shared": 2,
+    "sharedform": 2,
+}
 _POS_ALPHABET = "abcdefghijklmnopqrstuvwxyz-"
-_UPOS = ("ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN",
-         "PUNCT", "SCONJ", "SYM", "VERB", "X")
+_UPOS = (
+    "ADJ",
+    "ADP",
+    "ADV",
+    "AUX",
+    "CCONJ",
+    "DET",
+    "INTJ",
+    "NOUN",
+    "NUM",
+    "PART",
+    "PRON",
+    "PROPN",
+    "PUNCT",
+    "SCONJ",
+    "SYM",
+    "VERB",
+    "X",
+)
 
 
 class WordChannels(torch.nn.Module):
@@ -54,7 +80,8 @@ class WordChannels(torch.nn.Module):
         if not self.kinds:
             raise ValueError(f"no known channel in {kinds!r}; expected some of {KINDS}")
         self.tables = torch.nn.ModuleDict(
-            {k: torch.nn.Embedding(SIZES[k] + 1, hidden, padding_idx=0) for k in self.kinds})
+            {k: torch.nn.Embedding(SIZES[k] + 1, hidden, padding_idx=0) for k in self.kinds}
+        )
         for table in self.tables.values():
             torch.nn.init.normal_(table.weight, std=init_std)
             with torch.no_grad():
@@ -91,7 +118,7 @@ class WordChannels(torch.nn.Module):
 
         parse = _dep_parser().parse_all([list(tokens)])[" ".join(tokens)]
         out = []
-        for i, word in enumerate(tokens):
+        for i, _word in enumerate(tokens):
             upos, rel, head = parse[i] if i < len(parse) else ("X", "dep", -1)
             ids = []
             for kind in self.parsed_kinds:
@@ -155,7 +182,11 @@ class WordChannels(torch.nn.Module):
         the other side, 1 where not, 0 where the word has no letters."""
         kinds = [k for k in self.kinds if k in CROSS]
         other_lemmas = {self._lemma_of(w) for w in others} - {""} if "shared" in kinds else set()
-        other_forms = {re.sub(r"[^a-z]", "", w.lower()) for w in others} - {""} if "sharedform" in kinds else set()
+        other_forms = (
+            {re.sub(r"[^a-z]", "", w.lower()) for w in others} - {""}
+            if "sharedform" in kinds
+            else set()
+        )
         out = []
         for word in words:
             letters = re.sub(r"[^a-z]", "", word.lower())
@@ -173,26 +204,36 @@ class WordChannels(torch.nn.Module):
 
     # ---------- the batch ----------
 
-    def ids(self, shape: Tuple[int, int], reuse_spans: Sequence[Sequence[Tuple[int, int]]],
-            source_spans: Sequence[Sequence[Tuple[int, int]]],
-            pairs: Sequence[Tuple[Sequence[str], Sequence[str]]]) -> torch.Tensor:
+    def ids(
+        self,
+        shape: Tuple[int, int],
+        reuse_spans: Sequence[Sequence[Tuple[int, int]]],
+        source_spans: Sequence[Sequence[Tuple[int, int]]],
+        pairs: Sequence[Tuple[Sequence[str], Sequence[str]]],
+    ) -> torch.Tensor:
         """``[B, W, n_kinds]`` channel ids: every piece of a word carries the word's ids, the
         rest (specials, padding, truncated words) the padding row."""
         batch, width = shape
         out = torch.zeros((batch, width, len(self.kinds)), dtype=torch.long)
-        form_cols = [k for k, kind in enumerate(self.kinds) if kind not in PARSED and kind not in CROSS]
+        form_cols = [
+            k for k, kind in enumerate(self.kinds) if kind not in PARSED and kind not in CROSS
+        ]
         parsed_cols = [k for k, kind in enumerate(self.kinds) if kind in PARSED]
         cross_cols = [k for k, kind in enumerate(self.kinds) if kind in CROSS]
         for row, (source, target) in enumerate(pairs):
-            for words, others, spans in ((source, target, source_spans[row] if row < len(source_spans) else ()),
-                                         (target, source, reuse_spans[row] if row < len(reuse_spans) else ())):
+            for words, others, spans in (
+                (source, target, source_spans[row] if row < len(source_spans) else ()),
+                (target, source, reuse_spans[row] if row < len(reuse_spans) else ()),
+            ):
                 parsed = self.passage_ids(words) if parsed_cols else None
                 cross = self.cross_ids(words, others) if cross_cols else None
                 for w, (word, (start, end)) in enumerate(zip(words, spans)):
                     if end > width:
                         break
                     if form_cols:
-                        out[row, start:end, form_cols] = torch.tensor(self.word_ids(word), dtype=torch.long)
+                        out[row, start:end, form_cols] = torch.tensor(
+                            self.word_ids(word), dtype=torch.long
+                        )
                     if parsed is not None and w < len(parsed):
                         out[row, start:end, parsed_cols] = torch.tensor(parsed[w], dtype=torch.long)
                     if cross is not None and w < len(cross):

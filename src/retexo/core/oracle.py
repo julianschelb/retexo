@@ -27,9 +27,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from retexo.core.normalize import normalize
+from retexo.core.script import CostModel, EditScript
 from retexo.operations import EditOperation, Level, OperationRegistry
 from retexo.resources import Resources
-from retexo.core.script import CostModel, EditScript
 
 # =============================================================================
 # Alignment
@@ -174,9 +174,7 @@ class EditPlanOracle:
         """Derive the script transforming ``source`` into ``reuse``."""
         return self.plan_tokens(source.split(), reuse.split())
 
-    def plan_tokens(
-        self, source_tokens: Sequence[str], target_tokens: Sequence[str]
-    ) -> EditScript:
+    def plan_tokens(self, source_tokens: Sequence[str], target_tokens: Sequence[str]) -> EditScript:
         """Token-level entry point, for callers that have already tokenized."""
         source_tokens, target_tokens = list(source_tokens), list(target_tokens)
         candidates = self._find_candidates(source_tokens, target_tokens)
@@ -189,7 +187,8 @@ class EditPlanOracle:
     def _relations(self):
         """Detectable token-level operations, in precedence order."""
         return [
-            op for op in self.registry
+            op
+            for op in self.registry
             if op.level is Level.TOKEN and op.detectable and op.tag not in self.exclude
         ]
 
@@ -220,9 +219,7 @@ class EditPlanOracle:
                 if relation is None:
                     continue
                 tag, detail = relation
-                candidates.append(
-                    AlignmentCandidate(i, j, tag, detail, costs.get(tag, 1.0))
-                )
+                candidates.append(AlignmentCandidate(i, j, tag, detail, costs.get(tag, 1.0)))
         return candidates
 
     @staticmethod
@@ -274,8 +271,11 @@ class EditPlanOracle:
                 continue
             operations.append(
                 EditOperation(
-                    candidate.tag, (candidate.source_index,), (j,),
-                    (source_tokens[candidate.source_index],), (token,),
+                    candidate.tag,
+                    (candidate.source_index,),
+                    (j,),
+                    (source_tokens[candidate.source_index],),
+                    (token,),
                     candidate.detail,
                 )
             )
@@ -286,8 +286,12 @@ class EditPlanOracle:
             candidate = by_target[j]
             operations.append(
                 EditOperation(
-                    "REORDER", (candidate.source_index,), (),
-                    (source_tokens[candidate.source_index],), (), "crossing",
+                    "REORDER",
+                    (candidate.source_index,),
+                    (),
+                    (source_tokens[candidate.source_index],),
+                    (),
+                    "crossing",
                 )
             )
         return EditScript(list(source_tokens), list(target_tokens), operations, self.registry)

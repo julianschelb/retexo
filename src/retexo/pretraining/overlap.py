@@ -26,12 +26,132 @@ from typing import Dict, Iterator, List, Optional, Sequence, Set, Tuple
 
 from retexo.pretraining.pool import DEFAULT_GOLD, PoolBuilder, PoolPair, _norm
 
-STOP = set("""et in ad ab ex de cum non ut si sed aut atque ac vel nec neque quod quia quae qui quam
-quo qua est sunt esse erat erant sit sint fuit erit enim autem nam tamen iam tum tunc hic haec hoc
-ille illa illud ipse ipsa ipsum is ea id ego tu nos vos me te se sui sibi suus sua suum meus tuus noster
-vester per pro sub super inter ante post contra sine ob propter apud iam etiam quoque quidem vero nunc
-omnis omnes omnia unus una unum duo tres magnus magna magnum bonus bona bonum multus multa multum
-quis quid quem cuius cui ne an num utrum dum donec quando ubi unde ibi inde ergo igitur itaque""".split())
+STOP = set(
+    [
+        "et",
+        "in",
+        "ad",
+        "ab",
+        "ex",
+        "de",
+        "cum",
+        "non",
+        "ut",
+        "si",
+        "sed",
+        "aut",
+        "atque",
+        "ac",
+        "vel",
+        "nec",
+        "neque",
+        "quod",
+        "quia",
+        "quae",
+        "qui",
+        "quam",
+        "quo",
+        "qua",
+        "est",
+        "sunt",
+        "esse",
+        "erat",
+        "erant",
+        "sit",
+        "sint",
+        "fuit",
+        "erit",
+        "enim",
+        "autem",
+        "nam",
+        "tamen",
+        "iam",
+        "tum",
+        "tunc",
+        "hic",
+        "haec",
+        "hoc",
+        "ille",
+        "illa",
+        "illud",
+        "ipse",
+        "ipsa",
+        "ipsum",
+        "is",
+        "ea",
+        "id",
+        "ego",
+        "tu",
+        "nos",
+        "vos",
+        "me",
+        "te",
+        "se",
+        "sui",
+        "sibi",
+        "suus",
+        "sua",
+        "suum",
+        "meus",
+        "tuus",
+        "noster",
+        "vester",
+        "per",
+        "pro",
+        "sub",
+        "super",
+        "inter",
+        "ante",
+        "post",
+        "contra",
+        "sine",
+        "ob",
+        "propter",
+        "apud",
+        "iam",
+        "etiam",
+        "quoque",
+        "quidem",
+        "vero",
+        "nunc",
+        "omnis",
+        "omnes",
+        "omnia",
+        "unus",
+        "una",
+        "unum",
+        "duo",
+        "tres",
+        "magnus",
+        "magna",
+        "magnum",
+        "bonus",
+        "bona",
+        "bonum",
+        "multus",
+        "multa",
+        "multum",
+        "quis",
+        "quid",
+        "quem",
+        "cuius",
+        "cui",
+        "ne",
+        "an",
+        "num",
+        "utrum",
+        "dum",
+        "donec",
+        "quando",
+        "ubi",
+        "unde",
+        "ibi",
+        "inde",
+        "ergo",
+        "igitur",
+        "itaque",
+    ]
+)
 #: A token in more segments than this is not indexed (E32's miner).
 MAX_DF = 2000
 
@@ -56,10 +176,19 @@ class OverlapMiner:
         ```
     """
 
-    def __init__(self, corpus: Sequence[str], queries: Sequence[str], gold_texts: Set[str], *, min_shared: int = 2,
-                 max_df: int = MAX_DF, min_tokens: int = 6, max_tokens: int = 80):
+    def __init__(
+        self,
+        corpus: Sequence[str],
+        queries: Sequence[str],
+        gold_texts: Set[str],
+        *,
+        min_shared: int = 2,
+        max_df: int = MAX_DF,
+        min_tokens: int = 6,
+        max_tokens: int = 80,
+    ):
         self.builder = PoolBuilder(gold_texts, min_tokens=min_tokens, max_tokens=max_tokens)
-        self.corpus = list(dict.fromkeys(corpus))        # a text once: every pair below is then unique
+        self.corpus = list(dict.fromkeys(corpus))  # a text once: every pair below is then unique
         self.queries = list(dict.fromkeys(queries))
         self.min_shared = min_shared
         self.corpus_tokens = [content(t) for t in self.corpus]
@@ -83,8 +212,13 @@ class OverlapMiner:
                     continue
                 kept += 1
                 self.report["kept_overlap"] += 1
-                yield PoolPair(f"o_{kept:08d}", tuple(_norm(self.corpus[i]).split()), tuple(_norm(query).split()),
-                               "overlap", float(n))
+                yield PoolPair(
+                    f"o_{kept:08d}",
+                    tuple(_norm(self.corpus[i]).split()),
+                    tuple(_norm(query).split()),
+                    "overlap",
+                    float(n),
+                )
                 if max_pairs and kept >= max_pairs:
                     return
             if log and qi % 10000 == 0:
@@ -100,7 +234,11 @@ def load_texts(min_words: int, max_words: int) -> Tuple[List[str], List[str]]:
     data = BenchmarkData.load()
     corpus = [t for t in data.corpus_texts() if min_words <= len(t.split()) <= max_words]
     rows = load_dataset("julian-schelb/latin-classical-intertextuality-queries", split="train")
-    queries = [r["text"] for r in rows if isinstance(r["text"], str) and min_words <= len(r["text"].split()) <= max_words]
+    queries = [
+        r["text"]
+        for r in rows
+        if isinstance(r["text"], str) and min_words <= len(r["text"].split()) <= max_words
+    ]
     return corpus, queries
 
 
@@ -115,7 +253,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = ap.parse_args(argv)
     corpus, queries = load_texts(args.min_words, args.max_words)
     print(f"[overlap] corpus segments {len(corpus):,}, query segments {len(queries):,}", flush=True)
-    miner = OverlapMiner(corpus, queries, PoolBuilder.gold_texts(Path(args.gold_records)), min_shared=args.min_shared)
+    miner = OverlapMiner(
+        corpus, queries, PoolBuilder.gold_texts(Path(args.gold_records)), min_shared=args.min_shared
+    )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     n = 0

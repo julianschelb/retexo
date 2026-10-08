@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 from retexo.formulations.pair_encoding import PairEncoder
 
@@ -84,12 +84,16 @@ class OperationTyper:
                 self.unreachable += 1
                 continue
             start, end = spans[row][example.position]
-            rows.append(row); starts.append(start); ends.append(max(end, start + 1))
-            labels.append(self.index[example.tag]); kept.append(row)
+            rows.append(row)
+            starts.append(start)
+            ends.append(max(end, start + 1))
+            labels.append(self.index[example.tag])
+            kept.append(row)
         if not rows:
             return None, None, []
 
-        rows_t = torch.tensor(rows); starts_t = torch.tensor(starts)
+        rows_t = torch.tensor(rows)
+        starts_t = torch.tensor(starts)
         ends_t = torch.tensor(ends)
         if self.config.pooling == "first":
             vectors = hidden[rows_t, starts_t]
@@ -103,10 +107,9 @@ class OperationTyper:
             gathered = hidden[rows_t.unsqueeze(1).to(hidden.device), index]
             gathered = gathered * mask.unsqueeze(-1)
             vectors = gathered.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
-        return (self._head(vectors),
-                torch.tensor(labels).to(self.config.device), kept)
+        return (self._head(vectors), torch.tensor(labels).to(self.config.device), kept)
 
-    def fit(self, examples: Sequence[TypedExample], *, log=None) -> "OperationTyper":
+    def fit(self, examples: Sequence[TypedExample], *, log=None) -> OperationTyper:
         import torch
 
         optimizer = torch.optim.AdamW(
@@ -117,7 +120,8 @@ class OperationTyper:
         order = list(examples)
         rng = random.Random(self.config.seed)
 
-        self._encoder.train(); self._head.train()
+        self._encoder.train()
+        self._head.train()
         for epoch in range(self.config.epochs):
             rng.shuffle(order)
             epoch_losses = []
@@ -127,7 +131,9 @@ class OperationTyper:
                 if logits is None:
                     continue
                 loss = loss_fn(logits, labels)
-                optimizer.zero_grad(); loss.backward(); optimizer.step()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
                 epoch_losses.append(float(loss.item()))
             mean_loss = sum(epoch_losses) / max(len(epoch_losses), 1)
             self.losses.append(mean_loss)
@@ -139,7 +145,8 @@ class OperationTyper:
         """Predicted tag per example; ``None`` where the position was unreachable."""
         import torch
 
-        self._encoder.eval(); self._head.eval()
+        self._encoder.eval()
+        self._head.eval()
         out: List[Optional[str]] = [None] * len(examples)
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -148,10 +155,6 @@ class OperationTyper:
                 if logits is None:
                     continue
                 chosen = logits.argmax(dim=-1).tolist()
-                seen = 0
-                for offset, example in enumerate(chunk):
-                    if example.position >= len(chunk):
-                        pass
                 for local, guess in zip(kept, chosen):
                     out[start + local] = self.tags[guess]
         return out

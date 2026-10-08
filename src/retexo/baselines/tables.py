@@ -45,7 +45,9 @@ class FoldRow:
     scores: Dict[int, dict]
 
     @classmethod
-    def load(cls, prefix: str, *, runs: Path = Path("runs"), folds: Sequence[int] = (0, 1, 2, 3, 4)) -> "FoldRow":
+    def load(
+        cls, prefix: str, *, runs: Path = Path("runs"), folds: Sequence[int] = (0, 1, 2, 3, 4)
+    ) -> FoldRow:
         scores = {}
         for k in folds:
             path = runs / f"{prefix}_f{k}.json"
@@ -66,12 +68,20 @@ class FoldRow:
             node = node[key]
         return float(node) if isinstance(node, (int, float)) else None
 
-    def cell(self, keys: Sequence[str], *, level: str) -> Tuple[Optional[float], Optional[float], int]:
+    def cell(
+        self, keys: Sequence[str], *, level: str
+    ) -> Tuple[Optional[float], Optional[float], int]:
         """``(mean, std, n)`` over the folds that have the value."""
-        values = [v for v in (self.value(k, keys, level=level) for k in self.folds) if v is not None]
+        values = [
+            v for v in (self.value(k, keys, level=level) for k in self.folds) if v is not None
+        ]
         if not values:
             return None, None, 0
-        return statistics.fmean(values), (statistics.stdev(values) if len(values) > 1 else 0.0), len(values)
+        return (
+            statistics.fmean(values),
+            (statistics.stdev(values) if len(values) > 1 else 0.0),
+            len(values),
+        )
 
 
 class Table1:
@@ -83,8 +93,14 @@ class Table1:
         ```
     """
 
-    def __init__(self, *, level: str = "V1", runs: Path = Path("runs"), folds: Sequence[int] = (0, 1, 2, 3, 4),
-                 with_std: bool = True):
+    def __init__(
+        self,
+        *,
+        level: str = "V1",
+        runs: Path = Path("runs"),
+        folds: Sequence[int] = (0, 1, 2, 3, 4),
+        with_std: bool = True,
+    ):
         self.level = level
         self.runs = runs
         self.folds = tuple(folds)
@@ -106,26 +122,44 @@ class Table1:
                     cells.append(f"{mean:.3f} ± {std:.3f}")
                 else:
                     cells.append(f"{mean:.3f}")
-            lines.append(f"| {row.prefix} | {','.join(map(str, row.folds)) or '–'} | " + " | ".join(cells) + " |")
+            lines.append(
+                f"| {row.prefix} | {','.join(map(str, row.folds)) or '–'} | "
+                + " | ".join(cells)
+                + " |"
+            )
         return "\n".join(lines)
 
     def per_fold(self, prefix: str) -> str:
         """The same columns fold by fold, for the appendix and for spotting an outlier."""
         row = FoldRow.load(prefix, runs=self.runs, folds=self.folds)
-        lines = ["| fold | " + " | ".join(name for name, _ in TABLE1_COLUMNS) + " |", "|" + "---|" * (len(TABLE1_COLUMNS) + 1)]
+        lines = [
+            "| fold | " + " | ".join(name for name, _ in TABLE1_COLUMNS) + " |",
+            "|" + "---|" * (len(TABLE1_COLUMNS) + 1),
+        ]
         for k in row.folds:
-            cells = [("–" if (v := row.value(k, keys, level=self.level)) is None else f"{v:.3f}") for _, keys in TABLE1_COLUMNS]
+            cells = [
+                ("–" if (v := row.value(k, keys, level=self.level)) is None else f"{v:.3f}")
+                for _, keys in TABLE1_COLUMNS
+            ]
             lines.append(f"| {k} | " + " | ".join(cells) + " |")
         return "\n".join(lines)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Table 1 rows from per-fold run JSONs")
-    parser.add_argument("prefixes", nargs="+", help="run prefixes, e.g. sim_latin_bert (reads runs/sim_latin_bert_f<k>.json)")
-    parser.add_argument("--level", default="V1", help="operation level for the op columns (V0, V1, V3, mode, group)")
+    parser.add_argument(
+        "prefixes",
+        nargs="+",
+        help="run prefixes, e.g. sim_latin_bert (reads runs/sim_latin_bert_f<k>.json)",
+    )
+    parser.add_argument(
+        "--level", default="V1", help="operation level for the op columns (V0, V1, V3, mode, group)"
+    )
     parser.add_argument("--folds", default="0,1,2,3,4")
     parser.add_argument("--runs", default="runs")
-    parser.add_argument("--per-fold", action="store_true", help="also print every prefix fold by fold")
+    parser.add_argument(
+        "--per-fold", action="store_true", help="also print every prefix fold by fold"
+    )
     parser.add_argument("--no-std", action="store_true")
     args = parser.parse_args(argv)
     folds = [int(k) for k in args.folds.split(",")]

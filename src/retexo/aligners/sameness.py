@@ -31,8 +31,14 @@ class SamenessPolicy:
     #: Mined from the completed hand labels: every link labelled NOP whose two words
     #: `normalize` still reports as different. 138 links over 111 distinct forms,
     #: which fall into four groups of very different character.
-    _ARCHAIC = (("umus", "imus"), ("uma", "ima"), ("umum", "imum"),
-                ("umis", "imis"), ("umae", "imae"), ("umo", "imo"))
+    _ARCHAIC = (
+        ("umus", "imus"),
+        ("uma", "ima"),
+        ("umum", "imum"),
+        ("umis", "imis"),
+        ("umae", "imae"),
+        ("umo", "imo"),
+    )
 
     @staticmethod
     def same_current(a: str, b: str) -> bool:
@@ -90,8 +96,11 @@ class SamenessPolicy:
         measure, not to recommend.
         """
         x, y = cls._extended(a), cls._extended(b)
-        return (x == y or cls._strip_enclitic(x) == cls._strip_enclitic(y)
-                or cls._plural(cls._strip_enclitic(x)) == cls._plural(cls._strip_enclitic(y)))
+        return (
+            x == y
+            or cls._strip_enclitic(x) == cls._strip_enclitic(y)
+            or cls._plural(cls._strip_enclitic(x)) == cls._plural(cls._strip_enclitic(y))
+        )
 
     RULES: ClassVar[Dict[str, Callable[[str, str], bool]]] = {}
 

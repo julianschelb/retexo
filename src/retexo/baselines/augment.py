@@ -63,10 +63,13 @@ class GoldReorder:
         cut = cls.cut_point(record.reuse_tokens) if cut is None else cut
         perm = cls.permutation(n, cut)
         tokens = list(record.reuse_tokens[cut:]) + list(record.reuse_tokens[:cut])
-        links = sorted((replace(e, r=perm[e.r]) for e in record.links if 0 <= e.r < n), key=lambda e: (e.r, e.s))
+        links = sorted(
+            (replace(e, r=perm[e.r]) for e in record.links if 0 <= e.r < n),
+            key=lambda e: (e.r, e.s),
+        )
         spans: List[Span] = []
         for sp in record.spans:
-            if sp.start < cut <= sp.end - 1:          # a span across the cut is split in two
+            if sp.start < cut <= sp.end - 1:  # a span across the cut is split in two
                 spans.append(replace(sp, start=perm[sp.start], end=perm[cut - 1] + 1))
                 spans.append(replace(sp, start=perm[cut], end=perm[sp.end - 1] + 1))
             elif sp.end > sp.start:
@@ -83,8 +86,15 @@ class GoldReorder:
                 annotation[key] = value
         provenance = dict(record.provenance)
         provenance["reorder"] = {"cut": cut, "of": record.id}
-        return replace(record, id=f"{record.id}#reorder", reuse_tokens=tokens, links=links, spans=spans,
-                       annotation=annotation, provenance=provenance)
+        return replace(
+            record,
+            id=f"{record.id}#reorder",
+            reuse_tokens=tokens,
+            links=links,
+            spans=spans,
+            annotation=annotation,
+            provenance=provenance,
+        )
 
     @classmethod
     def augment(cls, records: Sequence[Record], *, rate: float, seed: int = 1) -> List[Record]:

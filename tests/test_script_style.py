@@ -16,5 +16,9 @@ SRC = str(Path(__file__).resolve().parents[1] / "src")
 def test_script_runs_clean(module):
     env = dict(os.environ)
     env["PYTHONPATH"] = SRC + os.pathsep + env.get("PYTHONPATH", "")
-    done = subprocess.run([sys.executable, str(module)], capture_output=True, text=True, env=env, timeout=600)
-    assert done.returncode == 0, f"{module.name} failed:\n{done.stdout[-1500:]}\n{done.stderr[-1500:]}"
+    done = subprocess.run(
+        [sys.executable, str(module)], capture_output=True, text=True, env=env, timeout=600
+    )
+    assert done.returncode == 0, (
+        f"{module.name} failed:\n{done.stdout[-1500:]}\n{done.stderr[-1500:]}"
+    )

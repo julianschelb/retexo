@@ -4,6 +4,7 @@ attestation logic that separates what the static resources already know from the
 residual territory, the dependency-parse features, the operation-label glosses, the post-decoding
 repair rules, and the edit-script-as-classifier features for the downstream reuse/non-reuse
 decision."""
+
 from __future__ import annotations
 
 from retexo.edit_typing.attest import Attestation, Attester, FrameLexicon

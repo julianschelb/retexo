@@ -16,7 +16,9 @@ FIXTURE = Path(__file__).parent / "fixtures" / "raw_predictions.jsonl"
 
 @pytest.fixture(scope="module")
 def prepare():
-    spec = importlib.util.spec_from_file_location("prepare_data", ROOT / "webapp" / "scripts" / "prepare_data.py")
+    spec = importlib.util.spec_from_file_location(
+        "prepare_data", ROOT / "webapp" / "scripts" / "prepare_data.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -35,7 +37,13 @@ def labels(scripts):
         row = {"id": record.benchmark_id}
         for prefix, side in (("corpus", record.source), ("query", record.reuse)):
             text = " ".join(side["tokens"])
-            row.update({f"{prefix}_text": text, f"{prefix}_text_original": text.upper(), f"{prefix}_text_english": None})
+            row.update(
+                {
+                    f"{prefix}_text": text,
+                    f"{prefix}_text_original": text.upper(),
+                    f"{prefix}_text_english": None,
+                }
+            )
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -49,19 +57,32 @@ def test_a_record_has_what_the_app_reads(prepare, scripts, labels):
     for record in prepare.build_records(scripts, labels):
         assert record["pair_label"] in ("cit", "cf")
         for side in (record["source"], record["reuse"]):
-            assert set(side) == {"author", "work", "citation", "tokens", "text", "text_original", "text_english"}
+            assert set(side) == {
+                "author",
+                "work",
+                "citation",
+                "tokens",
+                "text",
+                "text_original",
+                "text_english",
+            }
         for link in record["pred"]["links"]:
             assert set(link) == {"r", "s", "op", "p", "relation"}
-            assert 0 <= link["r"] < len(record["reuse"]["tokens"]) and 0 <= link["s"] < len(record["source"]["tokens"])
+            assert 0 <= link["r"] < len(record["reuse"]["tokens"]) and 0 <= link["s"] < len(
+                record["source"]["tokens"]
+            )
 
 
 def test_links_and_spans_follow_the_released_record(prepare, scripts, labels):
     payload = {r["id"]: r for r in prepare.build_records(scripts, labels)}
     for released in scripts.itertuples(index=False):
         pred = payload[released.id]["pred"]
-        assert [(l["r"], l["s"], l["op"]) for l in pred["links"]] == [
-            (l["reuse"], l["source"], l["label"]) for l in released.links]
-        assert [(s["start"], s["end"]) for s in pred["frame_spans"]] == [(s["start"], s["end"]) for s in released.frame]
+        assert [(link["r"], link["s"], link["op"]) for link in pred["links"]] == [
+            (link["reuse"], link["source"], link["label"]) for link in released.links
+        ]
+        assert [(s["start"], s["end"]) for s in pred["frame_spans"]] == [
+            (s["start"], s["end"]) for s in released.frame
+        ]
 
 
 def test_texts_come_from_the_labels_and_missing_ones_are_null(prepare, scripts, labels):

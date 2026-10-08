@@ -32,7 +32,7 @@ from retexo.core.normalize import normalize
 Row = List[Tuple[int, float]]
 Rows = List[Row]
 
-DEFAULT_THETA = 0.45          # the preliminary champion's null threshold, fold 4
+DEFAULT_THETA = 0.45  # the preliminary champion's null threshold, fold 4
 BIDI_AVERAGE_THRESHOLD = 0.4  # Nagata et al. 2020, section 2.3
 
 
@@ -52,7 +52,19 @@ class BaselineDecoder:
         ```
     """
 
-    DECODERS = ("default", "argmax", "mutual", "mutual_threshold", "threshold", "intersect", "gdf", "raw", "stack", "fragment", "none")
+    DECODERS = (
+        "default",
+        "argmax",
+        "mutual",
+        "mutual_threshold",
+        "threshold",
+        "intersect",
+        "gdf",
+        "raw",
+        "stack",
+        "fragment",
+        "none",
+    )
 
     # ---------- row arithmetic ----------
 
@@ -68,7 +80,9 @@ class BaselineDecoder:
         return sorted(((int(s), float(p)) for s, p in row), key=lambda x: -x[1])
 
     @classmethod
-    def symmetrise_average(cls, rows: Rows, rev_rows: Optional[Rows], n_source: Optional[int] = None) -> Rows:
+    def symmetrise_average(
+        cls, rows: Rows, rev_rows: Optional[Rows], n_source: Optional[int] = None
+    ) -> Rows:
         """Nagata's bidirectional average: ``p = (p_fwd(s | t) + p_rev(t | s)) / 2``.
 
         The union of the forward candidates of ``t`` and the reverse
@@ -168,7 +182,9 @@ class BaselineDecoder:
         return cls.decode_argmax(AgreementDecoder.mutual_argmax(rows, rev_rows))
 
     @classmethod
-    def decode_mutual_threshold(cls, rows: Rows, rev_rows: Optional[Rows], theta: float) -> List[int]:
+    def decode_mutual_threshold(
+        cls, rows: Rows, rev_rows: Optional[Rows], theta: float
+    ) -> List[int]:
         """SimAlign's Argmax with a null: a mutual-best link is kept iff its score is at least ``theta``."""
         links = cls.decode_mutual(rows, rev_rows)
         for t, s in enumerate(links):
@@ -184,8 +200,9 @@ class BaselineDecoder:
         return 0.0
 
     @classmethod
-    def decode_intersect(cls, rows: Rows, rev_rows: Optional[Rows], c: float = 0.001
-                         ) -> Tuple[List[int], List[Tuple[int, int]]]:
+    def decode_intersect(
+        cls, rows: Rows, rev_rows: Optional[Rows], c: float = 0.001
+    ) -> Tuple[List[int], List[Tuple[int, int]]]:
         """awesome-align: keep ``(t, s)`` iff ``p(s | t) > c`` and ``p(t | s) > c``.
 
         Many-to-many; the primary link of ``t`` is its best kept candidate and
@@ -207,8 +224,14 @@ class BaselineDecoder:
         return links, extra
 
     @classmethod
-    def decode_gdf(cls, rows: Rows, rev_rows: Optional[Rows], n_source: Optional[int] = None,
-                   *, final: str = "and") -> Tuple[List[int], List[Tuple[int, int]]]:
+    def decode_gdf(
+        cls,
+        rows: Rows,
+        rev_rows: Optional[Rows],
+        n_source: Optional[int] = None,
+        *,
+        final: str = "and",
+    ) -> Tuple[List[int], List[Tuple[int, int]]]:
         """Grow-diag-final(-and) over the two argmax alignments (Och and Ney 2003, section 4).
 
         Start from the intersection of the forward argmax and the reverse
@@ -239,12 +262,21 @@ class BaselineDecoder:
             for t, s in sorted(aligned):
                 for dt, ds in neighbours:
                     u, v = t + dt, s + ds
-                    if (u, v) in union and (u, v) not in aligned and (u not in t_done or v not in s_done):
-                        aligned.add((u, v)); t_done.add(u); s_done.add(v); changed = True
+                    if (
+                        (u, v) in union
+                        and (u, v) not in aligned
+                        and (u not in t_done or v not in s_done)
+                    ):
+                        aligned.add((u, v))
+                        t_done.add(u)
+                        s_done.add(v)
+                        changed = True
         for t, s in sorted(union - aligned):
             free_t, free_s = t not in t_done, s not in s_done
             if (final == "and" and free_t and free_s) or (final == "or" and (free_t or free_s)):
-                aligned.add((t, s)); t_done.add(t); s_done.add(s)
+                aligned.add((t, s))
+                t_done.add(t)
+                s_done.add(s)
         prob = [dict(row) for row in rows]
         links = [-1] * n_t
         extra = []
@@ -258,8 +290,9 @@ class BaselineDecoder:
     # ---------- the full system's stack ----------
 
     @classmethod
-    def identity_bonus(cls, rows: Rows, source_tokens: Sequence[str], reuse_tokens: Sequence[str],
-                       w: float) -> Rows:
+    def identity_bonus(
+        cls, rows: Rows, source_tokens: Sequence[str], reuse_tokens: Sequence[str], w: float
+    ) -> Rows:
         """``run_e9.rerank`` for one pair: ``+ w`` in logit space on identical forms."""
         if w == 0.0:
             return [cls._sorted(r) for r in rows]
@@ -267,10 +300,17 @@ class BaselineDecoder:
         out = []
         for t, row in enumerate(rows):
             if not row:
-                out.append([]); continue
+                out.append([])
+                continue
             target = normalize(reuse_tokens[t]) if t < len(reuse_tokens) else None
-            bumped = [(s, math.log(max(p, 1e-12)) + (w if s >= 0 and s < len(source) and source[s] == target else 0.0))
-                      for s, p in row]
+            bumped = [
+                (
+                    s,
+                    math.log(max(p, 1e-12))
+                    + (w if s >= 0 and s < len(source) and source[s] == target else 0.0),
+                )
+                for s, p in row
+            ]
             top = max(v for _, v in bumped)
             weights = [(s, math.exp(v - top)) for s, v in bumped]
             total = sum(v for _, v in weights) or 1.0
@@ -278,8 +318,15 @@ class BaselineDecoder:
         return out
 
     @classmethod
-    def lemma_rerank(cls, rows: Rows, source_lemmas: Sequence[str], reuse_lemmas: Sequence[str],
-                     similarity: Callable[[str, str], Optional[float]], weight: float, top_k: int) -> Rows:
+    def lemma_rerank(
+        cls,
+        rows: Rows,
+        source_lemmas: Sequence[str],
+        reuse_lemmas: Sequence[str],
+        similarity: Callable[[str, str], Optional[float]],
+        weight: float,
+        top_k: int,
+    ) -> Rows:
         """``run_e23.similarity_rerank`` for one pair: ``+ weight * sim`` on the top-k real candidates."""
         if weight == 0.0:
             return [cls._sorted(r) for r in rows]
@@ -299,15 +346,31 @@ class BaselineDecoder:
         return out
 
     @classmethod
-    def decode_stack(cls, rows: Rows, record, *, w: float = 0.0, weight: float = 0.0, top_k: int = 5,
-                     k: float = 1.0, theta: float = DEFAULT_THETA, morph=None, vectors=None,
-                     beta: float = 0.0, llm_links: Optional[Sequence[int]] = None,
-                     rev_rows: Optional[Rows] = None) -> List[int]:
+    def decode_stack(
+        cls,
+        rows: Rows,
+        record,
+        *,
+        w: float = 0.0,
+        weight: float = 0.0,
+        top_k: int = 5,
+        k: float = 1.0,
+        theta: float = DEFAULT_THETA,
+        morph=None,
+        vectors=None,
+        beta: float = 0.0,
+        llm_links: Optional[Sequence[int]] = None,
+        rev_rows: Optional[Rows] = None,
+    ) -> List[int]:
         """Identity bonus, lemma re-rank, null scale, rater bonus, then the default decoder."""
         rows = cls.identity_bonus(rows, record.source_tokens, record.reuse_tokens, w)
         if weight and vectors is not None:
-            lemmas_s = record.annotation.get("lemma_source") or [morph.lemma(x) if morph else x for x in record.source_tokens]
-            lemmas_t = record.annotation.get("lemma") or [morph.lemma(x) if morph else x for x in record.reuse_tokens]
+            lemmas_s = record.annotation.get("lemma_source") or [
+                morph.lemma(x) if morph else x for x in record.source_tokens
+            ]
+            lemmas_t = record.annotation.get("lemma") or [
+                morph.lemma(x) if morph else x for x in record.reuse_tokens
+            ]
             rows = cls.lemma_rerank(rows, lemmas_s, lemmas_t, vectors.similarity, weight, top_k)
         if k != 1.0:
             rows = AgreementDecoder.null_scale(rows, k)
@@ -315,15 +378,23 @@ class BaselineDecoder:
             bumped = []
             for t, row in enumerate(rows):
                 cell = llm_links[t] if t < len(llm_links) else -1
-                bumped.append(cls._sorted((s, p + (beta if s == cell and s >= 0 else 0.0)) for s, p in row))
+                bumped.append(
+                    cls._sorted((s, p + (beta if s == cell and s >= 0 else 0.0)) for s, p in row)
+                )
             rows = bumped
         return cls.decode_default(rows, theta=theta, rev_rows=rev_rows)
 
     # ---------- the default and the dispatch table ----------
 
     @classmethod
-    def decode_default(cls, rows: Rows, *, theta: float, rev_rows: Optional[Rows] = None,
-                       n_source: Optional[int] = None) -> List[int]:
+    def decode_default(
+        cls,
+        rows: Rows,
+        *,
+        theta: float,
+        rev_rows: Optional[Rows] = None,
+        n_source: Optional[int] = None,
+    ) -> List[int]:
         """Bidirectional average where two directions exist, threshold, Hungarian."""
         rows = cls.symmetrise_average(rows, rev_rows, n_source)
         return cls.hungarian(cls.with_threshold(rows, theta))
@@ -342,8 +413,12 @@ class BaselineDecoder:
         for t, s in enumerate(links):
             if s < 0:
                 continue
-            if cur is not None and -1 <= s - last_s <= gap + 1:     # a forward gap is a deletion, a backward jump a reorder
-                cur[1] = t; cur[2] = min(cur[2], s); cur[3] = max(cur[3], s)
+            if (
+                cur is not None and -1 <= s - last_s <= gap + 1
+            ):  # a forward gap is a deletion, a backward jump a reorder
+                cur[1] = t
+                cur[2] = min(cur[2], s)
+                cur[3] = max(cur[3], s)
             else:
                 if cur is not None:
                     blocks.append(cur)
@@ -354,7 +429,9 @@ class BaselineDecoder:
         return blocks
 
     @classmethod
-    def residual_region(cls, t: int, blocks: Sequence[Sequence[int]], n_source: int) -> Optional[Tuple[int, int]]:
+    def residual_region(
+        cls, t: int, blocks: Sequence[Sequence[int]], n_source: int
+    ) -> Optional[Tuple[int, int]]:
         """The source words an unlinked reuse word ``t`` may come from: inside a fragment, its
         source span; between two fragments, the source words between their spans (in either
         order); before the first or after the last, the source words before or after it."""
@@ -376,15 +453,23 @@ class BaselineDecoder:
         return None
 
     @classmethod
-    def split_repair(cls, links: List[int], rows: Rows, record, theta: float, *, rev_rows: Optional[Rows] = None,
-                     n_source: Optional[int] = None) -> List[int]:
+    def split_repair(
+        cls,
+        links: List[int],
+        rows: Rows,
+        record,
+        theta: float,
+        *,
+        rev_rows: Optional[Rows] = None,
+        n_source: Optional[int] = None,
+    ) -> List[int]:
         """SPLIT under a one-to-one decoder (failure-mode row 15, 2026-09-19): three of the eleven sure
         substitution misses of fold 4 were *siqua -> si qua* and *iamdudum -> dudum*, where the model put
         .98 on the right source word and the Hungarian step, which lets no source word be taken twice,
         gave it to the neighbour. An unlinked reuse word keeps its best source word when that word scores
         at least ``theta``, is held by the adjacent reuse word, and the two reuse words together spell it
         (punctuation and case folded)."""
-        sym = rows                      # the forward view: the reverse row of a split word belongs to its neighbour
+        sym = rows  # the forward view: the reverse row of a split word belongs to its neighbour
         src = [normalize(w) for w in record.source_tokens]
         reu = [normalize(w) for w in record.reuse_tokens]
         holder_of = {s: t for t, s in enumerate(links) if s >= 0}
@@ -405,15 +490,27 @@ class BaselineDecoder:
         return out
 
     @classmethod
-    def decode_fragment(cls, rows: Rows, *, theta: float, rev_rows: Optional[Rows] = None,
-                        n_source: Optional[int] = None, frag_scale: float = 0.5, gap: int = 3) -> List[int]:
+    def decode_fragment(
+        cls,
+        rows: Rows,
+        *,
+        theta: float,
+        rev_rows: Optional[Rows] = None,
+        n_source: Optional[int] = None,
+        frag_scale: float = 0.5,
+        gap: int = 3,
+    ) -> List[int]:
         """The default decode, then a second pass inside the matched fragments: an unlinked reuse
         word may take an unlinked source word of its fragment's region at the lower threshold
         ``theta * frag_scale`` -- the annotator's slot convention ("everything around it matches")
         as a decoding rule; one-to-one by the Hungarian method among the residual words."""
         sym = cls.symmetrise_average(rows, rev_rows, n_source)
         links = cls.hungarian(cls.with_threshold(sym, theta))
-        n_src = n_source if n_source is not None else max([s for row in sym for s, _ in row if s >= 0] + [-1]) + 1
+        n_src = (
+            n_source
+            if n_source is not None
+            else max([s for row in sym for s, _ in row if s >= 0] + [-1]) + 1
+        )
         blocks = cls.fragments(links, gap=gap)
         if not blocks:
             return links
@@ -427,7 +524,9 @@ class BaselineDecoder:
             if region is None or region[0] > region[1]:
                 continue
             prob = {s2: p for s2, p in sym[t] if s2 >= 0}
-            cands = [(s2, prob.get(s2, 0.0)) for s2 in range(region[0], region[1] + 1) if s2 not in used]
+            cands = [
+                (s2, prob.get(s2, 0.0)) for s2 in range(region[0], region[1] + 1) if s2 not in used
+            ]
             cands = [(s2, p) for s2, p in cands if p >= low]
             if cands:
                 residual[t] = cands + [(-1, low)]
@@ -439,15 +538,25 @@ class BaselineDecoder:
         return links
 
     @classmethod
-    def decode(cls, name: str, rows: Rows, *, theta: float = DEFAULT_THETA, rev_rows: Optional[Rows] = None,
-               n_source: Optional[int] = None, record=None, dials: Optional[Dict[str, float]] = None
-               ) -> Tuple[List[int], List[Tuple[int, int]]]:
+    def decode(
+        cls,
+        name: str,
+        rows: Rows,
+        *,
+        theta: float = DEFAULT_THETA,
+        rev_rows: Optional[Rows] = None,
+        n_source: Optional[int] = None,
+        record=None,
+        dials: Optional[Dict[str, float]] = None,
+    ) -> Tuple[List[int], List[Tuple[int, int]]]:
         """Dispatch by name; returns ``(links, extra_edges)``."""
         dials = dials or {}
         if name == "default":
             links = cls.decode_default(rows, theta=theta, rev_rows=rev_rows, n_source=n_source)
             if dials.get("split_repair") and record is not None:
-                links = cls.split_repair(links, rows, record, theta, rev_rows=rev_rows, n_source=n_source)
+                links = cls.split_repair(
+                    links, rows, record, theta, rev_rows=rev_rows, n_source=n_source
+                )
             return links, []
         if name == "argmax":
             return cls.decode_argmax(cls.symmetrise_average(rows, rev_rows)), []
@@ -464,14 +573,29 @@ class BaselineDecoder:
         if name == "raw":
             return cls.decode_raw(rows), []
         if name == "stack":
-            return cls.decode_stack(rows, record, w=float(dials.get("w", 0.0)), weight=float(dials.get("weight", 0.0)),
-                                top_k=int(dials.get("top_k", 5)), k=float(dials.get("k", 1.0)), theta=theta,
-                                morph=dials.get("morph"), vectors=dials.get("vectors"),
-                                beta=float(dials.get("beta", 0.0)), llm_links=dials.get("llm_links"),
-                                rev_rows=rev_rows), []
+            return cls.decode_stack(
+                rows,
+                record,
+                w=float(dials.get("w", 0.0)),
+                weight=float(dials.get("weight", 0.0)),
+                top_k=int(dials.get("top_k", 5)),
+                k=float(dials.get("k", 1.0)),
+                theta=theta,
+                morph=dials.get("morph"),
+                vectors=dials.get("vectors"),
+                beta=float(dials.get("beta", 0.0)),
+                llm_links=dials.get("llm_links"),
+                rev_rows=rev_rows,
+            ), []
         if name == "fragment":
-            return cls.decode_fragment(rows, theta=theta, rev_rows=rev_rows, n_source=n_source,
-                                       frag_scale=float(dials.get("frag_scale", 0.5)), gap=int(dials.get("gap", 3))), []
+            return cls.decode_fragment(
+                rows,
+                theta=theta,
+                rev_rows=rev_rows,
+                n_source=n_source,
+                frag_scale=float(dials.get("frag_scale", 0.5)),
+                gap=int(dials.get("gap", 3)),
+            ), []
         if name == "none":
             return cls.decode_raw(rows), []
         raise ValueError(f"unknown decoder {name!r}; expected one of {cls.DECODERS}")
@@ -479,11 +603,19 @@ class BaselineDecoder:
     # ---------- dev-fold tuning of the null threshold ----------
 
     @classmethod
-    def tune_null_threshold(cls, rows_per_pair: Sequence[Rows], gold_links_per_pair: Sequence[Sequence[int]], *,
-                            rev_per_pair: Optional[Sequence[Optional[Rows]]] = None,
-                            n_source_per_pair: Optional[Sequence[int]] = None,
-                            grid: Optional[Sequence[float]] = None, criterion: str = "token_accuracy",
-                            decoder: str = "default", records=None, dials=None) -> float:
+    def tune_null_threshold(
+        cls,
+        rows_per_pair: Sequence[Rows],
+        gold_links_per_pair: Sequence[Sequence[int]],
+        *,
+        rev_per_pair: Optional[Sequence[Optional[Rows]]] = None,
+        n_source_per_pair: Optional[Sequence[int]] = None,
+        grid: Optional[Sequence[float]] = None,
+        criterion: str = "token_accuracy",
+        decoder: str = "default",
+        records=None,
+        dials=None,
+    ) -> float:
         """The theta that maximises ``criterion`` on the dev pairs; ties go to the larger theta."""
         from retexo.baselines.scorer import link_prf_from_links, token_accuracy_from_links
 
@@ -495,7 +627,9 @@ class BaselineDecoder:
                 rev = rev_per_pair[i] if rev_per_pair is not None else None
                 n_s = n_source_per_pair[i] if n_source_per_pair is not None else None
                 rec = records[i] if records is not None else None
-                links, _ = cls.decode(decoder, rows, theta=theta, rev_rows=rev, n_source=n_s, record=rec, dials=dials)
+                links, _ = cls.decode(
+                    decoder, rows, theta=theta, rev_rows=rev, n_source=n_s, record=rec, dials=dials
+                )
                 decoded.append(links)
             if criterion == "link_f1":
                 value = link_prf_from_links(decoded, gold_links_per_pair)["f1"]

@@ -66,9 +66,7 @@ class Localized:
         wanted = {normalize(token) for token in short}
         best_start, best_score = 0, -1
         for start in range(len(long) - width + 1):
-            score = sum(
-                1 for token in long[start:start + width] if normalize(token) in wanted
-            )
+            score = sum(1 for token in long[start : start + width] if normalize(token) in wanted)
             if score > best_score:
                 best_start, best_score = start, score
         return best_start, best_start + width
@@ -76,7 +74,7 @@ class Localized:
     @classmethod
     def find(
         cls, source: Sequence[str], target: Sequence[str], *, enabled: bool = True
-    ) -> "Localized":
+    ) -> Localized:
         """Narrow the longer passage to the window that best matches the shorter.
 
         The shorter passage is left whole: it is the better estimate of the extent

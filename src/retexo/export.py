@@ -33,13 +33,31 @@ SCHEMA_VERSION = 1
 
 #: The code's tag for a link, and the label of the paper it stands for.
 LABEL_OF_TAG = {
-    "NOP": "COPY", "COPY": "COPY",
-    "MORPH": "INFLECT", "INFLECT": "INFLECT",
-    "SUBST": "SUBST", "SPLIT": "SPLIT", "MERGE": "MERGE",
+    "NOP": "COPY",
+    "COPY": "COPY",
+    "MORPH": "INFLECT",
+    "INFLECT": "INFLECT",
+    "SUBST": "SUBST",
+    "SPLIT": "SPLIT",
+    "MERGE": "MERGE",
 }
 
 #: A former lexical tag is a substitution that names its relation.
-RELATION_TAGS = ("SYN", "SYN-DIST", "HYPER", "HYPO", "CO-HYPO", "ANT", "POS", "NE-SUB", "FUNC", "META", "CONSTR", "PRON", "NUM")
+RELATION_TAGS = (
+    "SYN",
+    "SYN-DIST",
+    "HYPER",
+    "HYPO",
+    "CO-HYPO",
+    "ANT",
+    "POS",
+    "NE-SUB",
+    "FUNC",
+    "META",
+    "CONSTR",
+    "PRON",
+    "NUM",
+)
 
 LABELS = ("COPY", "INFLECT", "SUBST", "SPLIT", "MERGE")
 
@@ -87,9 +105,13 @@ def convert_record(raw: Dict[str, Any], *, fold: Optional[int] = None) -> Dict[s
     source, reuse = raw["source"], raw["target"]
     links, tags, frames, dels = raw["links"], raw["gated_tags"], raw["frames"], raw["dels"]
     if not (len(links) == len(tags) == len(frames) == len(reuse)):
-        raise ValueError(f"{raw['id']}: per-word lists do not match the reuse passage's {len(reuse)} words")
+        raise ValueError(
+            f"{raw['id']}: per-word lists do not match the reuse passage's {len(reuse)} words"
+        )
     if len(dels) != len(source):
-        raise ValueError(f"{raw['id']}: deletions do not match the source passage's {len(source)} words")
+        raise ValueError(
+            f"{raw['id']}: deletions do not match the source passage's {len(source)} words"
+        )
 
     confidence = {(x["r"], x["s"]): x.get("p") for x in raw.get("pred", {}).get("links", [])}
     out_links = []
@@ -98,8 +120,15 @@ def convert_record(raw: Dict[str, Any], *, fold: Optional[int] = None) -> Dict[s
             continue
         label, relation = label_of(tags[r])
         p = confidence.get((r, s))
-        out_links.append({"reuse": r, "source": s, "label": label, "relation": relation,
-                          "confidence": None if p is None else round(float(p), 5)})
+        out_links.append(
+            {
+                "reuse": r,
+                "source": s,
+                "label": label,
+                "relation": relation,
+                "confidence": None if p is None else round(float(p), 5),
+            }
+        )
     claimed = {link["source"] for link in out_links}
     deletions = [s for s in range(len(source)) if s not in claimed]
     if deletions != [s for s, flag in enumerate(dels) if flag]:
@@ -154,7 +183,9 @@ def write_parquet(records: Sequence[Dict[str, Any]], path: Path | str) -> int:
     return len(records)
 
 
-def export_folds(sources: Sequence[Path | str], out_dir: Path | str, *, fmt: str = "jsonl") -> Dict[int, int]:
+def export_folds(
+    sources: Sequence[Path | str], out_dir: Path | str, *, fmt: str = "jsonl"
+) -> Dict[int, int]:
     """Convert one raw file per test fold into ``out_dir/fold_<k>.<fmt>``; returns pairs per fold.
 
     The fold is read from the records themselves, so the order of ``sources`` does not matter.
@@ -167,10 +198,14 @@ def export_folds(sources: Sequence[Path | str], out_dir: Path | str, *, fmt: str
         records = list(read_predictions(src))
         folds = {record["fold"] for record in records}
         if len(folds) != 1 or None in folds:
-            raise ValueError(f"{src}: expected the pairs of exactly one fold, found {sorted(map(str, folds))}")
+            raise ValueError(
+                f"{src}: expected the pairs of exactly one fold, found {sorted(map(str, folds))}"
+            )
         fold = folds.pop()
         target = out_dir / f"fold_{fold}.{fmt}"
-        counts[fold] = write_jsonl(records, target) if fmt == "jsonl" else write_parquet(records, target)
+        counts[fold] = (
+            write_jsonl(records, target) if fmt == "jsonl" else write_parquet(records, target)
+        )
     return dict(sorted(counts.items()))
 
 
@@ -184,5 +219,14 @@ def label_shares(records: Iterable[Dict[str, Any]]) -> Dict[str, float]:
     return {label: count / n for label, count in totals.items()}
 
 
-__all__ = ["SCHEMA_VERSION", "LABELS", "convert_record", "read_predictions", "export_folds", "label_shares", "label_of",
-           "write_jsonl", "write_parquet"]
+__all__ = [
+    "SCHEMA_VERSION",
+    "LABELS",
+    "convert_record",
+    "read_predictions",
+    "export_folds",
+    "label_shares",
+    "label_of",
+    "write_jsonl",
+    "write_parquet",
+]

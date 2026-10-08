@@ -23,7 +23,7 @@ from retexo import (  # noqa: E402
     VariantBuilder,
     normalize,
 )
-from retexo.operations import EditOperation, Role  # noqa: E402
+from retexo.operations import EditOperation  # noqa: E402
 
 REGISTRY = OperationRegistry.default()
 SCRIBA = Scriba(REGISTRY)
@@ -260,8 +260,10 @@ def test_execute_raises_on_invalid_script():
 
 
 def test_verify_returns_false_rather_than_raising():
-    ops = [EditOperation("NOP", (0,), (0,), ("a",), ("a",)),
-           EditOperation("NOP", (1,), (0,), ("b",), ("b",))]
+    ops = [
+        EditOperation("NOP", (0,), (0,), ("a",), ("a",)),
+        EditOperation("NOP", (1,), (0,), ("b",), ("b",)),
+    ]
     assert SCRIBA.verify(EditScript(["a", "b"], [], ops, REGISTRY), ["a", "b"], ["a"]) is False
 
 
@@ -309,11 +311,9 @@ def test_every_operation_is_exercised():
     e = VariantBuilder("k l m n", REGISTRY)
     e.subst(0, "K").keep(1).form(2, "M").sense(3, "N")
     _, s4 = e.build()
-    seen = (set(s1.op_counts()) | set(s2.op_counts()) | set(s3.op_counts())
-            | set(s4.op_counts()))
+    seen = set(s1.op_counts()) | set(s2.op_counts()) | set(s3.op_counts()) | set(s4.op_counts())
     missing = set(REGISTRY.tags()) - seen
     assert not missing, f"never exercised: {sorted(missing)}"
-
 
 
 # =============================================================================
@@ -368,9 +368,15 @@ def test_every_tag_has_a_builder_method():
 
 def test_substitution_helpers_match_substitute():
     """Each helper is exactly its tag's substitute call, not a variant of it."""
-    for tag, name in [("SYN", "syn"), ("SYN-DIST", "syn_dist"), ("HYPER", "hyper"),
-                      ("HYPO", "hypo"), ("ANT", "ant"), ("NE-SUB", "ne_sub"),
-                      ("POS", "pos")]:
+    for tag, name in [
+        ("SYN", "syn"),
+        ("SYN-DIST", "syn_dist"),
+        ("HYPER", "hyper"),
+        ("HYPO", "hypo"),
+        ("ANT", "ant"),
+        ("NE-SUB", "ne_sub"),
+        ("POS", "pos"),
+    ]:
         generic = VariantBuilder(SEED, REGISTRY)
         generic.substitute(0, "aliud", tag=tag, detail="d")
         _, expected = generic.build()
@@ -381,13 +387,13 @@ def test_substitution_helpers_match_substitute():
 
         assert actual.serialize() == expected.serialize(), f"{name} diverges from substitute"
 
+
 # =============================================================================
 # Runner
 # =============================================================================
 
 if __name__ == "__main__":
-    tests = [(n, f) for n, f in sorted(globals().items())
-             if n.startswith("test_") and callable(f)]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = []
     for name, fn in tests:
         try:

@@ -30,8 +30,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence
 
 from retexo.datasets.dataset import LabelledPair
-from retexo.formulations.base import ScriptExample, ScriptModel
 from retexo.datasets.localize import Localized
+from retexo.formulations.base import ScriptExample, ScriptModel
 
 # =============================================================================
 # Phases
@@ -116,9 +116,7 @@ class TrainingSchedule:
                 if on_error == "raise":
                     raise
                 continue
-            out.append(
-                ScriptExample(span.source, span.target, script, origin=origin)
-            )
+            out.append(ScriptExample(span.source, span.target, script, origin=origin))
         return out
 
     @staticmethod
@@ -152,11 +150,16 @@ class TrainingSchedule:
                 if on_error == "raise":
                     raise
                 continue
-            out.append(ScriptExample(
-                source, target, script, origin=origin,
-                framed=any(op.tag == "FRAME" for op in script.operations),
-                fragment_span=fragment_span,
-            ))
+            out.append(
+                ScriptExample(
+                    source,
+                    target,
+                    script,
+                    origin=origin,
+                    framed=any(op.tag == "FRAME" for op in script.operations),
+                    fragment_span=fragment_span,
+                )
+            )
         return out
 
     @staticmethod
@@ -207,9 +210,12 @@ class TrainingSchedule:
             report.losses[phase.name] = model.log.losses[before:]
             if log:
                 final = report.losses[phase.name]
-                log(f"    phase {phase.name}: {len(phase)} examples, "
-                    f"loss {final[0]:.3f} -> {final[-1]:.3f}" if final
-                    else f"    phase {phase.name}: {len(phase)} examples")
+                log(
+                    f"    phase {phase.name}: {len(phase)} examples, "
+                    f"loss {final[0]:.3f} -> {final[-1]:.3f}"
+                    if final
+                    else f"    phase {phase.name}: {len(phase)} examples"
+                )
         return report
 
 

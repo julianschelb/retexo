@@ -25,7 +25,7 @@ Operations fall into three roles, which determine how a script replays:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional, Sequence, Tuple
 
@@ -231,7 +231,7 @@ class OperationRegistry:
     # ---------- Construction ----------
 
     @classmethod
-    def default(cls) -> "OperationRegistry":
+    def default(cls) -> OperationRegistry:
         """Every operation in the inventory."""
         from retexo.operations import ALL_OPERATIONS
 

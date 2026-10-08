@@ -173,36 +173,59 @@ class PromptVariants:
 
     @staticmethod
     def build(ops: str, stretch: bool, gate: str = GATE) -> Tuple[str, str]:
-        static = (SYSTEM_EN + "\n\n" + TASK + "\n\n" + INLINE_NOTE + "\n" + FIXES + gate + "\n"
-                  + WORD_SCHEME.replace("{operations}", ops).replace("{n_lines_note}", "")
-                  + (STRETCH_LINE if stretch else "")
-                  + CLOSE.format(relation_note=REL_FINE if ops is FINE_OPS else ""))
+        static = (
+            SYSTEM_EN
+            + "\n\n"
+            + TASK
+            + "\n\n"
+            + INLINE_NOTE
+            + "\n"
+            + FIXES
+            + gate
+            + "\n"
+            + WORD_SCHEME.replace("{operations}", ops).replace("{n_lines_note}", "")
+            + (STRETCH_LINE if stretch else "")
+            + CLOSE.format(relation_note=REL_FINE if ops is FINE_OPS else "")
+        )
         return static, USER_TURN
 
     @classmethod
     def all(cls) -> Dict[str, Tuple[str, str]]:
-        round_one = (TASK + "\n\n" + INLINE_NOTE + "\n" + FIXES + """
+        round_one = (
+            TASK
+            + "\n\n"
+            + INLINE_NOTE
+            + "\n"
+            + FIXES
+            + """
 EARLIER passage:
 {source_annotated}
 
 LATER passage:
 {target_annotated}
 
-""" + WORD_SCHEME.replace("{operations}", FINE_OPS) + """
+"""
+            + WORD_SCHEME.replace("{operations}", FINE_OPS)
+            + """
 Work through the later passage in order. For each word ask first whether it comes from the
 earlier passage at all -- most words of a later passage are the author's own and get INS --
 and only then which word it came from and how it changed. Name the closest relation you can
 defend from these two passages; when a word was simply replaced by an unrelated one, say
 SUBST rather than reaching for a relation.
 
-Answer with the lines only, one per word of the later passage.""")
+Answer with the lines only, one per word of the later passage."""
+        )
         return {
-            "P0": (SYSTEM_EN, round_one),                                  # round 1
-            "P1": cls.build(FINE_OPS, stretch=True),                       # reuse gate + REUSED line, fine inventory
-            "P2": cls.build(FINE_OPS, stretch=False),                      # reuse gate only
-            "P3": cls.build(COARSE_OPS, stretch=True),                     # reuse gate + REUSED line, coarse inventory
-            "P4": cls.build(FINE_OPS, stretch=False, gate=GATE + GATE2),   # gate + "identical words are not a stretch"
-            "P5": cls.build(FINE_OPS, stretch=False, gate=GATE + GATE2 + SLOT),   # P4 + complete inside, strict outside
+            "P0": (SYSTEM_EN, round_one),  # round 1
+            "P1": cls.build(FINE_OPS, stretch=True),  # reuse gate + REUSED line, fine inventory
+            "P2": cls.build(FINE_OPS, stretch=False),  # reuse gate only
+            "P3": cls.build(COARSE_OPS, stretch=True),  # reuse gate + REUSED line, coarse inventory
+            "P4": cls.build(
+                FINE_OPS, stretch=False, gate=GATE + GATE2
+            ),  # gate + "identical words are not a stretch"
+            "P5": cls.build(
+                FINE_OPS, stretch=False, gate=GATE + GATE2 + SLOT
+            ),  # P4 + complete inside, strict outside
         }
 
     @classmethod
@@ -214,9 +237,16 @@ Answer with the lines only, one per word of the later passage.""")
 
 
 #: The rater's system text (E40): the coarse inventory, no reuse gate, the lines only.
-RATER_SYSTEM = (SYSTEM_EN + "\n\n" + TASK + "\n\n" + INLINE_NOTE + "\n"
-                + WORD_SCHEME.replace("{operations}", COARSE_OPS).replace("{n_lines_note}", "")
-                + "\nWork through the later passage in order. Answer with the lines only.")
+RATER_SYSTEM = (
+    SYSTEM_EN
+    + "\n\n"
+    + TASK
+    + "\n\n"
+    + INLINE_NOTE
+    + "\n"
+    + WORD_SCHEME.replace("{operations}", COARSE_OPS).replace("{n_lines_note}", "")
+    + "\nWork through the later passage in order. Answer with the lines only."
+)
 
 #: The rater's user turn (E40).
 RATER_USER = "EARLIER passage:\n{src}\n\nLATER passage:\n{tgt}\n\nThat is {n} lines, one per word, in order. Answer with the lines only."

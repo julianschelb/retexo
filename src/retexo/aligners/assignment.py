@@ -49,8 +49,10 @@ class AssignmentPolicy:
         The candidate lists arrive sorted best first, so this is the head of each.
         Nothing coordinates the choices, which is the behaviour under test.
         """
-        return [[(candidates[0][0] if candidates else -1) for candidates in example]
-                for example in scores]
+        return [
+            [(candidates[0][0] if candidates else -1) for candidates in example]
+            for example in scores
+        ]
 
     @classmethod
     def links_greedy(cls, scores, cap: int = 1) -> List[List[int]]:
@@ -69,10 +71,12 @@ class AssignmentPolicy:
         out = []
         for example in scores:
             nulls = [cls._null_probability(c) for c in example]
-            claims = [(probability, word, source)
-                      for word, candidates in enumerate(example)
-                      for source, probability in candidates
-                      if source >= 0 and probability > nulls[word]]
+            claims = [
+                (probability, word, source)
+                for word, candidates in enumerate(example)
+                for source, probability in candidates
+                if source >= 0 and probability > nulls[word]
+            ]
             claims.sort(key=lambda claim: -claim[0])
             assigned = [-1] * len(example)
             spent: Dict[int, int] = {}
@@ -176,16 +180,23 @@ class Reranker:
                 if not candidates:
                     rescored.append([])
                     continue
-                target = normalize(example.target_tokens[word]) \
-                    if word < len(example.target_tokens) else None
-                bumped = [(s, math.log(max(p, 1e-12))
-                           + (weight if s >= 0 and source[s] == target else 0.0))
-                          for s, p in candidates]
-                top = max(l for _, l in bumped)
-                weights = [(s, math.exp(l - top)) for s, l in bumped]
+                target = (
+                    normalize(example.target_tokens[word])
+                    if word < len(example.target_tokens)
+                    else None
+                )
+                bumped = [
+                    (
+                        s,
+                        math.log(max(p, 1e-12))
+                        + (weight if s >= 0 and source[s] == target else 0.0),
+                    )
+                    for s, p in candidates
+                ]
+                top = max(logp for _, logp in bumped)
+                weights = [(s, math.exp(logp - top)) for s, logp in bumped]
                 total = sum(v for _, v in weights) or 1.0
-                rescored.append(sorted(((s, v / total) for s, v in weights),
-                                       key=lambda c: -c[1]))
+                rescored.append(sorted(((s, v / total) for s, v in weights), key=lambda c: -c[1]))
             out.append(rescored)
         return out
 
@@ -202,11 +213,11 @@ class Reranker:
             rescored = []
             for candidates in per_word:
                 if not candidates:
-                    rescored.append([]); continue
+                    rescored.append([])
+                    continue
                 bumped = [(s, p * (factor if s < 0 else 1.0)) for s, p in candidates]
                 total = sum(p for _, p in bumped) or 1.0
-                rescored.append(sorted(((s, p / total) for s, p in bumped),
-                                       key=lambda c: -c[1]))
+                rescored.append(sorted(((s, p / total) for s, p in bumped), key=lambda c: -c[1]))
             out.append(rescored)
         return out
 
@@ -228,24 +239,23 @@ class Reranker:
                 if not candidates:
                     rescored.append([])
                     continue
-                target = example.target_tokens[word] \
-                    if word < len(example.target_tokens) else None
+                target = example.target_tokens[word] if word < len(example.target_tokens) else None
                 real = [c for c in candidates if c[0] >= 0][:top_k]
                 eligible = {s for s, _ in real}
                 bumped = []
                 for s, p in candidates:
                     bonus = 0.0
                     if s in eligible and target is not None:
-                        sim = cls._similarity(example.source_tokens[s], target,
-                                              morph, vectors, cache)
+                        sim = cls._similarity(
+                            example.source_tokens[s], target, morph, vectors, cache
+                        )
                         if sim is not None:
                             bonus = weight * sim
                     bumped.append((s, math.log(max(p, 1e-12)) + bonus))
                 top = max(v for _, v in bumped)
                 exp = [(s, math.exp(v - top)) for s, v in bumped]
                 total = sum(p for _, p in exp) or 1.0
-                rescored.append(sorted(((s, p / total) for s, p in exp),
-                                       key=lambda c: -c[1]))
+                rescored.append(sorted(((s, p / total) for s, p in exp), key=lambda c: -c[1]))
             out.append(rescored)
         return out
 

@@ -41,7 +41,7 @@ model may pick among them, and both are recorded.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from retexo.edit_typing.link_features import FEATURE_NAMES, SymbolicTyper
 
@@ -50,8 +50,13 @@ from retexo.edit_typing.link_features import FEATURE_NAMES, SymbolicTyper
 # =============================================================================
 
 NONE, RELATION, ENCLITIC, LEMMA, FORM = 0, 1, 2, 3, 4
-TIER_NAMES = {NONE: "none", RELATION: "relation", ENCLITIC: "enclitic",
-              LEMMA: "lemma", FORM: "form"}
+TIER_NAMES = {
+    NONE: "none",
+    RELATION: "relation",
+    ENCLITIC: "enclitic",
+    LEMMA: "lemma",
+    FORM: "form",
+}
 
 #: the score a candidate at each tier gets in the resource-only aligner; the
 #: null sits between RELATION and ENCLITIC, so a relation alone never links
@@ -79,9 +84,10 @@ def pair_tier(phi: Sequence[float]) -> int:
 @dataclass
 class Attestation:
     """What the resources say about one reuse word."""
+
     tier: int = NONE
-    candidates: List[int] = field(default_factory=list)   # source indices at ``tier``
-    by_order: int = -1                                    # nearest to the monotone slot
+    candidates: List[int] = field(default_factory=list)  # source indices at ``tier``
+    by_order: int = -1  # nearest to the monotone slot
     phi: Dict[int, List[float]] = field(default_factory=dict)  # evidence per candidate
 
     @property
@@ -159,9 +165,9 @@ class Attester:
         n_s, n_t = len(source), len(target)
         phi_of = phi_source(example, featurizer)
         out = []
-        for t, token in enumerate(target):
+        for t, _token in enumerate(target):
             best, cands, phis = NONE, [], {}
-            for s, src in enumerate(source):
+            for s, _src in enumerate(source):
                 phi = phi_of(s, t)
                 tier = pair_tier(phi)
                 if tier == NONE:
@@ -171,7 +177,9 @@ class Attester:
                     best, cands = tier, [s]
                 elif tier == best:
                     cands.append(s)
-            att = Attestation(tier=best, candidates=cands if best >= self.min_tier else [], phi=phis)
+            att = Attestation(
+                tier=best, candidates=cands if best >= self.min_tier else [], phi=phis
+            )
             if att.candidates:
                 expected = t * n_s / max(n_t, 1)
                 att.by_order = min(att.candidates, key=lambda s: abs(s - expected))
@@ -192,10 +200,10 @@ class Attester:
         n_s, n_t = len(source), len(target)
         phi_of = phi_source(example, featurizer)
         rows = []
-        for t, token in enumerate(target):
+        for t, _token in enumerate(target):
             row = [(-1, NULL_SCORE)]
             expected = t * n_s / max(n_t, 1)
-            for s, src in enumerate(source):
+            for s, _src in enumerate(source):
                 tier = pair_tier(phi_of(s, t))
                 if tier == NONE or tier < self.min_tier:
                     continue
@@ -208,13 +216,20 @@ class Attester:
 
     def symbolic_links(self, examples, featurizer=None) -> List[List[int]]:
         from retexo.aligners.assignment import AssignmentPolicy
-        return AssignmentPolicy.links_hungarian([self.symbolic_scores(ex, featurizer) for ex in examples])
+
+        return AssignmentPolicy.links_hungarian(
+            [self.symbolic_scores(ex, featurizer) for ex in examples]
+        )
 
     # ---------- combining: the resources where they speak, the model where they do not ----------
 
     @staticmethod
-    def combine_scores(attested: List[Attestation], model_row: List[List[Tuple[int, float]]],
-                       *, mode: str = "whether") -> List[List[Tuple[int, float]]]:
+    def combine_scores(
+        attested: List[Attestation],
+        model_row: List[List[Tuple[int, float]]],
+        *,
+        mode: str = "whether",
+    ) -> List[List[Tuple[int, float]]]:
         """One example's model rows, restricted by the attestations.
 
         The measurement behind the modes: the resources know *where* (1,026 of
@@ -232,7 +247,8 @@ class Attester:
         out = []
         for att, row in zip(attested, model_row):
             if not att.candidates:
-                out.append(row); continue
+                out.append(row)
+                continue
             if mode in ("fix", "order"):
                 if att.unique or mode == "order":
                     s = att.chosen if att.unique else att.by_order
@@ -250,16 +266,20 @@ class Attester:
     @staticmethod
     def combine_links(attested_all, model_scores, **kw) -> List[List[int]]:
         from retexo.aligners.assignment import AssignmentPolicy
-        return AssignmentPolicy.links_hungarian([Attester.combine_scores(a, r, **kw)
-                                for a, r in zip(attested_all, model_scores)])
+
+        return AssignmentPolicy.links_hungarian(
+            [Attester.combine_scores(a, r, **kw) for a, r in zip(attested_all, model_scores)]
+        )
 
     @staticmethod
     def ceiling_links(links: Sequence[int], gold_align) -> List[int]:
         """Resources decide where, the gold decides whether: the resources' own
         links, kept only where the gold links the word. The ceiling of any system
         whose links on attested words come from the resources."""
-        return [s if (gold_align is not None and t < len(gold_align) and gold_align[t] >= 0) else -1
-                for t, s in enumerate(links)]
+        return [
+            s if (gold_align is not None and t < len(gold_align) and gold_align[t] >= 0) else -1
+            for t, s in enumerate(links)
+        ]
 
     def training_restriction(self, example, attested: List[Attestation]):
         """What route B hands the loss: per reuse word the allowed sources (the
@@ -331,7 +351,7 @@ class FrameLexicon:
         longest = max((len(k) for k in keyed), default=0)
         for a in range(len(words)):
             for n in range(min(longest, len(words) - a), self.min_len - 1, -1):
-                if tuple(words[a:a + n]) in keyed:
+                if tuple(words[a : a + n]) in keyed:
                     for i in range(a, a + n):
                         flags[i] = 1
                     break

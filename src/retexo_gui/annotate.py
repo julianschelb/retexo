@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import html
 import json
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,8 +35,22 @@ HERE = home()
 from retexo.baselines.record import Record, RecordCodec, RecordInterface  # noqa: E402
 
 #: The extended inventory the annotators choose from (the fine types of the definition plus the nulls).
-OPERATIONS = ("COPY", "MORPH", "SYN", "SYN-DIST", "HYPER", "HYPO", "ANT", "NE-SUB", "POS", "SPLIT", "MERGE", "SUBST",
-              "INS", "FRAME")
+OPERATIONS = (
+    "COPY",
+    "MORPH",
+    "SYN",
+    "SYN-DIST",
+    "HYPER",
+    "HYPO",
+    "ANT",
+    "NE-SUB",
+    "POS",
+    "SPLIT",
+    "MERGE",
+    "SUBST",
+    "INS",
+    "FRAME",
+)
 
 #: What each operation means, shown in the app.
 GLOSSES = {
@@ -45,19 +58,33 @@ GLOSSES = {
     "MORPH": "the same word in another form (case, number, tense, person)",
     "SYN": "a synonym: a word that could stand in its place",
     "SYN-DIST": "a word of the same field that could not stand in its place",
-    "HYPER": "a more general word", "HYPO": "a more specific word", "ANT": "an opposite",
-    "NE-SUB": "a different proper name", "POS": "the same stem as another part of speech",
+    "HYPER": "a more general word",
+    "HYPO": "a more specific word",
+    "ANT": "an opposite",
+    "NE-SUB": "a different proper name",
+    "POS": "the same stem as another part of speech",
     "SPLIT": "this word and its neighbour together render one source word",
     "MERGE": "this word alone renders two source words (name the first; note the second)",
     "SUBST": "a different word with no relation to the source word it replaces",
     "INS": "the later author's own word, from nowhere in the source",
-    "FRAME": "a word of the citing formula (\"as Virgil says\")",
+    "FRAME": 'a word of the citing formula ("as Virgil says")',
 }
 
 #: Below this confidence a model cell is flagged.
 UNSURE = 0.7
 
-TABLE_COLUMNS = ["#", "reuse word", "source #", "operation", "sure", "comment", "model source #", "model op", "model p", "flag"]
+TABLE_COLUMNS = [
+    "#",
+    "reuse word",
+    "source #",
+    "operation",
+    "sure",
+    "comment",
+    "model source #",
+    "model op",
+    "model p",
+    "flag",
+]
 
 
 # =============================================================================
@@ -75,7 +102,7 @@ class Proposal:
     frame: List[int]
 
     @staticmethod
-    def from_legacy(row: Dict[str, Any]) -> "Proposal":
+    def from_legacy(row: Dict[str, Any]) -> Proposal:
         """The preliminary round's dump (``links``, ``gated_tags``, ``frames``, ``top``)."""
         links = [int(s) for s in row.get("links", [])]
         tags = list(row.get("gated_tags") or row.get("model_tags") or ["INS"] * len(links))
@@ -84,14 +111,18 @@ class Proposal:
         for t, top in enumerate(row.get("top") or []):
             chosen = links[t] if t < len(links) else -1
             prob = dict((int(s), float(p)) for s, p in top).get(chosen)
-            ps.append(prob if prob is not None else (dict((int(s), float(p)) for s, p in top).get(-1)))
+            ps.append(
+                prob if prob is not None else (dict((int(s), float(p)) for s, p in top).get(-1))
+            )
         ps += [None] * (len(links) - len(ps))
         return Proposal(links, tags, ps, frames)
 
     @staticmethod
-    def from_harness(pred) -> "Proposal":
+    def from_harness(pred) -> Proposal:
         n = len(pred.links)
-        return Proposal(list(pred.links), list(pred.tags), list(pred.link_p or [None] * n), list(pred.frame))
+        return Proposal(
+            list(pred.links), list(pred.tags), list(pred.link_p or [None] * n), list(pred.frame)
+        )
 
     def op_at(self, t: int) -> str:
         if t >= len(self.links):
@@ -122,16 +153,23 @@ class Proposals:
         if not path.exists():
             print(f"[annotate] no dump at {path}", flush=True)
             return
-        first = next((json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()), {})
+        first = next(
+            (
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ),
+            {},
+        )
         n = 0
-        if isinstance(first.get("pred"), dict):                    # the harness dump
+        if isinstance(first.get("pred"), dict):  # the harness dump
             from retexo.baselines.adapters import PredictionAdapter
 
             for record, pred in PredictionAdapter.read_dump(path):
                 if not pred.invalid:
                     self.by_id[record.id] = Proposal.from_harness(pred)
                     n += 1
-        else:                                                      # the preliminary round's dump
+        else:  # the preliminary round's dump
             for line in path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
@@ -173,9 +211,24 @@ class CorrectionStore:
                     row = json.loads(line)
                     self.saved[row["id"]] = row
 
-    def save(self, pair_id: str, rows: List[Dict[str, Any]], *, note: str = "", blind: bool = False, seconds: float = 0.0) -> None:
-        entry = {"id": pair_id, "annotator": self.annotator, "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                 "blind": blind, "seconds": round(seconds, 1), "note": note, "words": rows}
+    def save(
+        self,
+        pair_id: str,
+        rows: List[Dict[str, Any]],
+        *,
+        note: str = "",
+        blind: bool = False,
+        seconds: float = 0.0,
+    ) -> None:
+        entry = {
+            "id": pair_id,
+            "annotator": self.annotator,
+            "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "blind": blind,
+            "seconds": round(seconds, 1),
+            "note": note,
+            "words": rows,
+        }
         with self.path.open("a", encoding="utf-8") as sink:
             sink.write(json.dumps(entry, ensure_ascii=False) + "\n")
         self.saved[pair_id] = entry
@@ -214,7 +267,9 @@ class Session:
         return None
 
 
-def silver_rows(record: Record, proposal: Optional[Proposal], saved: Optional[Dict[str, Any]], *, blind: bool) -> List[List[Any]]:
+def silver_rows(
+    record: Record, proposal: Optional[Proposal], saved: Optional[Dict[str, Any]], *, blind: bool
+) -> List[List[Any]]:
     """The editable table: the saved correction if there is one, else the silver
     labels, with the model's columns beside them."""
     links, tags, frame, sure = RecordInterface.links_of(record)
@@ -223,7 +278,12 @@ def silver_rows(record: Record, proposal: Optional[Proposal], saved: Optional[Di
     for t, word in enumerate(record.reuse_tokens):
         if saved is not None and t < len(saved["words"]):
             w = saved["words"][t]
-            src, op, is_sure, comment = w.get("source", -1), w.get("op", "INS"), w.get("sure", True), w.get("comment", "")
+            src, op, is_sure, comment = (
+                w.get("source", -1),
+                w.get("op", "INS"),
+                w.get("sure", True),
+                w.get("comment", ""),
+            )
         else:
             src = links[t]
             op = (detail.get(t) or tags[t]) if src >= 0 else ("FRAME" if frame[t] else "INS")
@@ -235,29 +295,60 @@ def silver_rows(record: Record, proposal: Optional[Proposal], saved: Optional[Di
             prob = proposal.p[t] if t < len(proposal.p) else None
             m_p = f"{prob:.2f}" if prob is not None else ""
             disagree = (m_src != src) or (labels.canonical(m_op)[0] != labels.canonical(op)[0])
-            flag = ("disagrees " if disagree else "") + ("unsure" if prob is not None and prob < UNSURE else "")
-        rows.append([t, word, int(src), op, "yes" if is_sure else "possible", comment, m_src, m_op, m_p, flag.strip()])
+            flag = ("disagrees " if disagree else "") + (
+                "unsure" if prob is not None and prob < UNSURE else ""
+            )
+        rows.append(
+            [
+                t,
+                word,
+                int(src),
+                op,
+                "yes" if is_sure else "possible",
+                comment,
+                m_src,
+                m_op,
+                m_p,
+                flag.strip(),
+            ]
+        )
     return rows
 
 
 def render_pair(record: Record, rows: List[List[Any]]) -> str:
     """The source with indices and the reuse coloured by operation, links as arrows."""
-    colours = {"COPY": "#2a7", "MORPH": "#27a", "INS": "#999", "FRAME": "#a63", "SPLIT": "#a2a", "MERGE": "#a2a"}
-    src = " ".join(f"<span style='white-space:nowrap'><sup style='color:#999'>{i}</sup>{html.escape(w)}</span>"
-                   for i, w in enumerate(record.source_tokens))
+    colours = {
+        "COPY": "#2a7",
+        "MORPH": "#27a",
+        "INS": "#999",
+        "FRAME": "#a63",
+        "SPLIT": "#a2a",
+        "MERGE": "#a2a",
+    }
+    src = " ".join(
+        f"<span style='white-space:nowrap'><sup style='color:#999'>{i}</sup>{html.escape(w)}</span>"
+        for i, w in enumerate(record.source_tokens)
+    )
     parts = []
     for row in rows:
-        t, word, s, op = row[0], row[1], int(row[2]), str(row[3])
+        _t, word, s, op = row[0], row[1], int(row[2]), str(row[3])
         colour = colours.get(op, "#c33")
         arrow = f"<sup style='color:#999'>&rarr;{s}</sup>" if s >= 0 else ""
         flag = " style='outline:2px solid #e90'" if row[9] else ""
-        parts.append(f"<span{flag} title='{html.escape(op)}'><span style='color:{colour};font-weight:600'>{html.escape(word)}</span>{arrow}</span>")
-    legend = " ".join(f"<span style='color:{c}'>{op}</span>" for op, c in colours.items()) + " <span style='color:#c33'>lexical types</span>"
-    return (f"<div style='font-family:Georgia,serif;font-size:16px;line-height:1.9'>"
-            f"<div style='color:#666;font-size:12px'>SOURCE ({record.source_work})</div><div>{src}</div>"
-            f"<div style='color:#666;font-size:12px;margin-top:8px'>REUSE ({record.reuse_work}, {record.pair_label}.)</div>"
-            f"<div>{' '.join(parts)}</div><div style='font-size:11px;color:#666;margin-top:6px'>{legend}; "
-            f"orange outline = the model disagrees or is unsure</div></div>")
+        parts.append(
+            f"<span{flag} title='{html.escape(op)}'><span style='color:{colour};font-weight:600'>{html.escape(word)}</span>{arrow}</span>"
+        )
+    legend = (
+        " ".join(f"<span style='color:{c}'>{op}</span>" for op, c in colours.items())
+        + " <span style='color:#c33'>lexical types</span>"
+    )
+    return (
+        f"<div style='font-family:Georgia,serif;font-size:16px;line-height:1.9'>"
+        f"<div style='color:#666;font-size:12px'>SOURCE ({record.source_work})</div><div>{src}</div>"
+        f"<div style='color:#666;font-size:12px;margin-top:8px'>REUSE ({record.reuse_work}, {record.pair_label}.)</div>"
+        f"<div>{' '.join(parts)}</div><div style='font-size:11px;color:#666;margin-top:6px'>{legend}; "
+        f"orange outline = the model disagrees or is unsure</div></div>"
+    )
 
 
 def validate(rows: List[List[Any]], record: Record) -> List[str]:
@@ -268,18 +359,23 @@ def validate(rows: List[List[Any]], record: Record) -> List[str]:
         try:
             s = int(s)
         except (TypeError, ValueError):
-            problems.append(f"word {t}: source # must be an integer or -1"); continue
+            problems.append(f"word {t}: source # must be an integer or -1")
+            continue
         if op not in OPERATIONS:
             problems.append(f"word {t}: operation {op!r} is not one of {', '.join(OPERATIONS)}")
         if s >= record.n_source:
-            problems.append(f"word {t}: source # {s} is beyond the source ({record.n_source} words)")
+            problems.append(
+                f"word {t}: source # {s} is beyond the source ({record.n_source} words)"
+            )
         if s >= 0 and op in ("INS", "FRAME"):
             problems.append(f"word {t}: {op} cannot point at a source word")
         if s < 0 and op not in ("INS", "FRAME"):
             problems.append(f"word {t}: {op} needs a source #")
         if s >= 0 and op != "SPLIT":
             if s in used:
-                problems.append(f"word {t}: source # {s} is already used by word {used[s]} (only SPLIT may share a source word)")
+                problems.append(
+                    f"word {t}: source # {s} is already used by word {used[s]} (only SPLIT may share a source word)"
+                )
             used[s] = t
     return problems
 
@@ -298,9 +394,11 @@ def build(session: Session):
         record = session.current
         saved = session.store.get(record.id)
         rows = silver_rows(record, session.proposals.get(record.id), saved, blind=session.blind)
-        status = (f"pair {session.index + 1} of {len(session.records)}: **{record.id}** (fold {record.fold}, {record.pair_label}.) "
-                  f"| {'corrected ' + saved['time'] if saved else 'silver labels'} | {session.store.done()} pairs saved by {session.store.annotator}"
-                  + (" | blind" if session.blind else ""))
+        status = (
+            f"pair {session.index + 1} of {len(session.records)}: **{record.id}** (fold {record.fold}, {record.pair_label}.) "
+            f"| {'corrected ' + saved['time'] if saved else 'silver labels'} | {session.store.done()} pairs saved by {session.store.annotator}"
+            + (" | blind" if session.blind else "")
+        )
         return record.id, status, render_pair(record, rows), rows, (saved or {}).get("note", ""), ""
 
     def save(pair_id: str, table, note: str):
@@ -310,20 +408,40 @@ def build(session: Session):
         problems = validate(rows, record)
         if problems:
             return "**Not saved:** " + "; ".join(problems), render_pair(record, rows)
-        words = [{"t": int(r[0]), "word": str(r[1]), "source": int(r[2]), "op": str(r[3]).strip().upper(),
-                  "sure": str(r[4]).strip().lower() != "possible", "comment": str(r[5] or "")} for r in rows]
-        session.store.save(record.id, words, note=note or "", blind=session.blind, seconds=time.time() - session.opened_at)
-        return f"Saved {record.id} ({session.store.done()} pairs by {session.store.annotator}).", render_pair(record, rows)
+        words = [
+            {
+                "t": int(r[0]),
+                "word": str(r[1]),
+                "source": int(r[2]),
+                "op": str(r[3]).strip().upper(),
+                "sure": str(r[4]).strip().lower() != "possible",
+                "comment": str(r[5] or ""),
+            }
+            for r in rows
+        ]
+        session.store.save(
+            record.id,
+            words,
+            note=note or "",
+            blind=session.blind,
+            seconds=time.time() - session.opened_at,
+        )
+        return (
+            f"Saved {record.id} ({session.store.done()} pairs by {session.store.annotator}).",
+            render_pair(record, rows),
+        )
 
     def goto(pair_id: str):
         index = session.find(pair_id.strip())
         return show(index if index is not None else session.index)
 
     with gr.Blocks(title="Edit-script annotation", theme=gr.themes.Soft()) as app:
-        gr.Markdown("## Correct the token labels\n"
-                    "Every reuse word has a source word (its index, or -1) and an operation. Edit the **source #**, "
-                    "**operation**, **sure** (yes / possible) and **comment** cells; the model's columns are read-only "
-                    "context. Save writes the whole pair; the last save per pair wins.")
+        gr.Markdown(
+            "## Correct the token labels\n"
+            "Every reuse word has a source word (its index, or -1) and an operation. Edit the **source #**, "
+            "**operation**, **sure** (yes / possible) and **comment** cells; the model's columns are read-only "
+            "context. Save writes the whole pair; the last save per pair wins."
+        )
         with gr.Row():
             pair_box = gr.Textbox(label="pair id", scale=1)
             go = gr.Button("go", scale=0)
@@ -332,10 +450,18 @@ def build(session: Session):
             unsaved_btn = gr.Button("next unsaved", scale=0)
         status = gr.Markdown()
         view = gr.HTML()
-        table = gr.Dataframe(headers=TABLE_COLUMNS, datatype=["number", "str", "number", "str", "str", "str", "str", "str", "str", "str"],
-                             interactive=True, wrap=True, label="words (edit source #, operation, sure, comment)")
+        table = gr.Dataframe(
+            headers=TABLE_COLUMNS,
+            datatype=["number", "str", "number", "str", "str", "str", "str", "str", "str", "str"],
+            interactive=True,
+            wrap=True,
+            label="words (edit source #, operation, sure, comment)",
+        )
         with gr.Row():
-            note = gr.Textbox(label="note on the pair (frame boundary, doubts, anything the labels cannot say)", scale=3)
+            note = gr.Textbox(
+                label="note on the pair (frame boundary, doubts, anything the labels cannot say)",
+                scale=3,
+            )
             save_btn = gr.Button("save pair", variant="primary", scale=1)
         message = gr.Markdown()
         with gr.Accordion("operations", open=False):
@@ -358,7 +484,9 @@ def build(session: Session):
     return app
 
 
-def select_records(records: List[Record], *, sample: Optional[Path], folds: Optional[Sequence[int]], limit: int) -> List[Record]:
+def select_records(
+    records: List[Record], *, sample: Optional[Path], folds: Optional[Sequence[int]], limit: int
+) -> List[Record]:
     if sample is not None and sample.exists():
         ids = json.loads(sample.read_text())
         wanted = {i: k for k, i in enumerate(ids)}
@@ -369,25 +497,44 @@ def select_records(records: List[Record], *, sample: Optional[Path], folds: Opti
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--annotator", required=True)
     ap.add_argument("--gold-dir", default="data/gold_full")
-    ap.add_argument("--dump", action="append", default=[], help="a predictions.jsonl with the model's proposals (repeatable)")
+    ap.add_argument(
+        "--dump",
+        action="append",
+        default=[],
+        help="a predictions.jsonl with the model's proposals (repeatable)",
+    )
     ap.add_argument("--sample", default=None, help="a JSON list of pair ids, in annotation order")
     ap.add_argument("--folds", default=None, help="e.g. 4 or 0,1")
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--blind", action="store_true", help="hide the model's columns (the random arm)")
+    ap.add_argument(
+        "--blind", action="store_true", help="hide the model's columns (the random arm)"
+    )
     ap.add_argument("--corrections", default="data/gold_full/corrections")
     ap.add_argument("--port", type=int, default=7861)
     ap.add_argument("--share", action="store_true")
     args = ap.parse_args()
     records = RecordCodec.gold_records(HERE / args.gold_dir)
     folds = [int(f) for f in args.folds.split(",")] if args.folds else None
-    records = select_records(records, sample=Path(args.sample) if args.sample else None, folds=folds, limit=args.limit)
+    records = select_records(
+        records, sample=Path(args.sample) if args.sample else None, folds=folds, limit=args.limit
+    )
     dumps = [HERE / d for d in (args.dump or ["runs/champion_fold4/predictions.jsonl"])]
-    session = Session(records, Proposals(dumps), CorrectionStore(HERE / args.corrections, args.annotator), blind=args.blind)
-    print(f"[annotate] {len(records)} pairs, {len(session.proposals.by_id)} with proposals, annotator {args.annotator}"
-          f"{', blind' if args.blind else ''}", flush=True)
+    session = Session(
+        records,
+        Proposals(dumps),
+        CorrectionStore(HERE / args.corrections, args.annotator),
+        blind=args.blind,
+    )
+    print(
+        f"[annotate] {len(records)} pairs, {len(session.proposals.by_id)} with proposals, annotator {args.annotator}"
+        f"{', blind' if args.blind else ''}",
+        flush=True,
+    )
     build(session).launch(server_name="0.0.0.0", server_port=args.port, share=args.share)
     return 0
 

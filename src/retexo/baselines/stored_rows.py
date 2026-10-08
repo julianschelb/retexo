@@ -64,7 +64,11 @@ class StoredRowsBaseline(Baseline):
 
     def tune(self, dev: List[Record], *, log=None) -> Dict[str, float]:
         """The decoder dials given on the command line (``frag_scale``, ``gap`` of the fragment decoder)."""
-        return {k: float(self.cfg.extra[k]) for k in ("frag_scale", "gap", "split_repair") if k in self.cfg.extra}
+        return {
+            k: float(self.cfg.extra[k])
+            for k in ("frag_scale", "gap", "split_repair")
+            if k in self.cfg.extra
+        }
 
     def predict(self, records: List[Record]) -> List[Prediction]:
         out = []
@@ -73,7 +77,9 @@ class StoredRowsBaseline(Baseline):
             pred = Prediction.empty(record.n_reuse)
             if stored is not None and stored.scores and len(stored.scores) == record.n_reuse:
                 pred.scores = [list(row) for row in stored.scores]
-                pred.rev_scores = [list(row) for row in stored.rev_scores] if stored.rev_scores else None
+                pred.rev_scores = (
+                    [list(row) for row in stored.rev_scores] if stored.rev_scores else None
+                )
             else:
                 pred.scores = [[(-1, 1.0)] for _ in range(record.n_reuse)]
             out.append(pred)

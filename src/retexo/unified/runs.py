@@ -69,7 +69,9 @@ class Segmentation:
         position = 0
         for run in self.runs:
             if run.start != position or run.end <= run.start:
-                raise ValueError(f"runs must tile the reuse in order; got {run} at position {position}")
+                raise ValueError(
+                    f"runs must tile the reuse in order; got {run} at position {position}"
+                )
             if run.kind == QUOTE and run.source_start is None:
                 raise ValueError(f"a quote run needs a source_start: {run}")
             position = run.end
@@ -94,7 +96,9 @@ class Segmentation:
         return out
 
     @classmethod
-    def from_links(cls, links: Sequence[int], frame: Optional[Sequence[int]] = None) -> "Segmentation":
+    def from_links(
+        cls, links: Sequence[int], frame: Optional[Sequence[int]] = None
+    ) -> Segmentation:
         """The gold read as runs: maximal stretches whose links are consecutive
         source words, unlinked stretches split by the frame flag."""
         n = len(links)
@@ -106,7 +110,11 @@ class Segmentation:
             if s is None or s < 0:
                 kind = FRAME if frame[t] else INS
                 end = t + 1
-                while end < n and (links[end] is None or links[end] < 0) and bool(frame[end]) == (kind == FRAME):
+                while (
+                    end < n
+                    and (links[end] is None or links[end] < 0)
+                    and bool(frame[end]) == (kind == FRAME)
+                ):
                     end += 1
                 runs.append(Run(t, end, kind))
             else:
@@ -121,10 +129,19 @@ class Segmentation:
 
     def cells(self) -> List[Tuple[int, int]]:
         """Every (reuse, source) pair a QUOTE run asserts."""
-        return [(t, run.source_of(t)) for run in self.runs if run.kind == QUOTE for t in range(run.start, run.end)]
+        return [
+            (t, run.source_of(t))
+            for run in self.runs
+            if run.kind == QUOTE
+            for t in range(run.start, run.end)
+        ]
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, Segmentation) and self.runs == other.runs and self.n_reuse == other.n_reuse
+        return (
+            isinstance(other, Segmentation)
+            and self.runs == other.runs
+            and self.n_reuse == other.n_reuse
+        )
 
     def __repr__(self) -> str:
         return f"Segmentation({self.runs})"

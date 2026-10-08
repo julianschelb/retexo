@@ -27,17 +27,25 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from retexo.baselines import labels
 from retexo.baselines.base import Prediction
 from retexo.baselines.record import Record
-from retexo.edit_typing.downstream import DownstreamScorer, ScriptFeaturizer, SCRIPT_FEATURES
+from retexo.edit_typing.downstream import SCRIPT_FEATURES, DownstreamScorer, ScriptFeaturizer
 
 #: Lexicon and overlap columns, excluded: the row must be explained by the script alone.
-EXCLUDED_FEATURES = ("form1_link_share", "lemma_link_share", "none_link_share", "shared_forms", "shared_lemmas",
-                     "jaccard_lemma")
+EXCLUDED_FEATURES = (
+    "form1_link_share",
+    "lemma_link_share",
+    "none_link_share",
+    "shared_forms",
+    "shared_lemmas",
+    "jaccard_lemma",
+)
 
 #: The four mode shares over reuse tokens (``labels.to_mode``).
 MODE_FEATURES = tuple(f"mode_{m.lower()}" for m in labels.MODES)
 
 #: The columns Table 3 trains on.
-SCRIPT_ONLY_FEATURES: Tuple[str, ...] = tuple(f for f in SCRIPT_FEATURES if f not in EXCLUDED_FEATURES) + MODE_FEATURES
+SCRIPT_ONLY_FEATURES: Tuple[str, ...] = (
+    tuple(f for f in SCRIPT_FEATURES if f not in EXCLUDED_FEATURES) + MODE_FEATURES
+)
 
 #: E34's pair head (the Downstream pair-head row): [p(no match), p(cit.), p(cf.)] from ``Prediction.meta``, as extra
 #: columns when every row of a dump carries them.
@@ -72,10 +80,16 @@ class ScriptOnlyFeatures:
 
     @staticmethod
     def query_id(record: Record) -> str:
-        return str(record.annotation.get("query_id") or record.annotation.get("query") or " ".join(record.reuse_tokens))
+        return str(
+            record.annotation.get("query_id")
+            or record.annotation.get("query")
+            or " ".join(record.reuse_tokens)
+        )
 
     @classmethod
-    def row(cls, record: Record, pred: Optional[Prediction], *, gold: bool = False) -> Optional[Dict[str, Any]]:
+    def row(
+        cls, record: Record, pred: Optional[Prediction], *, gold: bool = False
+    ) -> Optional[Dict[str, Any]]:
         import numpy as np
 
         from retexo.aligners.decode import ScriptDecoder
@@ -94,31 +108,57 @@ class ScriptOnlyFeatures:
         view = ScriptDecoder.per_token_view(script)
         n = record.n_reuse
         link_p = list(pred.link_p or [0.0] * n) + [0.0] * (n - len(pred.link_p or []))
-        null_p = [1.0 - p if s >= 0 else 1.0 for p, s in zip(link_p, pred.links)] if not gold else [1.0] * n
+        null_p = (
+            [1.0 - p if s >= 0 else 1.0 for p, s in zip(link_p, pred.links)]
+            if not gold
+            else [1.0] * n
+        )
         tiers = np.zeros((n, record.n_source), dtype=np.int8)
         values = ScriptFeaturizer.features(view, script, record.n_source, link_p, null_p, tiers)
-        row = {name: float(v) for name, v in zip(SCRIPT_FEATURES, values) if name not in EXCLUDED_FEATURES}
+        row = {
+            name: float(v)
+            for name, v in zip(SCRIPT_FEATURES, values)
+            if name not in EXCLUDED_FEATURES
+        }
         # the view's tags are the script's (NOP for a copy); the mode reads the record vocabulary
-        modes = [labels.to_mode((labels.canonical(tag)[0] or "SUBST") if s >= 0 else "INS", bool(f))
-                 for tag, s, f in zip(view["tags"], view["link"], view["frame"])]
+        modes = [
+            labels.to_mode((labels.canonical(tag)[0] or "SUBST") if s >= 0 else "INS", bool(f))
+            for tag, s, f in zip(view["tags"], view["link"], view["frame"])
+        ]
         for name, mode in zip(MODE_FEATURES, labels.MODES):
             row[name] = modes.count(mode) / max(n, 1)
         head = (pred.meta or {}).get("pair_head") if not gold else None
         if head and len(head) == 3:
             row.update(dict(zip(PAIR_HEAD_FEATURES, map(float, head))))
         label = record.pair_label.rstrip(".")
-        row.update({"id": record.id, "query_id": cls.query_id(record), "fold": record.fold, "pair_label": label,
-                    "is_reference": int(label in ("cit", "cf")), "is_cit": int(label == "cit")})
+        row.update(
+            {
+                "id": record.id,
+                "query_id": cls.query_id(record),
+                "fold": record.fold,
+                "pair_label": label,
+                "is_reference": int(label in ("cit", "cf")),
+                "is_cit": int(label == "cit"),
+            }
+        )
         return row
 
     @classmethod
-    def from_pairs(cls, pairs: Sequence[Tuple[Record, Optional[Prediction]]], *, gold: bool = False):
+    def from_pairs(
+        cls, pairs: Sequence[Tuple[Record, Optional[Prediction]]], *, gold: bool = False
+    ):
         import pandas as pd
 
         rows = [cls.row(r, p, gold=gold) for r, p in pairs]
         frame = pd.DataFrame([r for r in rows if r is not None])
-        head = [c for c in PAIR_HEAD_FEATURES if len(frame) and c in frame.columns and frame[c].notna().all()]
-        return frame[list(SCRIPT_ONLY_FEATURES) + head + list(META_COLUMNS)] if len(frame) else frame
+        head = [
+            c
+            for c in PAIR_HEAD_FEATURES
+            if len(frame) and c in frame.columns and frame[c].notna().all()
+        ]
+        return (
+            frame[list(SCRIPT_ONLY_FEATURES) + head + list(META_COLUMNS)] if len(frame) else frame
+        )
 
     @classmethod
     def from_dump(cls, path: Path):
@@ -131,7 +171,9 @@ class ScriptOnlyFeatures:
         return cls.from_pairs([(r, None) for r in records], gold=True)
 
     @staticmethod
-    def dedupe(pairs: Sequence[Tuple[Record, Optional[Prediction]]]) -> Tuple[List[Tuple[Record, Optional[Prediction]]], List[Tuple[str, str]]]:
+    def dedupe(
+        pairs: Sequence[Tuple[Record, Optional[Prediction]]],
+    ) -> Tuple[List[Tuple[Record, Optional[Prediction]]], List[Tuple[str, str]]]:
         """One record per distinct text pair (note 35: 1,467 of the gold's 1,490):
         the first by id wins, the later duplicates' ids come back as
         ``(kept, dropped)`` pairs; a label conflict is reported, not resolved."""
@@ -169,9 +211,15 @@ class SimilarityScore:
     @staticmethod
     def _row(record: Record, score: float) -> Dict[str, Any]:
         label = record.pair_label
-        return {"similarity": float(score), "id": record.id, "query_id": ScriptOnlyFeatures.query_id(record),
-                "fold": record.fold, "pair_label": label, "is_reference": int(label in ("cit", "cf")),
-                "is_cit": int(label == "cit")}
+        return {
+            "similarity": float(score),
+            "id": record.id,
+            "query_id": ScriptOnlyFeatures.query_id(record),
+            "fold": record.fold,
+            "pair_label": label,
+            "is_reference": int(label in ("cit", "cf")),
+            "is_cit": int(label == "cit"),
+        }
 
     @classmethod
     def positives(cls, records: Sequence[Record], scores_by_fold: Dict[int, Dict[str, float]]):
@@ -191,8 +239,13 @@ class SimilarityScore:
     def pool(cls, records: Sequence[Record]):
         import pandas as pd
 
-        return pd.DataFrame([cls._row(r, 1.0 - float(r.provenance["prob_no_match"])) for r in records
-                             if r.provenance.get("prob_no_match") is not None])
+        return pd.DataFrame(
+            [
+                cls._row(r, 1.0 - float(r.provenance["prob_no_match"]))
+                for r in records
+                if r.provenance.get("prob_no_match") is not None
+            ]
+        )
 
 
 class LengthOnly:
@@ -212,10 +265,17 @@ class LengthOnly:
     @staticmethod
     def _row(record: Record) -> Dict[str, Any]:
         label = record.pair_label.rstrip(".")
-        return {"source_len": float(record.n_source), "reuse_len": float(record.n_reuse),
-                "len_ratio": record.n_reuse / max(record.n_source, 1), "id": record.id,
-                "query_id": ScriptOnlyFeatures.query_id(record), "fold": record.fold, "pair_label": label,
-                "is_reference": int(label in ("cit", "cf")), "is_cit": int(label == "cit")}
+        return {
+            "source_len": float(record.n_source),
+            "reuse_len": float(record.n_reuse),
+            "len_ratio": record.n_reuse / max(record.n_source, 1),
+            "id": record.id,
+            "query_id": ScriptOnlyFeatures.query_id(record),
+            "fold": record.fold,
+            "pair_label": label,
+            "is_reference": int(label in ("cit", "cf")),
+            "is_cit": int(label == "cit"),
+        }
 
     @classmethod
     def frame(cls, records: Sequence[Record]):
@@ -241,7 +301,11 @@ class ReferenceClassifier:
         positives = frame[frame["is_reference"] == 1]
         negatives = frame[frame["is_reference"] == 0]
         n_neg = min(len(negatives), neg_ratio * max(len(positives), 1))
-        return pd.concat([positives, negatives.sample(n=n_neg, random_state=seed)]) if n_neg else positives
+        return (
+            pd.concat([positives, negatives.sample(n=n_neg, random_state=seed)])
+            if n_neg
+            else positives
+        )
 
     @staticmethod
     def build(kind: str = "logreg"):
@@ -255,15 +319,28 @@ class ReferenceClassifier:
         return make_pipeline(StandardScaler(), LogisticRegression(C=C, max_iter=MAX_ITER))
 
     @classmethod
-    def fit(cls, train, *, kind: str = "logreg", neg_ratio: int = NEG_RATIO, seed: int = SEED, target: str = "is_reference",
-            threshold_on: str = "train", features: Sequence[str] = SCRIPT_ONLY_FEATURES):
+    def fit(
+        cls,
+        train,
+        *,
+        kind: str = "logreg",
+        neg_ratio: int = NEG_RATIO,
+        seed: int = SEED,
+        target: str = "is_reference",
+        threshold_on: str = "train",
+        features: Sequence[str] = SCRIPT_ONLY_FEATURES,
+    ):
         """The classifier on positives plus sampled negatives; the plateau
         threshold on the training rows' probabilities (``cv`` for the boosted ceiling). ``features``
         is the similarity row's single score column instead of the script columns."""
         import numpy as np
         from sklearn.model_selection import cross_val_predict
 
-        sample = cls.sample_negatives(train, neg_ratio=neg_ratio, seed=seed) if target == "is_reference" else train
+        sample = (
+            cls.sample_negatives(train, neg_ratio=neg_ratio, seed=seed)
+            if target == "is_reference"
+            else train
+        )
         X = sample[list(features)].to_numpy(dtype=float)
         y = sample[target].to_numpy(dtype=int)
         model = cls.build(kind).fit(X, y)
@@ -275,10 +352,15 @@ class ReferenceClassifier:
         return model, threshold
 
     @staticmethod
-    def evaluate(model, threshold: float, test, *, target: str = "is_reference",
-                 features: Sequence[str] = SCRIPT_ONLY_FEATURES) -> Dict[str, Any]:
+    def evaluate(
+        model,
+        threshold: float,
+        test,
+        *,
+        target: str = "is_reference",
+        features: Sequence[str] = SCRIPT_ONLY_FEATURES,
+    ) -> Dict[str, Any]:
         """The paper's per-query macro/micro F1 at the threshold, plus recall@k."""
-        import numpy as np
 
         X = test[list(features)].to_numpy(dtype=float)
         probs = model.predict_proba(X)[:, 1]
@@ -288,11 +370,19 @@ class ReferenceClassifier:
         gold_rows, pred_rows, score_rows = [], [], []
         for qid in qids:
             mask = (test["query_id"] == qid).to_numpy()
-            gold_rows.append(gold_all[mask]); pred_rows.append(pred_all[mask]); score_rows.append(probs[mask])
+            gold_rows.append(gold_all[mask])
+            pred_rows.append(pred_all[mask])
+            score_rows.append(probs[mask])
         macro, micro, _ = DownstreamScorer.macro_micro(qids, gold_rows, pred_rows)
         recall = DownstreamScorer.recall_at_k(qids, gold_rows, score_rows, ks=RECALL_KS)
-        return {"macro": macro, "micro": micro, "recall_at_k": {str(k): v for k, v in recall.items()},
-                "threshold": float(threshold), "n": int(len(test)), "n_queries": len(qids)}
+        return {
+            "macro": macro,
+            "micro": micro,
+            "recall_at_k": {str(k): v for k, v in recall.items()},
+            "threshold": float(threshold),
+            "n": int(len(test)),
+            "n_queries": len(qids),
+        }
 
 
 class TypeClassifier:
@@ -305,8 +395,13 @@ class TypeClassifier:
     """
 
     @staticmethod
-    def fit_and_evaluate(positives, *, kind: str = "logreg", folds: Sequence[int] = (0, 1, 2, 3, 4),
-                         features: Sequence[str] = SCRIPT_ONLY_FEATURES) -> Dict[str, Any]:
+    def fit_and_evaluate(
+        positives,
+        *,
+        kind: str = "logreg",
+        folds: Sequence[int] = (0, 1, 2, 3, 4),
+        features: Sequence[str] = SCRIPT_ONLY_FEATURES,
+    ) -> Dict[str, Any]:
         import numpy as np
         from sklearn.metrics import f1_score
 
@@ -316,12 +411,19 @@ class TypeClassifier:
             test = positives[positives["fold"] == fold]
             if not len(train) or not len(test) or train["is_cit"].nunique() < 2:
                 continue
-            model = ReferenceClassifier.build(kind).fit(train[list(features)].to_numpy(dtype=float),
-                                                        train["is_cit"].to_numpy(dtype=int))
+            model = ReferenceClassifier.build(kind).fit(
+                train[list(features)].to_numpy(dtype=float), train["is_cit"].to_numpy(dtype=int)
+            )
             pred = model.predict(test[list(features)].to_numpy(dtype=float))
-            per_fold.append(float(f1_score(test["is_cit"].to_numpy(dtype=int), pred, average="macro")))
+            per_fold.append(
+                float(f1_score(test["is_cit"].to_numpy(dtype=int), pred, average="macro"))
+            )
             models[fold] = model
-        return {"macro_f1": float(np.mean(per_fold)) if per_fold else 0.0, "per_fold": per_fold, "models": models}
+        return {
+            "macro_f1": float(np.mean(per_fold)) if per_fold else 0.0,
+            "per_fold": per_fold,
+            "models": models,
+        }
 
 
 class Explanation:

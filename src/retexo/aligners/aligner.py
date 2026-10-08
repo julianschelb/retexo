@@ -9,11 +9,9 @@ teacher consumes it to convert resource-silent DEL+INS residue into arrows.
 
 from __future__ import annotations
 
-from retexo.formulations.pair_encoding import latin_bert_pieces
-
 from typing import List, Optional, Sequence, Tuple
 
-from retexo.core.normalize import normalize
+from retexo.formulations.pair_encoding import latin_bert_pieces
 
 BASE_MODEL = "ashleygong03/bamman-burns-latin-bert"
 
@@ -35,14 +33,14 @@ class ContextualAligner:
     def __init__(self, model_path: Optional[str] = None, device: str = "cpu"):
         import huggingface_hub
         import torch
-        from transformers import AutoModel
-
         from locisimiles.tokenization.latin_bert import SubwordTextEncoder
+        from transformers import AutoModel
 
         vocab = huggingface_hub.hf_hub_download(BASE_MODEL, "vocab.txt")
         self.encoder = SubwordTextEncoder.from_file(vocab)
-        self.specials = {s: i for i, s in enumerate(self.encoder._subtokens)
-                         if s in ("[CLS]", "[SEP]")}
+        self.specials = {
+            s: i for i, s in enumerate(self.encoder._subtokens) if s in ("[CLS]", "[SEP]")
+        }
         self.model = AutoModel.from_pretrained(model_path or BASE_MODEL)
         self.model.to(device).eval()
         self.device = device
@@ -59,8 +57,9 @@ class ContextualAligner:
             ids.extend(pieces)
         ids.append(self.specials["[SEP]"])
         with torch.no_grad():
-            out = self.model(input_ids=torch.tensor([ids], device=self.device),
-                             output_hidden_states=True)
+            out = self.model(
+                input_ids=torch.tensor([ids], device=self.device), output_hidden_states=True
+            )
         hidden = out.hidden_states[LAYER][0]
         vectors = torch.stack([hidden[a:b].mean(0) for a, b in spans])
         return torch.nn.functional.normalize(vectors, dim=-1)

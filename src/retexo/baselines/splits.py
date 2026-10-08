@@ -8,7 +8,9 @@ from typing import List, Sequence, Tuple
 from retexo.baselines.record import Record
 
 
-def split_gold(records: Sequence[Record], fold: int, dev_fold: int) -> Tuple[List[Record], List[Record], List[Record]]:
+def split_gold(
+    records: Sequence[Record], fold: int, dev_fold: int
+) -> Tuple[List[Record], List[Record], List[Record]]:
     """``train`` = every fold but K (the dev fold inside it), ``dev`` = fold (K + 1) mod 5, ``test`` = fold K.
 
     Args:

@@ -19,9 +19,8 @@ model trained on destroyed input.
 from __future__ import annotations
 
 import re
-
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 #: Model names whose vocabulary needs the tensor2tensor encoder.
 LATIN_BERT_MARKERS = ("latin-bert", "latin_bert", "bamman")
@@ -40,7 +39,9 @@ def is_latin_bert(model_name: str) -> bool:
     if any(marker in lowered for marker in LATIN_BERT_MARKERS):
         return True
     local = Path(model_name)
-    return local.is_dir() and (local / "vocab.txt").exists() and (local / "latin_bert.marker").exists()
+    return (
+        local.is_dir() and (local / "vocab.txt").exists() and (local / "latin_bert.marker").exists()
+    )
 
 
 #: The reference pre-tokenisation of Latin BERT (``locisimiles.tokenization.latin_bert``, after Bamman's
@@ -58,7 +59,7 @@ def latin_bert_pieces(encoder, word: str, unk: int = 1) -> List[int]:
     for run in _LATIN_WORD_RE.findall(word.lower()):
         try:
             pieces.extend(encoder.encode_word(run))
-        except ValueError:                           # unreachable for letters, kept for safety
+        except ValueError:  # unreachable for letters, kept for safety
             pieces.append(unk)
     return pieces or [unk]
 
@@ -74,6 +75,7 @@ def latin_bert_vocab(model_name: str) -> str:
     import huggingface_hub
 
     return huggingface_hub.hf_hub_download(model_name, "vocab.txt")
+
 
 # =============================================================================
 # Interface
@@ -97,7 +99,7 @@ class PairEncoder(ABC):
         self,
         pairs: Sequence[Tuple[Sequence[str], Sequence[str]]],
         max_length: int,
-    ) -> Tuple[Dict[str, "torch.Tensor"], List[List[Tuple[int, int]]]]:  # noqa: F821
+    ) -> Tuple[Dict[str, torch.Tensor], List[List[Tuple[int, int]]]]:  # noqa: F821
         """Return model inputs and, per example, one span per reuse word.
 
         A span is ``(start, end)`` over token positions. Words truncated away
@@ -111,7 +113,7 @@ class PairEncoder(ABC):
         """Identifier for the run record."""
 
     @classmethod
-    def build(cls, model_name: str) -> "PairEncoder":
+    def build(cls, model_name: str) -> PairEncoder:
         """Choose the encoder a backbone requires.
 
         Example:
@@ -156,8 +158,11 @@ class HuggingFacePairEncoder(PairEncoder):
         batch = self.tokenizer(
             [list(a) for a, _ in pairs],
             [list(b) for _, b in pairs],
-            is_split_into_words=True, padding=True, truncation=True,
-            max_length=max_length, return_tensors="pt",
+            is_split_into_words=True,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt",
         )
         spans: List[List[Tuple[int, int]]] = []
         source_spans: List[List[Tuple[int, int]]] = []
@@ -174,9 +179,7 @@ class HuggingFacePairEncoder(PairEncoder):
                 elif sequence == 0:
                     found_source.setdefault(word, []).append(position)
             spans.append([(min(v), max(v) + 1) for _, v in sorted(found.items())])
-            source_spans.append(
-                [(min(v), max(v) + 1) for _, v in sorted(found_source.items())]
-            )
+            source_spans.append([(min(v), max(v) + 1) for _, v in sorted(found_source.items())])
         self.last_source_spans = source_spans
         return dict(batch), spans
 
@@ -216,7 +219,7 @@ class LatinBertPairEncoder(PairEncoder):
         self.PAD = specials.get("[PAD]", self.PAD)
         #: E35: label prefix -- per operation, the gloss as a word list; None = off
         self.label_prefix = None
-        self.LBL = len(self.subtokens)          # one new token id, appended to the vocabulary
+        self.LBL = len(self.subtokens)  # one new token id, appended to the vocabulary
         self.last_label_positions = None
 
     @property
@@ -243,13 +246,13 @@ class LatinBertPairEncoder(PairEncoder):
         if self.label_prefix is not None:
             prefix_ids, label_pos = [], []
             for gloss in self.label_prefix:
-                label_pos.append(1 + len(prefix_ids))          # after [CLS]
+                label_pos.append(1 + len(prefix_ids))  # after [CLS]
                 prefix_ids.append(self.LBL)
                 for word in gloss:
                     prefix_ids.extend(self._word_ids(word))
             prefix_ids.append(self.SEP)
             prefix_len = len(prefix_ids)
-            max_length = max_length + prefix_len               # the passages keep their budget
+            max_length = max_length + prefix_len  # the passages keep their budget
         for source, target in pairs:
             ids = [self.CLS]
             if self.label_prefix is not None:
@@ -288,6 +291,5 @@ class LatinBertPairEncoder(PairEncoder):
             attention[i, : len(row)] = 1
             token_types[i, : len(row_types)] = torch.tensor(row_types)
 
-        batch = {"input_ids": input_ids, "attention_mask": attention,
-                 "token_type_ids": token_types}
+        batch = {"input_ids": input_ids, "attention_mask": attention, "token_type_ids": token_types}
         return batch, spans

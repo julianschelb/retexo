@@ -42,7 +42,11 @@ from retexo.resources import Resources
 #: upos to Sultan's four content categories (verb, noun, adjective, adverb); PROPN folds into noun,
 #: since Latin proper names inflect and are frequently the reuse word of a substitution.
 CONTENT_CATEGORY: Dict[str, str] = {
-    "VERB": "verb", "NOUN": "noun", "PROPN": "noun", "ADJ": "adj", "ADV": "adv",
+    "VERB": "verb",
+    "NOUN": "noun",
+    "PROPN": "noun",
+    "ADJ": "adj",
+    "ADV": "adv",
 }
 #: upos tags folded into the stop-word test on top of ``substitution.STOPWORDS`` (Sultan's function
 #: words); PRON is deliberately left out of this set (kept a candidate content word), matching the
@@ -81,7 +85,7 @@ class DependencyParse:
         self.head = list(head)
 
     @classmethod
-    def of(cls, tokens: Sequence[str], parsed: Sequence[Tuple[str, str, int]]) -> "DependencyParse":
+    def of(cls, tokens: Sequence[str], parsed: Sequence[Tuple[str, str, int]]) -> DependencyParse:
         """From one entry of ``DependencyParser.parse_all``'s ``{text: [(upos, deprel, head), ...]}``."""
         if not parsed:
             return cls(["X"] * len(tokens), ["dep"] * len(tokens), [-1] * len(tokens))
@@ -142,7 +146,9 @@ class EnglishDependencyParser:
             self._nlp = spacy.load(self.model)
         return self._nlp
 
-    def parse_all(self, token_lists: Sequence[Sequence[str]], **_) -> Dict[str, List[Tuple[str, str, int]]]:
+    def parse_all(
+        self, token_lists: Sequence[Sequence[str]], **_
+    ) -> Dict[str, List[Tuple[str, str, int]]]:
         from spacy.tokens import Doc
 
         nlp = self._pipeline()
@@ -155,8 +161,10 @@ class EnglishDependencyParser:
             keys = list(todo)
             docs = (Doc(nlp.vocab, words=todo[k]) for k in keys)
             for k, doc in zip(keys, nlp.pipe(docs)):
-                self._parses[k] = [(t.pos_ or "X", (t.dep_ or "dep").lower(),
-                                    -1 if t.head.i == t.i else t.head.i) for t in doc]
+                self._parses[k] = [
+                    (t.pos_ or "X", (t.dep_ or "dep").lower(), -1 if t.head.i == t.i else t.head.i)
+                    for t in doc
+                ]
         return {" ".join(toks): self._parses.get(" ".join(toks), []) for toks in token_lists}
 
 
@@ -178,7 +186,7 @@ class EnglishFeaturizer:
     def __init__(self, model: str = "en_core_web_sm"):
         self.model = model
         self._nlp = None
-        self._word: Dict[str, Tuple[str, str, bool]] = {}      # token -> (lemma, pos, is_name)
+        self._word: Dict[str, Tuple[str, str, bool]] = {}  # token -> (lemma, pos, is_name)
         self._pair: Dict[Tuple[str, str], List[float]] = {}
 
     def _pipeline(self):
@@ -201,8 +209,9 @@ class EnglishFeaturizer:
     def is_name(self, token: str) -> bool:
         return self._analyse(token)[2]
 
-    def __call__(self, source: str, target: str, s: int = 0, t: int = 0,
-                n_source: int = 1, n_target: int = 1) -> List[float]:
+    def __call__(
+        self, source: str, target: str, s: int = 0, t: int = 0, n_source: int = 1, n_target: int = 1
+    ) -> List[float]:
         key = (source, target)
         if key in self._pair:
             return list(self._pair[key])
@@ -219,8 +228,11 @@ class EnglishFeaturizer:
             try:
                 from nltk.corpus import wordnet
 
-                synonyms = {lemma.name().lower() for synset in wordnet.synsets(lemma_s)
-                           for lemma in synset.lemmas()}
+                synonyms = {
+                    lemma.name().lower()
+                    for synset in wordnet.synsets(lemma_s)
+                    for lemma in synset.lemmas()
+                }
                 f["wn_syn"] = float(lemma_t in synonyms)
             except LookupError:
                 pass
@@ -286,11 +298,13 @@ class SultanAligner(Baseline):
         if self.lang == "en":
             self.evidence = EnglishFeaturizer()
             self._normalize = plain_normalize
-            self._stopwords = None    # lazy: needs the NLTK corpus, not at import time
+            self._stopwords = None  # lazy: needs the NLTK corpus, not at import time
         else:
             # the cached resources only (``offline=1``): a live WordNet lookup costs four or more requests per
             # lemma at a 25 s timeout, and the shared featurizer of every other row is offline too
-            self.evidence = LinkFeaturizer(Resources(offline=bool(int(cfg.extra.get("offline", 1)))))
+            self.evidence = LinkFeaturizer(
+                Resources(offline=bool(int(cfg.extra.get("offline", 1))))
+            )
             self._normalize = normalize
             self._stopwords = STOPWORDS
         self.ppdb_sim = float(cfg.extra.get("ppdb_sim", self.PPDB_SIM))
@@ -332,7 +346,9 @@ class SultanAligner(Baseline):
         phi = dict(zip(FEATURE_NAMES, self.evidence(source, target)))
         if phi["same_form"] or phi["same_lemma"] or phi["enclitic_stem_match"]:
             return 1.0
-        if phi["wn_syn"] or (not phi["cos_missing"] and phi["cos"] >= self.syn_cos and phi["same_pos"]):
+        if phi["wn_syn"] or (
+            not phi["cos_missing"] and phi["cos"] >= self.syn_cos and phi["same_pos"]
+        ):
             return self.ppdb_sim
         return 0.0
 
@@ -354,8 +370,15 @@ class SultanAligner(Baseline):
         example is often a pronoun) is never excluded by this test alone."""
         return a is None or b is None or a == b
 
-    def dep_context(self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse,
-                    parse_t: DependencyParse, i: int, j: int) -> List[Tuple[int, int]]:
+    def dep_context(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        parse_s: DependencyParse,
+        parse_t: DependencyParse,
+        i: int,
+        j: int,
+    ) -> List[Tuple[int, int]]:
         """Neighbour pairs (Algorithm 1): a parent-parent or child-child pair of ``i``
         and ``j`` whose relations are the same or equivalent, whose categories are
         compatible, and whose word similarity is positive. With ``cross_orientation``
@@ -370,47 +393,68 @@ class SultanAligner(Baseline):
         out: List[Tuple[int, int]] = []
         ps, pt = parse_s.head[i], parse_t.head[j]
         cs, ct = parse_s.children(i), parse_t.children(j)
-        if (ps >= 0 and pt >= 0 and DependencyParse.same_relation(parse_s.deprel[i], parse_t.deprel[j])
-                and self._category_compatible(parse_s.category(ps), parse_t.category(pt))
-                and self.word_sim(S[ps], T[pt]) > 0):
+        if (
+            ps >= 0
+            and pt >= 0
+            and DependencyParse.same_relation(parse_s.deprel[i], parse_t.deprel[j])
+            and self._category_compatible(parse_s.category(ps), parse_t.category(pt))
+            and self.word_sim(S[ps], T[pt]) > 0
+        ):
             out.append((ps, pt))
         for k in cs:
-            for l in ct:
-                if (DependencyParse.same_relation(parse_s.deprel[k], parse_t.deprel[l])
-                        and self._category_compatible(parse_s.category(k), parse_t.category(l))
-                        and self.word_sim(S[k], T[l]) > 0):
-                    out.append((k, l))
+            for t_idx in ct:
+                if (
+                    DependencyParse.same_relation(parse_s.deprel[k], parse_t.deprel[t_idx])
+                    and self._category_compatible(parse_s.category(k), parse_t.category(t_idx))
+                    and self.word_sim(S[k], T[t_idx]) > 0
+                ):
+                    out.append((k, t_idx))
         if self.cross_orientation:
             if ps >= 0:
-                for l in ct:
-                    if (DependencyParse.same_relation(parse_s.deprel[i], parse_t.deprel[l])
-                            and self._category_compatible(parse_s.category(ps), parse_t.category(l))
-                            and self.word_sim(S[ps], T[l]) > 0):
-                        out.append((ps, l))
+                for t_idx in ct:
+                    if (
+                        DependencyParse.same_relation(parse_s.deprel[i], parse_t.deprel[t_idx])
+                        and self._category_compatible(parse_s.category(ps), parse_t.category(t_idx))
+                        and self.word_sim(S[ps], T[t_idx]) > 0
+                    ):
+                        out.append((ps, t_idx))
             if pt >= 0:
                 for k in cs:
-                    if (DependencyParse.same_relation(parse_s.deprel[k], parse_t.deprel[j])
-                            and self._category_compatible(parse_s.category(k), parse_t.category(pt))
-                            and self.word_sim(S[k], T[pt]) > 0):
+                    if (
+                        DependencyParse.same_relation(parse_s.deprel[k], parse_t.deprel[j])
+                        and self._category_compatible(parse_s.category(k), parse_t.category(pt))
+                        and self.word_sim(S[k], T[pt]) > 0
+                    ):
                         out.append((k, pt))
         return out
 
-    def text_context(self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse,
-                     parse_t: DependencyParse, i: int, j: int) -> List[Tuple[int, int]]:
+    def text_context(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        parse_s: DependencyParse,
+        parse_t: DependencyParse,
+        i: int,
+        j: int,
+    ) -> List[Tuple[int, int]]:
         """Every non-stop neighbour of ``i`` within the window paired with every
         non-stop neighbour of ``j`` (Algorithm 2); positions are interchangeable."""
+
         def neighbours(tokens, parse, idx):
             lo, hi = max(0, idx - self.WINDOW), min(len(tokens), idx + self.WINDOW + 1)
-            return [k for k in range(lo, hi) if k != idx and not self.is_stop(tokens[k], parse.upos[k])]
+            return [
+                k for k in range(lo, hi) if k != idx and not self.is_stop(tokens[k], parse.upos[k])
+            ]
 
         left = neighbours(S, parse_s, i)
         right = neighbours(T, parse_t, j)
-        return [(k, l) for k in left for l in right if self.word_sim(S[k], T[l]) > 0]
+        return [(k, t_idx) for k in left for t_idx in right if self.word_sim(S[k], T[t_idx]) > 0]
 
     # ---------- the pipeline (section 3.3) ----------
 
-    def punct_align(self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int]
-                    ) -> List[Tuple[int, int]]:
+    def punct_align(
+        self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int]
+    ) -> List[Tuple[int, int]]:
         """Identical punctuation marks, matched by rank within each mark (Sultan et
         al.'s own first pipeline module, ``alignWords``'s punctuation stage). A lone
         punctuation token -- a sentence-final period above all -- has no run to belong
@@ -430,11 +474,18 @@ class SultanAligner(Baseline):
         out = []
         for mark, idx_s in by_mark_s.items():
             for i, j in zip(idx_s, by_mark_t.get(mark, ())):
-                out.append((i, j)); used_s.add(i); used_t.add(j)
+                out.append((i, j))
+                used_s.add(i)
+                used_t.add(j)
         return out
 
-    def ws_align(self, S: Sequence[str], T: Sequence[str], used_s: Optional[Set[int]] = None,
-                used_t: Optional[Set[int]] = None) -> List[Tuple[int, int]]:
+    def ws_align(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        used_s: Optional[Set[int]] = None,
+        used_t: Optional[Set[int]] = None,
+    ) -> List[Tuple[int, int]]:
         """Every identical word sequence of length at least ``MIN_LEN`` containing at
         least one non-stop word, longest first, one-to-one (Algorithm, section 3.3.1)."""
         ns, nt = [self._normalize(w) for w in S], [self._normalize(w) for w in T]
@@ -443,37 +494,52 @@ class SultanAligner(Baseline):
         out: List[Tuple[int, int]] = []
         for length in range(min(len(S), len(T)), self.MIN_LEN - 1, -1):
             for i in range(len(S) - length + 1):
-                run = tuple(ns[i:i + length])
+                run = tuple(ns[i : i + length])
                 if not any(w and w not in self.stopwords for w in run):
                     continue
                 for j in range(len(T) - length + 1):
-                    if tuple(nt[j:j + length]) != run:
+                    if tuple(nt[j : j + length]) != run:
                         continue
                     span_s, span_t = range(i, i + length), range(j, j + length)
                     if used_s.isdisjoint(span_s) and used_t.isdisjoint(span_t):
                         out.extend(zip(span_s, span_t))
-                        used_s.update(span_s); used_t.update(span_t)
+                        used_s.update(span_s)
+                        used_t.update(span_t)
         return out
 
-    def ne_align(self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int]
-                ) -> List[Tuple[int, int]]:
+    def ne_align(
+        self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int]
+    ) -> List[Tuple[int, int]]:
         """Names (``Entities.is_name``, no recogniser: exact term matches only), most
         similar first, one-to-one (section 3.3.2)."""
         candidates = sorted(
-            ((self.word_sim(S[i], T[j]), i, j)
-             for i in range(len(S)) if i not in used_s and self.evidence.is_name(S[i])
-             for j in range(len(T)) if j not in used_t and self.evidence.is_name(T[j])),
-            key=lambda x: -x[0])
+            (
+                (self.word_sim(S[i], T[j]), i, j)
+                for i in range(len(S))
+                if i not in used_s and self.evidence.is_name(S[i])
+                for j in range(len(T))
+                if j not in used_t and self.evidence.is_name(T[j])
+            ),
+            key=lambda x: -x[0],
+        )
         out = []
         for sim, i, j in candidates:
             if sim <= 0 or i in used_s or j in used_t:
                 continue
-            out.append((i, j)); used_s.add(i); used_t.add(j)
+            out.append((i, j))
+            used_s.add(i)
+            used_t.add(j)
         return out
 
-    def cw_dep_align(self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse,
-                     parse_t: DependencyParse, used_s: Set[int], used_t: Set[int]
-                     ) -> List[Tuple[int, int]]:
+    def cw_dep_align(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        parse_s: DependencyParse,
+        parse_t: DependencyParse,
+        used_s: Set[int],
+        used_t: Set[int],
+    ) -> List[Tuple[int, int]]:
         """Content pairs with dependency evidence, by descending score (Algorithm 3);
         the evidence pair itself is aligned alongside its content pair (lines 19-22)."""
         scored = []
@@ -487,7 +553,7 @@ class SultanAligner(Baseline):
                 if sim <= 0:
                     continue
                 evidence = self.dep_context(S, T, parse_s, parse_t, i, j)
-                context_sim = sum(self.word_sim(S[k], T[l]) for k, l in evidence)
+                context_sim = sum(self.word_sim(S[k], T[t_idx]) for k, t_idx in evidence)
                 if context_sim <= 0:
                     continue
                 scored.append((self.w * sim + (1 - self.w) * context_sim, i, j, evidence))
@@ -496,15 +562,25 @@ class SultanAligner(Baseline):
         for _, i, j, evidence in scored:
             if i in used_s or j in used_t:
                 continue
-            out.append((i, j)); used_s.add(i); used_t.add(j)
-            for k, l in evidence:
-                if k not in used_s and l not in used_t:
-                    out.append((k, l)); used_s.add(k); used_t.add(l)
+            out.append((i, j))
+            used_s.add(i)
+            used_t.add(j)
+            for k, t_idx in evidence:
+                if k not in used_s and t_idx not in used_t:
+                    out.append((k, t_idx))
+                    used_s.add(k)
+                    used_t.add(t_idx)
         return out
 
-    def cw_text_align(self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse,
-                      parse_t: DependencyParse, used_s: Set[int], used_t: Set[int]
-                      ) -> List[Tuple[int, int]]:
+    def cw_text_align(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        parse_s: DependencyParse,
+        parse_t: DependencyParse,
+        used_s: Set[int],
+        used_t: Set[int],
+    ) -> List[Tuple[int, int]]:
         """Content pairs with textual-neighbourhood evidence (Algorithm 4); a pair
         with no context still aligns when ``no_competitor`` and nothing scores higher
         on either of its words (the "no competitor" rule, section 3.3.3)."""
@@ -519,7 +595,7 @@ class SultanAligner(Baseline):
                 if sim <= 0:
                     continue
                 evidence = self.text_context(S, T, parse_s, parse_t, i, j)
-                context_sim = sum(self.word_sim(S[k], T[l]) for k, l in evidence)
+                context_sim = sum(self.word_sim(S[k], T[t_idx]) for k, t_idx in evidence)
                 if context_sim > 0:
                     scored.append((self.w * sim + (1 - self.w) * context_sim, i, j))
                 else:
@@ -529,21 +605,37 @@ class SultanAligner(Baseline):
         for _, i, j in scored:
             if i in used_s or j in used_t:
                 continue
-            out.append((i, j)); used_s.add(i); used_t.add(j)
+            out.append((i, j))
+            used_s.add(i)
+            used_t.add(j)
         if self.no_competitor:
             for sim, i, j in sorted(plain, key=lambda x: -x[0]):
                 if i in used_s or j in used_t:
                     continue
-                beaten = any(s2 > sim for s2, i2, j2 in plain
-                            if (i2 == i or j2 == j) and (i2, j2) != (i, j)
-                            and i2 not in used_s and j2 not in used_t)
+                beaten = any(
+                    s2 > sim
+                    for s2, i2, j2 in plain
+                    if (i2 == i or j2 == j)
+                    and (i2, j2) != (i, j)
+                    and i2 not in used_s
+                    and j2 not in used_t
+                )
                 if not beaten:
-                    out.append((i, j)); used_s.add(i); used_t.add(j)
+                    out.append((i, j))
+                    used_s.add(i)
+                    used_t.add(j)
         return out
 
-    def sw_dep_align(self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse,
-                     parse_t: DependencyParse, used_s: Set[int], used_t: Set[int],
-                     aligned: Dict[int, int]) -> List[Tuple[int, int]]:
+    def sw_dep_align(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        parse_s: DependencyParse,
+        parse_t: DependencyParse,
+        used_s: Set[int],
+        used_t: Set[int],
+        aligned: Dict[int, int],
+    ) -> List[Tuple[int, int]]:
         """Stop words whose parent or a child is already aligned to the other side's
         counterpart under the exact same relation label (section 3.3.4)."""
         out = []
@@ -551,18 +643,36 @@ class SultanAligner(Baseline):
             if i in used_s or not self.is_stop(S[i], parse_s.upos[i]):
                 continue
             for j in range(len(T)):
-                if j in used_t or not self.is_stop(T[j], parse_t.upos[j]) or self.word_sim(S[i], T[j]) <= 0:
+                if (
+                    j in used_t
+                    or not self.is_stop(T[j], parse_t.upos[j])
+                    or self.word_sim(S[i], T[j]) <= 0
+                ):
                     continue
                 ps, pt = parse_s.head[i], parse_t.head[j]
-                parent_ok = (ps >= 0 and aligned.get(ps) == pt and parse_s.deprel[i] == parse_t.deprel[j])
-                child_ok = any(aligned.get(k) == l and parse_s.deprel[k] == parse_t.deprel[l]
-                              for k in parse_s.children(i) for l in parse_t.children(j))
+                parent_ok = (
+                    ps >= 0 and aligned.get(ps) == pt and parse_s.deprel[i] == parse_t.deprel[j]
+                )
+                child_ok = any(
+                    aligned.get(k) == t_idx and parse_s.deprel[k] == parse_t.deprel[t_idx]
+                    for k in parse_s.children(i)
+                    for t_idx in parse_t.children(j)
+                )
                 if parent_ok or child_ok:
-                    out.append((i, j)); used_s.add(i); used_t.add(j); aligned[i] = j
+                    out.append((i, j))
+                    used_s.add(i)
+                    used_t.add(j)
+                    aligned[i] = j
         return out
 
-    def sw_text_align(self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int],
-                      aligned: Dict[int, int]) -> List[Tuple[int, int]]:
+    def sw_text_align(
+        self,
+        S: Sequence[str],
+        T: Sequence[str],
+        used_s: Set[int],
+        used_t: Set[int],
+        aligned: Dict[int, int],
+    ) -> List[Tuple[int, int]]:
         """Stop words whose immediate left neighbour or immediate right neighbour is
         already aligned to the other side's corresponding neighbour, checked
         separately (section 3.3.4)."""
@@ -576,11 +686,15 @@ class SultanAligner(Baseline):
                 left = i - 1 >= 0 and j - 1 >= 0 and aligned.get(i - 1) == j - 1
                 right = i + 1 < len(S) and j + 1 < len(T) and aligned.get(i + 1) == j + 1
                 if left or right:
-                    out.append((i, j)); used_s.add(i); used_t.add(j); aligned[i] = j
+                    out.append((i, j))
+                    used_s.add(i)
+                    used_t.add(j)
+                    aligned[i] = j
         return out
 
-    def sw_fallback_align(self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int]
-                          ) -> List[Tuple[int, int]]:
+    def sw_fallback_align(
+        self, S: Sequence[str], T: Sequence[str], used_s: Set[int], used_t: Set[int]
+    ) -> List[Tuple[int, int]]:
         """A stop word still unaligned after both evidence-based stop-word stages
         aligns anyway if it is an exact form-or-lemma match (``word_sim == 1.0``) for
         exactly one remaining candidate on each side -- no dependency or textual
@@ -590,23 +704,36 @@ class SultanAligner(Baseline):
         "is"/"is". This is the reimplementation's own extension beyond the paper,
         gated by ``stopword_fallback`` (default on) precisely because it is not in
         the paper."""
-        plain = [(i, j) for i in range(len(S)) if i not in used_s and self.is_stop(S[i])
-                for j in range(len(T)) if j not in used_t and self.is_stop(T[j])
-                and self.word_sim(S[i], T[j]) == 1.0]
+        plain = [
+            (i, j)
+            for i in range(len(S))
+            if i not in used_s and self.is_stop(S[i])
+            for j in range(len(T))
+            if j not in used_t and self.is_stop(T[j]) and self.word_sim(S[i], T[j]) == 1.0
+        ]
         out = []
         for i, j in plain:
             if i in used_s or j in used_t:
                 continue
-            competitor = any((i2 == i or j2 == j) and (i2, j2) != (i, j)
-                             and i2 not in used_s and j2 not in used_t for i2, j2 in plain)
+            competitor = any(
+                (i2 == i or j2 == j)
+                and (i2, j2) != (i, j)
+                and i2 not in used_s
+                and j2 not in used_t
+                for i2, j2 in plain
+            )
             if not competitor:
-                out.append((i, j)); used_s.add(i); used_t.add(j)
+                out.append((i, j))
+                used_s.add(i)
+                used_t.add(j)
         return out
 
-    def align(self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse,
-             parse_t: DependencyParse) -> List[Tuple[int, int]]:
+    def align(
+        self, S: Sequence[str], T: Sequence[str], parse_s: DependencyParse, parse_t: DependencyParse
+    ) -> List[Tuple[int, int]]:
         """The full pipeline in order; never aligns a word twice (Algorithm 5)."""
-        used_s: Set[int] = set(); used_t: Set[int] = set()
+        used_s: Set[int] = set()
+        used_t: Set[int] = set()
         links = list(self.punct_align(S, T, used_s, used_t))
         links += self.ws_align(S, T, used_s, used_t)
         links += self.ne_align(S, T, used_s, used_t)
@@ -623,7 +750,9 @@ class SultanAligner(Baseline):
 
     def predict(self, records: List[Record]) -> List[Prediction]:
         # one batched parse call for the whole list (Stanza chunks internally), not one per record
-        parsed = self.parser.parse_all([r.source_tokens for r in records] + [r.reuse_tokens for r in records])
+        parsed = self.parser.parse_all(
+            [r.source_tokens for r in records] + [r.reuse_tokens for r in records]
+        )
         out = []
         for record in records:
             S, T = record.source_tokens, record.reuse_tokens
@@ -647,8 +776,12 @@ class SultanAligner(Baseline):
         Latin dials (``syn_cos``, ``no_competitor``), on the dev fold's token accuracy."""
         from retexo.baselines.scorer import BaselineScorer
 
-        best = {"ppdb_sim": self.ppdb_sim, "w": self.w, "syn_cos": self.syn_cos,
-               "no_competitor": self.no_competitor}
+        best = {
+            "ppdb_sim": self.ppdb_sim,
+            "w": self.w,
+            "syn_cos": self.syn_cos,
+            "no_competitor": self.no_competitor,
+        }
         best_acc = -1.0
         for ppdb_sim in (0.8, 0.9, 1.0):
             for w in (0.7, 0.8, 0.9, 1.0):
@@ -659,8 +792,12 @@ class SultanAligner(Baseline):
                         acc = BaselineScorer.token_accuracy(dev, self.predict(dev))
                         if acc > best_acc:
                             best_acc = acc
-                            best = {"ppdb_sim": ppdb_sim, "w": w, "syn_cos": syn_cos,
-                                   "no_competitor": no_competitor}
+                            best = {
+                                "ppdb_sim": ppdb_sim,
+                                "w": w,
+                                "syn_cos": syn_cos,
+                                "no_competitor": no_competitor,
+                            }
         self.ppdb_sim, self.w = best["ppdb_sim"], best["w"]
         self.syn_cos, self.no_competitor = best["syn_cos"], best["no_competitor"]
         if log:

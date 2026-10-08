@@ -25,8 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from retexo.baselines.record import Record, RecordInterface
 from retexo.baselines.base import Prediction
+from retexo.baselines.record import Record, RecordInterface
 
 
 @dataclass
@@ -44,7 +44,7 @@ class ScoredPair:
     tags_only: bool = False
 
     @staticmethod
-    def of(record: Record, pred: Prediction) -> "ScoredPair":
+    def of(record: Record, pred: Prediction) -> ScoredPair:
         from retexo.baselines import labels
 
         gold_links, gold_tags, gold_frame, _ = RecordInterface.links_of(record)
@@ -54,13 +54,23 @@ class ScoredPair:
         tags_only = not any(s >= 0 for s in pred.links) and any(pred.tags)
         if tags_only:
             gold_labels = ScoredPair.v1_frame(gold_links, gold_tags, gold_frame)
-            pred_labels = labels.tag_labels(list(pred.tags) + [""] * (len(gold_links) - len(pred.tags)), pred.frame, "V3")
+            pred_labels = labels.tag_labels(
+                list(pred.tags) + [""] * (len(gold_links) - len(pred.tags)), pred.frame, "V3"
+            )
             pred_labels = [lab if lab == "FRAME" else labels.to_v1(lab) for lab in pred_labels]
             agree = sum(1 for g, p in zip(gold_labels, pred_labels) if g == p)
-            return ScoredPair(record, pred, agree / max(len(gold_labels), 1), n_gold, 0, n_hard, True)
+            return ScoredPair(
+                record, pred, agree / max(len(gold_labels), 1), n_gold, 0, n_hard, True
+            )
         agree = sum(1 for g, p in zip(gold_links, pred_links) if g == p)
-        return ScoredPair(record, pred, agree / max(len(gold_links), 1), n_gold,
-                          sum(1 for p in pred_links[: len(gold_links)] if p >= 0), n_hard)
+        return ScoredPair(
+            record,
+            pred,
+            agree / max(len(gold_links), 1),
+            n_gold,
+            sum(1 for p in pred_links[: len(gold_links)] if p >= 0),
+            n_hard,
+        )
 
     @staticmethod
     def v1_frame(links, tags, frame) -> List[str]:
@@ -85,7 +95,9 @@ class SampleSelector:
     def scored(self, rows: Sequence[Tuple[Record, Prediction]]) -> List[ScoredPair]:
         return [ScoredPair.of(r, p) for r, p in rows]
 
-    def select(self, rows: Sequence[Tuple[Record, Prediction]], *, k: int = 5) -> Tuple[List[ScoredPair], List[ScoredPair]]:
+    def select(
+        self, rows: Sequence[Tuple[Record, Prediction]], *, k: int = 5
+    ) -> Tuple[List[ScoredPair], List[ScoredPair]]:
         pairs = [s for s in self.scored(rows) if s.n_gold_links >= self.min_links]
         by_acc = sorted(pairs, key=lambda s: (s.accuracy, -s.n_gold_links))
         worst = by_acc[:k]
@@ -112,10 +124,16 @@ class MarkdownRenderer:
         reu = " ".join(f"{i}:{w}" for i, w in enumerate(r.reuse_tokens))
         if sample.tags_only:
             return MarkdownRenderer.render_tags(sample, title=title, compact=compact)
-        lines = [f"**{title or r.id}** ({r.pair_label}., token accuracy {sample.accuracy:.2f}, "
-                 f"gold links {sample.n_gold_links}, predicted {sample.n_pred_links})", "",
-                 f"- source: {src}", f"- reuse: {reu}", "",
-                 "| reuse word | gold | predicted | |", "|---|---|---|---|"]
+        lines = [
+            f"**{title or r.id}** ({r.pair_label}., token accuracy {sample.accuracy:.2f}, "
+            f"gold links {sample.n_gold_links}, predicted {sample.n_pred_links})",
+            "",
+            f"- source: {src}",
+            f"- reuse: {reu}",
+            "",
+            "| reuse word | gold | predicted | |",
+            "|---|---|---|---|",
+        ]
         omitted = 0
         for t in range(r.n_reuse):
             g, pr = gold_links[t], pred_links[t]
@@ -125,13 +143,21 @@ class MarkdownRenderer:
             same_op = labels.canonical(gold_tags[t])[0] == labels.canonical(pred_tags[t])[0]
             agree = g == pr and (same_op or g < 0) and g_frame == p_frame
             if compact and agree and (gold_tags[t] == "COPY" or g_frame):
-                omitted += 1                       # a correct COPY or FRAME row says nothing; count it
+                omitted += 1  # a correct COPY or FRAME row says nothing; count it
                 continue
-            gold_cell = (f"{g}:{r.source_tokens[g]} {gold_tags[t]}{'' if gold_sure[t] else ' (possible)'}" if g >= 0
-                         else ("FRAME" if g_frame else "\u2014"))
-            pred_cell = (f"{pr}:{r.source_tokens[pr]} {pred_tags[t]}" if 0 <= pr < r.n_source
-                         else ("FRAME" if p_frame else "\u2014"))
-            lines.append(f"| {t}:{r.reuse_tokens[t]} | {gold_cell} | {pred_cell} | {'' if agree else '!'} |")
+            gold_cell = (
+                f"{g}:{r.source_tokens[g]} {gold_tags[t]}{'' if gold_sure[t] else ' (possible)'}"
+                if g >= 0
+                else ("FRAME" if g_frame else "\u2014")
+            )
+            pred_cell = (
+                f"{pr}:{r.source_tokens[pr]} {pred_tags[t]}"
+                if 0 <= pr < r.n_source
+                else ("FRAME" if p_frame else "\u2014")
+            )
+            lines.append(
+                f"| {t}:{r.reuse_tokens[t]} | {gold_cell} | {pred_cell} | {'' if agree else '!'} |"
+            )
         if omitted:
             lines.append(f"| *{omitted} correct COPY / FRAME rows omitted* | | | |")
         note = str(r.annotation.get("note", "") or r.provenance.get("note", "") or "")
@@ -148,12 +174,21 @@ class MarkdownRenderer:
         r, p = sample.record, sample.pred
         gold_links, gold_tags, gold_frame, _ = RecordInterface.links_of(r)
         gold_labels = ScoredPair.v1_frame(gold_links, gold_tags, gold_frame)
-        pred_labels = labels.tag_labels(list(p.tags) + [""] * (r.n_reuse - len(p.tags)), p.frame, "V3")
+        pred_labels = labels.tag_labels(
+            list(p.tags) + [""] * (r.n_reuse - len(p.tags)), p.frame, "V3"
+        )
         pred_labels = [lab if lab == "FRAME" else labels.to_v1(lab) for lab in pred_labels]
         src = " ".join(f"{i}:{w}" for i, w in enumerate(r.source_tokens))
         reu = " ".join(f"{i}:{w}" for i, w in enumerate(r.reuse_tokens))
-        lines = [f"**{title or r.id}** ({r.pair_label}., tag accuracy {sample.accuracy:.2f}, gold links {sample.n_gold_links}; a tagger, no links)", "",
-                 f"- source: {src}", f"- reuse: {reu}", "", "| reuse word | gold | predicted tag | |", "|---|---|---|---|"]
+        lines = [
+            f"**{title or r.id}** ({r.pair_label}., tag accuracy {sample.accuracy:.2f}, gold links {sample.n_gold_links}; a tagger, no links)",
+            "",
+            f"- source: {src}",
+            f"- reuse: {reu}",
+            "",
+            "| reuse word | gold | predicted tag | |",
+            "|---|---|---|---|",
+        ]
         omitted = 0
         for t in range(r.n_reuse):
             g, pr = gold_labels[t], pred_labels[t]
@@ -162,8 +197,12 @@ class MarkdownRenderer:
             if compact and g == pr and g in ("COPY", "FRAME"):
                 omitted += 1
                 continue
-            link = f" ({gold_links[t]}:{r.source_tokens[gold_links[t]]})" if gold_links[t] >= 0 else ""
-            lines.append(f"| {t}:{r.reuse_tokens[t]} | {g}{link} | {pr} | {'' if g == pr else '!'} |")
+            link = (
+                f" ({gold_links[t]}:{r.source_tokens[gold_links[t]]})" if gold_links[t] >= 0 else ""
+            )
+            lines.append(
+                f"| {t}:{r.reuse_tokens[t]} | {g}{link} | {pr} | {'' if g == pr else '!'} |"
+            )
         if omitted:
             lines.append(f"| *{omitted} correct COPY / FRAME rows omitted* | | | |")
         note = str(r.annotation.get("note", "") or r.provenance.get("note", "") or "")
@@ -196,12 +235,16 @@ class LeakageSplit:
     def is_leaky(self, record: Record) -> bool:
         return " ".join(record.source_tokens) in self._train_sources
 
-    def split(self, rows: Sequence[Tuple[Record, Prediction]]) -> Tuple[List[Tuple[Record, Prediction]], List[Tuple[Record, Prediction]]]:
+    def split(
+        self, rows: Sequence[Tuple[Record, Prediction]]
+    ) -> Tuple[List[Tuple[Record, Prediction]], List[Tuple[Record, Prediction]]]:
         leaky = [(r, p) for r, p in rows if self.is_leaky(r)]
         clean = [(r, p) for r, p in rows if not self.is_leaky(r)]
         return leaky, clean
 
-    def scores(self, rows: Sequence[Tuple[Record, Prediction]], *, emits: str = "links") -> Dict[str, Dict[str, float]]:
+    def scores(
+        self, rows: Sequence[Tuple[Record, Prediction]], *, emits: str = "links"
+    ) -> Dict[str, Dict[str, float]]:
         """``token_accuracy``, link F1 and V1 macro F1 on both halves."""
         from retexo.baselines.scorer import BaselineScorer
 
@@ -211,9 +254,12 @@ class LeakageSplit:
                 out[name] = {"n": 0}
                 continue
             result = BaselineScorer.score([r for r, _ in part], [p for _, p in part], emits=emits)
-            out[name] = {"n": len(part), "token_accuracy": result.get("token_accuracy"),
-                         "link_f1": result["link"]["f1"] if result.get("link") else None,
-                         "op_macro_v1": result["ops"]["V1"]["macro_f1"]}
+            out[name] = {
+                "n": len(part),
+                "token_accuracy": result.get("token_accuracy"),
+                "link_f1": result["link"]["f1"] if result.get("link") else None,
+                "op_macro_v1": result["ops"]["V1"]["macro_f1"],
+            }
         return out
 
 
@@ -227,7 +273,9 @@ class DifficultyTable:
         ```
     """
 
-    def __init__(self, dumps: Dict[str, Sequence[Tuple[Record, Prediction]]], *, min_links: int = 1):
+    def __init__(
+        self, dumps: Dict[str, Sequence[Tuple[Record, Prediction]]], *, min_links: int = 1
+    ):
         self.methods = list(dumps)
         self.by_pair: Dict[str, Dict[str, float]] = {}
         self.records: Dict[str, Record] = {}
@@ -247,8 +295,11 @@ class DifficultyTable:
         return sorted(rows, key=lambda x: x[1])[:n]
 
     def failed_by_all(self, threshold: float = 0.8) -> List[str]:
-        return [pid for pid, accs in self.by_pair.items()
-                if len(accs) == len(self.methods) and all(a < threshold for a in accs.values())]
+        return [
+            pid
+            for pid, accs in self.by_pair.items()
+            if len(accs) == len(self.methods) and all(a < threshold for a in accs.values())
+        ]
 
     def markdown(self, worst: int = 15) -> str:
         head = "| pair | label | mean | " + " | ".join(self.methods) + " | note |"
@@ -256,7 +307,11 @@ class DifficultyTable:
         for pid, mean, accs in self.hardest(worst):
             r = self.records[pid]
             note = str(r.annotation.get("note", "") or r.provenance.get("note", "") or "")[:80]
-            lines.append(f"| {pid} | {r.pair_label} | {mean:.2f} | " + " | ".join(f"{accs[m]:.2f}" for m in self.methods) + f" | {note} |")
+            lines.append(
+                f"| {pid} | {r.pair_label} | {mean:.2f} | "
+                + " | ".join(f"{accs[m]:.2f}" for m in self.methods)
+                + f" | {note} |"
+            )
         return "\n".join(lines)
 
 
@@ -267,13 +322,19 @@ def _read(path: Path):
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="best/worst pairs of a dump, leakage split, difficulty table")
+    ap = argparse.ArgumentParser(
+        description="best/worst pairs of a dump, leakage split, difficulty table"
+    )
     ap.add_argument("dumps", nargs="+")
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--min-links", type=int, default=3)
     ap.add_argument("--leakage", action="store_true")
     ap.add_argument("--fold", type=int, default=4)
-    ap.add_argument("--gold-records", default=None, help="record file the folds come from (default: the silver gold)")
+    ap.add_argument(
+        "--gold-records",
+        default=None,
+        help="record file the folds come from (default: the silver gold)",
+    )
     ap.add_argument("--difficulty", action="store_true")
     ap.add_argument("--worst", type=int, default=15)
     args = ap.parse_args(argv)
@@ -281,14 +342,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         dumps = {Path(d).parent.name: _read(Path(d)) for d in args.dumps}
         table = DifficultyTable(dumps)
         print(table.markdown(args.worst))
-        print(f"\nfailed by every method (accuracy < 0.8): {len(table.failed_by_all())} pairs: "
-              f"{', '.join(table.failed_by_all()[:40])}")
+        print(
+            f"\nfailed by every method (accuracy < 0.8): {len(table.failed_by_all())} pairs: "
+            f"{', '.join(table.failed_by_all()[:40])}"
+        )
         return 0
     rows = _read(Path(args.dumps[0]))
     if args.leakage:
         from retexo.baselines.record import RecordCodec, load_records
 
-        records = load_records(Path(args.gold_records)) if args.gold_records else RecordCodec.gold_records()
+        records = (
+            load_records(Path(args.gold_records))
+            if args.gold_records
+            else RecordCodec.gold_records()
+        )
         split = LeakageSplit(records, fold=args.fold)
         for name, scores in split.scores(rows).items():
             print(name, scores)

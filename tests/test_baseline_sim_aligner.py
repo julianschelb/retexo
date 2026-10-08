@@ -18,8 +18,16 @@ from retexo.baselines.sim_aligner import Embedder, SimAligner, SimilarityMatrix 
 
 
 def record(source, reuse):
-    return Record(id="t/1", level="gold", fold=4, source_work="", source_tokens=source, reuse_work="",
-                  reuse_tokens=reuse, pair_label="cit")
+    return Record(
+        id="t/1",
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=source,
+        reuse_work="",
+        reuse_tokens=reuse,
+        pair_label="cit",
+    )
 
 
 # =============================================================================
@@ -71,8 +79,8 @@ def test_mutual_argmax_drops_the_loser_of_a_shared_column():
     S = np.array([[5.0, 0.1], [4.0, 0.1], [0.1, 5.0]])
     matrix = SimilarityMatrix(S, sim="dot")
     links = BaselineDecoder.decode_mutual(matrix.rows(), matrix.rev_rows())
-    assert links[0] == 0        # reuse 0 wins source 0 (5.0 > 4.0)
-    assert links[1] == -1       # reuse 1 loses it and has no other candidate
+    assert links[0] == 0  # reuse 0 wins source 0 (5.0 > 4.0)
+    assert links[1] == -1  # reuse 1 loses it and has no other candidate
     assert links[2] == 1
 
 
@@ -171,7 +179,7 @@ class _FakeLatinModel:
             pass
 
         out = _Out()
-        out.hidden_states = [hidden] * 13   # 12 transformer layers plus the embedding layer
+        out.hidden_states = [hidden] * 13  # 12 transformer layers plus the embedding layer
         return out
 
 
@@ -194,8 +202,12 @@ def test_latin_bert_span_bookkeeping_on_a_fake_model():
     vectors = embedder._encode_latin_bert(["arma", "cano"])
     # ids: [CLS, 10, 11, 10, 11, SEP] -> arma spans positions 1:3, cano spans 3:5
     assert vectors.shape == (2, 4)
-    assert torch.allclose(vectors[0], torch.tensor([6.0, 7.0, 8.0, 9.0]))     # mean(hidden[1], hidden[2])
-    assert torch.allclose(vectors[1], torch.tensor([14.0, 15.0, 16.0, 17.0]))  # mean(hidden[3], hidden[4])
+    assert torch.allclose(
+        vectors[0], torch.tensor([6.0, 7.0, 8.0, 9.0])
+    )  # mean(hidden[1], hidden[2])
+    assert torch.allclose(
+        vectors[1], torch.tensor([14.0, 15.0, 16.0, 17.0])
+    )  # mean(hidden[3], hidden[4])
 
 
 # =============================================================================
@@ -238,5 +250,5 @@ def test_extract_itermax_bypasses_the_shared_decoder():
     pred = method.predict([rec])[0]
     assert "itermax_links" in pred.meta
     typed = method.postprocess(rec, pred, {"theta": 0.45, "frame_rule": "none"})
-    assert typed.links[0] == 0   # puella <-> arma: [1.0, 0.0] vs [0.9, 0.1], each other's best
-    assert typed.links[1] == 1   # cano <-> bellum: [0.0, 1.0] vs [0.0, 0.9], each other's best
+    assert typed.links[0] == 0  # puella <-> arma: [1.0, 0.0] vs [0.9, 0.1], each other's best
+    assert typed.links[1] == 1  # cano <-> bellum: [0.0, 1.0] vs [0.0, 0.9], each other's best

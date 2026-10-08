@@ -24,6 +24,7 @@ NULL_SOURCE = -1
 #: cannot explain by insertion and deletion alone.
 DERIVED_TAGS = ("INS", "DEL")
 
+
 class ScriptEncoder:
     """Turns scripts into model inputs, one method per formulation.
 

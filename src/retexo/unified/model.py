@@ -44,8 +44,15 @@ class UnifiedPointer(TypedPointer):
     ``frame_null_weight`` for the same reason it exists there (3% of words).
     """
 
-    def __init__(self, config=None, *, use_gate: bool = True, gate_weight: float = 1.0,
-                 decoder: Optional[DecoderConfig] = None, structured_margin_weight: float = 0.0) -> None:
+    def __init__(
+        self,
+        config=None,
+        *,
+        use_gate: bool = True,
+        gate_weight: float = 1.0,
+        decoder: Optional[DecoderConfig] = None,
+        structured_margin_weight: float = 0.0,
+    ) -> None:
         import torch
 
         super().__init__(config)
@@ -67,7 +74,9 @@ class UnifiedPointer(TypedPointer):
     # ---------- the grid, gated ----------
 
     def _cells_from_vectors(self, vectors, s_vectors, rows, t_words, s_rows, s_words, examples):
-        got = super()._cells_from_vectors(vectors, s_vectors, rows, t_words, s_rows, s_words, examples)
+        got = super()._cells_from_vectors(
+            vectors, s_vectors, rows, t_words, s_rows, s_words, examples
+        )
         if got is None:
             return None
         loc_flat, name, frame_logits = self._last_factorized
@@ -120,14 +129,15 @@ class UnifiedPointer(TypedPointer):
         for i, r in enumerate(rows):
             per_example.setdefault(r, []).append(i)
         losses = []
-        for r, idx in per_example.items():
+        for _r, idx in per_example.items():
             # an unknown gold link, or a gold source word truncated out of the grid,
             # leaves no gold segmentation to score against; a source word linked twice
             # (a SPLIT, the enclitic case) is a segmentation the decoder cannot produce,
             # so the hinge would push against an unreachable target: skip those examples
             linked = [align_l[i] for i in idx if align_l[i] >= 0]
-            if any(align_l[i] == -100 or (align_l[i] >= 0 and align_l[i] not in word_l[i]) for i in idx) \
-                    or len(linked) != len(set(linked)):
+            if any(
+                align_l[i] == -100 or (align_l[i] >= 0 and align_l[i] not in word_l[i]) for i in idx
+            ) or len(linked) != len(set(linked)):
                 continue
             m = max(t_words[i] for i in idx) + 1
             n = max([s for i in idx for s in word_l[i] if s >= 0] + [-1]) + 1
@@ -148,7 +158,13 @@ class UnifiedPointer(TypedPointer):
                 gold_frame[t] = 1 if frame_l[i] == 1 else 0
             gold = Segmentation.from_links(gold_links, gold_frame)
             live = CellGrid(log_p, log_ins, log_frame, m, n)
-            frozen = CellGrid(log_p.detach().tolist(), log_ins.detach().tolist(), log_frame.detach().tolist(), m, n)
+            frozen = CellGrid(
+                log_p.detach().tolist(),
+                log_ins.detach().tolist(),
+                log_frame.detach().tolist(),
+                m,
+                n,
+            )
             wrong = self.decoder.loss_augmented(frozen, gold)
             if wrong == gold:
                 continue
@@ -160,7 +176,9 @@ class UnifiedPointer(TypedPointer):
 
     # ---------- inference ----------
 
-    def predict_structured(self, examples: Sequence[ChangeExample]) -> List[Tuple[List[int], List[int]]]:
+    def predict_structured(
+        self, examples: Sequence[ChangeExample]
+    ) -> List[Tuple[List[int], List[int]]]:
         """Per example ``(links, frame)`` from the structured decoder over the
         (gated) grid -- the replacement for the per-word assignment and the three
         repairs. FRAME is the decoder's null run of that kind: split by the gate
@@ -168,21 +186,27 @@ class UnifiedPointer(TypedPointer):
         truncation come back as INS."""
         out = []
         for ex, words in zip(examples, self.predict_cells(examples)):
-            grid = CellGrid.from_word_rows(words, len(ex.source_tokens), frame_from_head=not self.use_gate)
+            grid = CellGrid.from_word_rows(
+                words, len(ex.source_tokens), frame_from_head=not self.use_gate
+            )
             seg = self.decoder.decode(grid)
             out.append((seg.links(), seg.frame()))
         return out
 
-    def gate_probabilities(self, examples: Sequence[ChangeExample]) -> List[List[Tuple[float, float, float]]]:
+    def gate_probabilities(
+        self, examples: Sequence[ChangeExample]
+    ) -> List[List[Tuple[float, float, float]]]:
         """Per example, per reuse word ``(p_reused, p_not, p_frame)`` -- the gate
         read on its own, for diagnostics."""
         import torch
 
-        self._encoder.eval(); self._typer.eval(); self._loc_mlp.eval()
+        self._encoder.eval()
+        self._typer.eval()
+        self._loc_mlp.eval()
         out = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
-                chunk = list(examples[start:start + self.config.batch_size])
+                chunk = list(examples[start : start + self.config.batch_size])
                 if not chunk:
                     continue
                 batch, rows, starts, ends, _, source, _, _, t_words = self._encode(chunk)
@@ -195,5 +219,7 @@ class UnifiedPointer(TypedPointer):
                         for i, (r, t) in enumerate(zip(rows.tolist(), t_words.tolist())):
                             per[r][t] = tuple(probs[i])
                 out.extend(per)
-        self._encoder.train(); self._typer.train(); self._loc_mlp.train()
+        self._encoder.train()
+        self._typer.train()
+        self._loc_mlp.train()
         return out

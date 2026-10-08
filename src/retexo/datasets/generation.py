@@ -23,9 +23,9 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from retexo.core.builder import VariantBuilder
 from retexo.core.normalize import normalize
-from retexo.operations import EditOperation, OperationRegistry
 from retexo.core.scriba import Scriba
 from retexo.core.script import EditScript
+from retexo.operations import EditOperation, OperationRegistry
 
 # =============================================================================
 # Substitution content
@@ -83,9 +83,14 @@ class MockSubstitutionSource(SubstitutionSource):
 
     def __init__(self, suffixes: Optional[Dict[str, str]] = None):
         self.suffixes = suffixes or {
-            "SYN": "-syn", "SYN-DIST": "-sim", "HYPER": "-gen",
-            "HYPO": "-spec", "ANT": "-ant", "NE-SUB": "-ne",
-            "POS": "-der", "MORPH": "-infl",
+            "SYN": "-syn",
+            "SYN-DIST": "-sim",
+            "HYPER": "-gen",
+            "HYPO": "-spec",
+            "ANT": "-ant",
+            "NE-SUB": "-ne",
+            "POS": "-der",
+            "MORPH": "-infl",
         }
 
     def replacement(self, token: str, tag: str, rng: random.Random) -> Optional[str]:
@@ -111,15 +116,16 @@ class LexicalSubstitutionSource(SubstitutionSource):
     the detector.
     """
 
-    def __init__(self, resources, fallback: Optional[SubstitutionSource] = None, cohypo: bool = False):
+    def __init__(
+        self, resources, fallback: Optional[SubstitutionSource] = None, cohypo: bool = False
+    ):
         self.resources = resources
         self.fallback = fallback
         #: E38b: SYN-DIST draws a WordNet co-hyponym first (Moritz et al. 2016's
         #: repl_co-hypo: caelum/polus, pontus/aequor), the vector neighbour second
         self.cohypo = cohypo
 
-    _RELATION = {"SYN": "synonyms", "HYPER": "hypernyms", "HYPO": "hyponyms",
-                 "ANT": "antonyms"}
+    _RELATION = {"SYN": "synonyms", "HYPER": "hypernyms", "HYPO": "hyponyms", "ANT": "antonyms"}
 
     def _cohyponym(self, token: str, rng: random.Random) -> Optional[str]:
         if not self.resources.has("wordnet"):
@@ -128,7 +134,11 @@ class LexicalSubstitutionSource(SubstitutionSource):
         for pos in self.resources.pos_candidates(token):
             options = []
             for hyper in self.resources.wordnet.lookup(lemma, pos).get("hypernyms", [])[:6]:
-                options += [h for h in self.resources.wordnet.lookup(hyper, pos).get("hyponyms", []) if h != lemma]
+                options += [
+                    h
+                    for h in self.resources.wordnet.lookup(hyper, pos).get("hyponyms", [])
+                    if h != lemma
+                ]
             options = sorted(set(options))
             if options:
                 return rng.choice(options)
@@ -268,14 +278,10 @@ class Difficulty:
         operations: List[EditOperation] = []
         for i, token in enumerate(source_tokens):
             if i >= len(target_tokens) or normalize(token) != normalize(target_tokens[i]):
-                operations.append(
-                    EditOperation("DEL", (i,), (), (token,), ())
-                )
+                operations.append(EditOperation("DEL", (i,), (), (token,), ()))
         for j, token in enumerate(target_tokens):
             if j < len(source_tokens) and normalize(source_tokens[j]) == normalize(token):
-                operations.append(
-                    EditOperation("NOP", (j,), (j,), (source_tokens[j],), (token,))
-                )
+                operations.append(EditOperation("NOP", (j,), (j,), (source_tokens[j],), (token,)))
             else:
                 operations.append(EditOperation("INS", (), (j,), (), (token,)))
         return EditScript(list(source_tokens), list(target_tokens), operations)
@@ -291,7 +297,7 @@ class Difficulty:
         source_tokens: Sequence[str],
         target_tokens: Sequence[str],
         script: EditScript,
-    ) -> "Difficulty":
+    ) -> Difficulty:
         """Record every difficulty signal available without the oracle."""
         structural = {"NOP", "INS", "DEL", "REORDER", "ADAPT", "DISPERSE", "QUOTE"}
         counts = script.op_counts()
@@ -414,10 +420,7 @@ class SyntheticGenerator:
                 variant, script = built
 
                 fragment_span = (0, len(variant))
-                framed = (
-                    context_pool
-                    and rng.random() < self.config.frame_probability
-                )
+                framed = context_pool and rng.random() < self.config.frame_probability
                 if framed:
                     variant, script, fragment_span = self._embed_in_frame(
                         tokens, variant, script, context_pool, rng
@@ -475,14 +478,12 @@ class SyntheticGenerator:
         it, which later stages use as span supervision.
         """
         context = rng.choice(context_pool)
-        context_tokens = (
-            context.split() if isinstance(context, str) else list(context)
-        )
+        context_tokens = context.split() if isinstance(context, str) else list(context)
         low, high = self.config.frame_share
         want = max(1, int(len(variant) * rng.uniform(low, high)))
         want = min(want, len(context_tokens))
         start = rng.randrange(0, len(context_tokens) - want + 1)
-        window = context_tokens[start:start + want]
+        window = context_tokens[start : start + want]
         cut = rng.randint(0, len(window))
         prefix, suffix = window[:cut], window[cut:]
 
@@ -500,19 +501,18 @@ class SyntheticGenerator:
         framed_variant = prefix + list(variant) + suffix
         operations = []
         if prefix:
-            operations.append(EditOperation(
-                "FRAME", (), tuple(range(len(prefix))), (), tuple(prefix)
-            ))
+            operations.append(
+                EditOperation("FRAME", (), tuple(range(len(prefix))), (), tuple(prefix))
+            )
         operations.extend(shifted)
         if suffix:
             begin = offset + len(variant)
-            operations.append(EditOperation(
-                "FRAME", (), tuple(range(begin, begin + len(suffix))), (),
-                tuple(suffix)
-            ))
-        framed_script = EditScript(
-            list(source_tokens), framed_variant, operations, script.registry
-        )
+            operations.append(
+                EditOperation(
+                    "FRAME", (), tuple(range(begin, begin + len(suffix))), (), tuple(suffix)
+                )
+            )
+        framed_script = EditScript(list(source_tokens), framed_variant, operations, script.registry)
         return framed_variant, framed_script, (offset, offset + len(variant))
 
     def _canonicalize(
@@ -520,7 +520,7 @@ class SyntheticGenerator:
         source_tokens: Sequence[str],
         target_tokens: Sequence[str],
         applied: EditScript,
-        report: "GenerationReport",
+        report: GenerationReport,
     ) -> EditScript:
         """Replace the applied script with the oracle's analysis of the pair.
 
@@ -570,9 +570,7 @@ class SyntheticGenerator:
                 builder.keep(i)
                 inserts.append(f"{token}-ins")
             else:
-                replacement = self.substitutions.replacement_in_context(
-                    tokens, i, tag, rng
-                )
+                replacement = self.substitutions.replacement_in_context(tokens, i, tag, rng)
                 if replacement is None:
                     builder.keep(i)
                 else:
@@ -597,7 +595,8 @@ class SyntheticGenerator:
         """
         structural = {"INS", "DEL", "REORDER"}
         keep_substitution = {
-            tag: weight for tag, weight in self.config.weights.items()
+            tag: weight
+            for tag, weight in self.config.weights.items()
             if tag not in structural and self.substitutions.realises(tag)
         }
         if not keep_substitution:
@@ -609,15 +608,13 @@ class SyntheticGenerator:
         # lexicon; letting it raise the insertion rate would turn that into a
         # claim about how much of this reuse is unexplained, which it is not.
         substitution_total = sum(
-            weight for tag, weight in self.config.weights.items()
-            if tag not in structural
+            weight for tag, weight in self.config.weights.items() if tag not in structural
         )
         scale = substitution_total / sum(keep_substitution.values())
         usable = {tag: weight * scale for tag, weight in keep_substitution.items()}
-        usable.update({
-            tag: weight for tag, weight in self.config.weights.items()
-            if tag in structural
-        })
+        usable.update(
+            {tag: weight for tag, weight in self.config.weights.items() if tag in structural}
+        )
         total = sum(usable.values())
         return {tag: weight / total for tag, weight in usable.items()}
 

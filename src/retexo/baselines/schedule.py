@@ -36,7 +36,9 @@ class SharedSchedule:
         both = lambda records: list(records) + [RecordCodec.swapped(r) for r in records]  # noqa: E731
         self.synthetic = synthetic if self.built_in else both(synthetic)
         self.real = list(real) if self.built_in else both(real)
-        self.negatives = list(method.shared_negatives[: len(real) // 2 if self.built_in else len(real)])
+        self.negatives = list(
+            method.shared_negatives[: len(real) // 2 if self.built_in else len(real)]
+        )
         self.per_pass = self.PER_PASS // 2 if self.built_in else self.PER_PASS
         self.rng = random.Random(99 + method.cfg.seed)
 
@@ -50,14 +52,22 @@ class SharedSchedule:
         return out
 
     def real_pass(self) -> List[Record]:
-        draw = self.rng.sample(self.synthetic, min(self.per_pass, len(self.synthetic))) if self.synthetic else []
+        draw = (
+            self.rng.sample(self.synthetic, min(self.per_pass, len(self.synthetic)))
+            if self.synthetic
+            else []
+        )
         return self.real + self.negatives + draw
 
     def summary(self) -> Dict[str, int]:
         """The counts in oriented examples, identical for every method that follows the schedule."""
         factor = 2 if self.built_in else 1
-        return {"synthetic_epoch": factor * len(self.synthetic), "real_per_pass": factor * len(self.real),
-                "negatives_per_pass": factor * len(self.negatives), "synthetic_per_pass": factor * self.per_pass}
+        return {
+            "synthetic_epoch": factor * len(self.synthetic),
+            "real_per_pass": factor * len(self.real),
+            "negatives_per_pass": factor * len(self.negatives),
+            "synthetic_per_pass": factor * self.per_pass,
+        }
 
 
 __all__ = ["SharedSchedule"]

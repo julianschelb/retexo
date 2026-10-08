@@ -37,14 +37,18 @@ def gate_log_probs(loc_flat, gate_logits):
     distribution)."""
     import torch
 
-    log_gate = torch.log_softmax(gate_logits, dim=-1)                      # [T, 3]
+    log_gate = torch.log_softmax(gate_logits, dim=-1)  # [T, 3]
     columns = loc_flat[:, _CELLS_FROM:]
     # a row whose every source column is -inf (no candidates) keeps all its mass on the nulls;
     # the softmax runs on a zeroed copy of those rows so no NaN reaches the backward pass
     has_columns = torch.isfinite(columns).any(dim=-1, keepdim=True)
     safe = torch.where(has_columns, columns, torch.zeros_like(columns))
     log_columns = torch.where(has_columns, torch.log_softmax(safe, dim=-1), columns)
-    log_reused = torch.where(has_columns.squeeze(-1), log_gate[:, REUSED], torch.full_like(log_gate[:, REUSED], float("-inf")))
+    log_reused = torch.where(
+        has_columns.squeeze(-1),
+        log_gate[:, REUSED],
+        torch.full_like(log_gate[:, REUSED], float("-inf")),
+    )
     log_null = torch.stack([log_gate[:, NOT_REUSED], log_gate[:, IS_FRAME]], dim=-1)
     if bool((~has_columns).any()):
         # renormalise the two nulls where the reused class has nowhere to go
@@ -73,7 +77,9 @@ def gate_targets(align: Sequence[int], frame: Sequence[int]) -> List[List[bool]]
     return out
 
 
-def gate_loss(gate_logits, allowed: Sequence[Sequence[bool]], class_weights: Sequence[float] = (1.0, 1.0, 1.0)):
+def gate_loss(
+    gate_logits, allowed: Sequence[Sequence[bool]], class_weights: Sequence[float] = (1.0, 1.0, 1.0)
+):
     """Set cross-entropy: ``-log sum_{allowed} p`` per word, weighted by the
     weight of the word's first allowed class, averaged over the words that
     allow anything."""

@@ -18,7 +18,7 @@ labelled badly cannot dominate.
 from __future__ import annotations
 
 import random
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Sequence
 
 #: The fine operations whose words count twice in a pair's error.
 FOCUS_OPS = {"SUBST", "SYN", "POS", "NE-SUB", "HYPER", "HYPO", "ANT", "MORPH", "SPLIT", "MERGE"}
@@ -35,7 +35,9 @@ class ErrorCurriculum:
         ```
     """
 
-    def __init__(self, *, floor: float = 0.5, candidates: int = 6000, cap: float = 0.6, seed: int = 1):
+    def __init__(
+        self, *, floor: float = 0.5, candidates: int = 6000, cap: float = 0.6, seed: int = 1
+    ):
         self.floor = min(max(float(floor), 0.0), 1.0)
         self.candidates = int(candidates)
         self.cap = float(cap)
@@ -62,7 +64,7 @@ class ErrorCurriculum:
     def errors(self, model, examples: Sequence, batch_size: int = 64) -> List[float]:
         out: List[float] = []
         for start in range(0, len(examples), batch_size):
-            chunk = examples[start:start + batch_size]
+            chunk = examples[start : start + batch_size]
             rows = model.predict_alignment_scores(chunk)
             out.extend(min(self.example_error(ex, r), self.cap) for ex, r in zip(chunk, rows))
         return out
@@ -92,11 +94,19 @@ class ErrorCurriculum:
                             break
                 chosen += [cands[i] for i in picked]
                 mean = total / len(errs)
-                self.history.append({"candidates": len(cands), "mean_error": round(mean, 4),
-                                     "with_error": sum(1 for e in errs if e > 0), "drawn": len(picked)})
+                self.history.append(
+                    {
+                        "candidates": len(cands),
+                        "mean_error": round(mean, 4),
+                        "with_error": sum(1 for e in errs if e > 0),
+                        "drawn": len(picked),
+                    }
+                )
                 if log:
-                    log(f"[curriculum] {len(cands)} candidates scored, mean error {mean:.3f}, "
-                        f"{self.history[-1]['with_error']} with an error, {len(picked)} drawn by error + {n_random} at random")
+                    log(
+                        f"[curriculum] {len(cands)} candidates scored, mean error {mean:.3f}, "
+                        f"{self.history[-1]['with_error']} with an error, {len(picked)} drawn by error + {n_random} at random"
+                    )
             else:
                 chosen += self.rng.sample(cands, min(n_error, len(cands)))
         return chosen

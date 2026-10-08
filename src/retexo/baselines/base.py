@@ -115,7 +115,7 @@ class Prediction:
     raw: Optional[str] = None
 
     @staticmethod
-    def empty(n_reuse: int) -> "Prediction":
+    def empty(n_reuse: int) -> Prediction:
         """The prediction that says nothing: no links, no tags, no frame."""
         return Prediction(links=[-1] * n_reuse, tags=[""] * n_reuse, frame=[0] * n_reuse)
 
@@ -174,14 +174,18 @@ class Baseline:
         self.featurizer = None
         self.validation: List[Record] = []
         self.early_stopping = None
-        self.monitor = None                    # the note's metrics over training time (early_stopping.TrainingMonitor)
+        self.monitor = (
+            None  # the note's metrics over training time (early_stopping.TrainingMonitor)
+        )
         #: the shared training set's synthetic pairs and negatives (``--shared-data``), empty otherwise
         self.shared_synthetic: List[Record] = []
         self.shared_negatives: List[Record] = []
 
     # ---------- Training ----------
 
-    def fit(self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()) -> "Baseline":
+    def fit(
+        self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
+    ) -> Baseline:
         """Train on the training records; a no-op for untrained rows.
 
         ``unlabeled`` is the text of the test records, labels never read: the
@@ -204,9 +208,14 @@ class Baseline:
         from retexo.baselines.adapters import PredictionAdapter
 
         pred = PredictionAdapter.decode_prediction(pred, self.decoder, dials, record)
-        return PredictionAdapter.type_prediction(pred, record, self.typer, self.featurizer,
-                               frame_rule=str(dials.get("frame_rule", "keyword")),
-                               head=getattr(self, "typer_head", None))
+        return PredictionAdapter.type_prediction(
+            pred,
+            record,
+            self.typer,
+            self.featurizer,
+            frame_rule=str(dials.get("frame_rule", "keyword")),
+            head=getattr(self, "typer_head", None),
+        )
 
     # ---------- Persistence ----------
 
@@ -215,5 +224,5 @@ class Baseline:
         Path(path).mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def load(cls, path: Path, cfg: BaselineConfig) -> "Baseline":
+    def load(cls, path: Path, cfg: BaselineConfig) -> Baseline:
         return cls(cfg)

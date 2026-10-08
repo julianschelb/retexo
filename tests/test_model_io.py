@@ -6,11 +6,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from retexo.core.scriba import Scriba  # noqa: E402
 from retexo.formulations.token_classifier import (  # noqa: E402
     TokenClassifierConfig,
     TokenClassifierModel,
 )
-from retexo.core.scriba import Scriba  # noqa: E402
 
 PASSED = FAILED = 0
 
@@ -28,8 +28,7 @@ TINY = "hf-internal-testing/tiny-random-bert"
 
 
 def test_save_load_predict():
-    model = TokenClassifierModel(
-        TokenClassifierConfig(base_model=TINY, device="cpu"))
+    model = TokenClassifierModel(TokenClassifierConfig(base_model=TINY, device="cpu"))
     model._build()
     source = "arma virumque cano".split()
     target = "arma virumque cecini".split()
@@ -37,8 +36,7 @@ def test_save_load_predict():
         model.save(Path(d))
         loaded = TokenClassifierModel.load(Path(d))
     check("labels preserved", loaded.labels == model.labels)
-    check("INS/DEL absent from head",
-          "INS" not in loaded.labels and "DEL" not in loaded.labels)
+    check("INS/DEL absent from head", "INS" not in loaded.labels and "DEL" not in loaded.labels)
     script = loaded.predict(source, target)
     check("predicts a script", script is not None)
     check("script is valid", Scriba().validate(script, len(source)).ok)

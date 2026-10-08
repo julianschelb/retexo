@@ -31,7 +31,7 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterator, List, Optional, Sequence, Tuple
 
 from retexo.core.normalize import normalize
@@ -149,8 +149,7 @@ class Passage:
     def tokens(self) -> List[TokenInfo]:
         """Annotated tokens, computing the local layer on first access."""
         if self._tokens is None:
-            self._tokens = [self._annotate_local(i, s)
-                            for i, s in enumerate(self._surfaces)]
+            self._tokens = [self._annotate_local(i, s) for i, s in enumerate(self._surfaces)]
         return self._tokens
 
     def _annotate_local(self, index: int, surface: str) -> TokenInfo:
@@ -168,8 +167,7 @@ class Passage:
             enclitic = morphology.split_enclitic(surface)
             readings = _readings(surface, lemma)
 
-        is_name = bool(resources.has("entities")
-                       and resources.entities.is_name(surface))
+        is_name = bool(resources.has("entities") and resources.entities.is_name(surface))
 
         return TokenInfo(
             index=index,
@@ -186,7 +184,7 @@ class Passage:
             syllables=_syllabify(surface),
         )
 
-    def annotate(self, *, wordnet: bool = False, vectors: bool = False) -> "Passage":
+    def annotate(self, *, wordnet: bool = False, vectors: bool = False) -> Passage:
         """Add the layers that cost something. Returns self, for chaining.
 
         ``wordnet`` goes to Latin WordNet, one lookup per distinct lemma, and
@@ -200,9 +198,7 @@ class Passage:
         for token in self.tokens:
             changes = {}
             if wordnet and self.resources.has("wordnet") and token.lemma:
-                record = self.resources.wordnet.lookup(
-                    token.lemma, token.pos or "n"
-                )
+                record = self.resources.wordnet.lookup(token.lemma, token.pos or "n")
                 changes.update(
                     synonyms=tuple(record.get("synonyms", ())),
                     hypernyms=tuple(record.get("hypernyms", ())),
@@ -212,12 +208,9 @@ class Passage:
                 )
             if vectors and token.lemma:
                 changes["has_vector"] = bool(
-                    self.resources.has("vectors")
-                    and self.resources.vectors.contains(token.lemma)
+                    self.resources.has("vectors") and self.resources.vectors.contains(token.lemma)
                 )
-            updated.append(
-                TokenInfo(**{**token.__dict__, **changes}) if changes else token
-            )
+            updated.append(TokenInfo(**{**token.__dict__, **changes}) if changes else token)
         self._tokens = updated
         self._wordnet_done = self._wordnet_done or wordnet
         return self
@@ -281,13 +274,19 @@ class Passage:
             lines.append("  ".join(parts))
             if relations:
                 for label, values in (
-                    ("syn", token.synonyms), ("hyper", token.hypernyms),
-                    ("hypo", token.hyponyms), ("ant", token.antonyms),
+                    ("syn", token.synonyms),
+                    ("hyper", token.hypernyms),
+                    ("hypo", token.hyponyms),
+                    ("ant", token.antonyms),
                     ("deriv", token.derivatives),
                 ):
                     if values:
                         shown = ", ".join(values[:max_relations])
-                        more = f" (+{len(values) - max_relations})" if len(values) > max_relations else ""
+                        more = (
+                            f" (+{len(values) - max_relations})"
+                            if len(values) > max_relations
+                            else ""
+                        )
                         lines.append(f"      {label}: {shown}{more}")
         return "\n".join(lines)
 

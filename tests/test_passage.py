@@ -125,9 +125,15 @@ def test_summary_counts_what_is_known():
 
 def test_works_with_no_resources_at_all():
     """A passage with everything switched off is still a passage."""
-    bare = Resources(vectors_path=None, enabled={
-        "morphology": False, "wordnet": False, "vectors": False, "entities": False,
-    })
+    bare = Resources(
+        vectors_path=None,
+        enabled={
+            "morphology": False,
+            "wordnet": False,
+            "vectors": False,
+            "entities": False,
+        },
+    )
     passage = Passage(TEXT, resources=bare)
     assert len(passage) == len(TEXT.split())
     assert passage[0].lemma is None
@@ -164,8 +170,7 @@ def test_passage_is_not_wired_into_the_pipeline():
 # =============================================================================
 
 if __name__ == "__main__":
-    tests = [(n, f) for n, f in sorted(globals().items())
-             if n.startswith("test_") and callable(f)]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = []
     for name, fn in tests:
         try:

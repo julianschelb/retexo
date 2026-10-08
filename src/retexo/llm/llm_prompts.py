@@ -22,7 +22,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Iterator, Tuple
 
-TAGS = ("NOP", "MORPH", "SYN", "SYN-DIST", "HYPER", "HYPO", "ANT", "NE-SUB", "POS", "SPLIT", "MERGE", "SUBST")
+TAGS = (
+    "NOP",
+    "MORPH",
+    "SYN",
+    "SYN-DIST",
+    "HYPER",
+    "HYPO",
+    "ANT",
+    "NE-SUB",
+    "POS",
+    "SPLIT",
+    "MERGE",
+    "SUBST",
+)
 
 SYSTEM_EN = "You are a Latin philologist annotating literary reuse: one author has rewritten an earlier passage."
 SYSTEM_LA = "Grammaticus es Latinus, qui imitationem poetarum annotas."
@@ -174,8 +187,8 @@ class PromptRegistry:
         """The (system, user, parse) triple for ``name`` with ``fields`` filled in."""
         variant = self._variants[name]
         fields.setdefault("tags", ", ".join(TAGS))
-        fields.setdefault("flags", "(not available)")      # the typer's evidence, when asked for
-        fields.setdefault("glosses", "(not available)")    # the model's own word-by-word reading
+        fields.setdefault("flags", "(not available)")  # the typer's evidence, when asked for
+        fields.setdefault("glosses", "(not available)")  # the model's own word-by-word reading
         return variant.system, variant.template.format(**fields), variant.parse
 
 
@@ -183,49 +196,89 @@ class PromptRegistry:
 # The type job's variants
 # =============================================================================
 
-TYPE = PromptRegistry({
-    "T0": PromptVariant(SYSTEM_EN, ITEM + """
+TYPE = PromptRegistry(
+    {
+        "T0": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Which of these describes how the reuse word relates to the source word?
 {tags}
 
-Answer with the tag alone.""", "tag"),
-
-    "T1": PromptVariant(SYSTEM_EN, ITEM + """
-
-Which of these describes how the reuse word relates to the source word?
-
-""" + DEFINITIONS + """
-
-Answer with the tag alone.""", "tag"),
-
-    "T2": PromptVariant(SYSTEM_EN, ITEM + """
+Answer with the tag alone.""",
+            "tag",
+        ),
+        "T1": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + """
+"""
+            + DEFINITIONS
+            + """
 
-Answer with the tag alone.""", "tag"),
-
-    "T3": PromptVariant(SYSTEM_EN, ITEM + """
-
-Which of these describes how the reuse word relates to the source word?
-
-""" + DEFINITIONS + "\n\n" + RULES + "\n\n" + FEWSHOT + """
-
-Answer with the tag alone.""", "tag"),
-
-    "T4": PromptVariant(SYSTEM_EN, ITEM + """
+Answer with the tag alone.""",
+            "tag",
+        ),
+        "T2": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + """
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + """
+
+Answer with the tag alone.""",
+            "tag",
+        ),
+        "T3": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
+
+Which of these describes how the reuse word relates to the source word?
+
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + "\n\n"
+            + FEWSHOT
+            + """
+
+Answer with the tag alone.""",
+            "tag",
+        ),
+        "T4": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
+
+Which of these describes how the reuse word relates to the source word?
+
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + """
 
 Think in at most two sentences: do the words share a lemma, and if not, what is
 the sense relation between them as used here? Then write the tag on the last
-line, alone.""", "last_tag"),
-
-    "T5": PromptVariant(SYSTEM_EN, ITEM + """
+line, alone.""",
+            "last_tag",
+        ),
+        "T5": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Answer three questions about the two words, then give the tag.
 
@@ -233,37 +286,70 @@ Answer three questions about the two words, then give the tag.
 2. If not, is there a sense relation between them as used here? synonym / same field /
    more general / more specific / opposite / same stem other part of speech /
    different proper name / none
-3. The tag from this list: """ + ", ".join(TAGS) + """
+3. The tag from this list: """
+            + ", ".join(TAGS)
+            + """
 
-Write the three answers on three lines, the tag alone on the last.""", "last_tag"),
-
-    "T6": PromptVariant(SYSTEM_LA, """Locus prior: {context_source}
+Write the three answers on three lines, the tag alone on the last.""",
+            "last_tag",
+        ),
+        "T6": PromptVariant(
+            SYSTEM_LA,
+            """Locus prior: {context_source}
 Locus posterior: {context_target}
 
 verbum prioris: {source}
 verbum posterioris: {target}
 
 Quomodo verbum posterius ad prius se habet? Elige unum:
-""" + DEFINITIONS + """
+"""
+            + DEFINITIONS
+            + """
 
-Responde uno vocabulo.""", "tag"),
-
-    # T7-T9 add a prior over the class distribution (SUBST is the commonest answer)
-    # and, for T9, a two-step framing that routes MORPH/POS out before naming a
-    # sense relation.
-    "T7": PromptVariant(SYSTEM_EN, ITEM + """
+Responde uno vocabulo.""",
+            "tag",
+        ),
+        # T7-T9 add a prior over the class distribution (SUBST is the commonest answer)
+        # and, for T9, a two-step framing that routes MORPH/POS out before naming a
+        # sense relation.
+        "T7": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + "\n\n" + PRIOR + REASON_TAIL, "last_tag"),
-
-    "T8": PromptVariant(SYSTEM_EN, ITEM + """
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + "\n\n"
+            + PRIOR
+            + REASON_TAIL,
+            "last_tag",
+        ),
+        "T8": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + "\n\n" + PRIOR + "\n\n" + FEWSHOT + REASON_TAIL, "last_tag"),
-
-    "T9": PromptVariant(SYSTEM_EN, ITEM + """
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + "\n\n"
+            + PRIOR
+            + "\n\n"
+            + FEWSHOT
+            + REASON_TAIL,
+            "last_tag",
+        ),
+        "T9": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Answer in two steps.
 
@@ -275,18 +361,24 @@ Step 2. If there is no relation, the answer is SUBST. If the words share a lemma
 differ only in form, the answer is MORPH; if they share a stem across parts of speech,
 POS. Otherwise choose the relation:
 
-""" + DEFINITIONS + """
+"""
+            + DEFINITIONS
+            + """
 
-Write step 1 in one sentence, then the tag on the last line, alone.""", "last_tag"),
-
-    # T10 is T9 without the sentence that names the prior ("a different word with no
-    # relation is the commonest case"). T9 beat every other prompt on the adjudicated
-    # fine relations, where SUBST is 40% of the items, and lost badly on the coarse
-    # MORPH-vs-SUBST test, where MORPH is 81% -- so the question is whether its gain
-    # came from the two-step framing or from a prior that happened to match one test
-    # set. T10 keeps the framing and drops the prior; T11 keeps neither step nor
-    # prior but routes MORPH and POS out first, which is the other half of T9.
-    "T10": PromptVariant(SYSTEM_EN, ITEM + """
+Write step 1 in one sentence, then the tag on the last line, alone.""",
+            "last_tag",
+        ),
+        # T10 is T9 without the sentence that names the prior ("a different word with no
+        # relation is the commonest case"). T9 beat every other prompt on the adjudicated
+        # fine relations, where SUBST is 40% of the items, and lost badly on the coarse
+        # MORPH-vs-SUBST test, where MORPH is 81% -- so the question is whether its gain
+        # came from the two-step framing or from a prior that happened to match one test
+        # set. T10 keeps the framing and drops the prior; T11 keeps neither step nor
+        # prior but routes MORPH and POS out first, which is the other half of T9.
+        "T10": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Answer in two steps.
 
@@ -297,41 +389,83 @@ Step 2. If there is no relation, the answer is SUBST. If the words share a lemma
 differ only in form, the answer is MORPH; if they share a stem across parts of speech,
 POS. Otherwise choose the relation:
 
-""" + DEFINITIONS + """
+"""
+            + DEFINITIONS
+            + """
 
-Write step 1 in one sentence, then the tag on the last line, alone.""", "last_tag"),
-
-    "T11": PromptVariant(SYSTEM_EN, ITEM + """
+Write step 1 in one sentence, then the tag on the last line, alone.""",
+            "last_tag",
+        ),
+        "T11": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + """
 
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + """
+"""
+            + DEFINITIONS
+            + """
 
 Decide in this order, in at most two sentences: first, do the two words share a lemma and
 differ only in form (MORPH)? If not, do they share a stem across parts of speech (POS)?
 Only if neither, name the sense relation, or SUBST if there is none.
 
-Then write the tag on the last line, alone.""", "last_tag"),
-
-    # T12-T15 add extra input: the typer's own lexical evidence (T12), the model's
-    # own word-by-word gloss (T13), both (T14), and both on T9's two-step framing
-    # (T15), so the effect of the extra input can be told apart from the framing.
-    "T12": PromptVariant(SYSTEM_EN, ITEM + EVIDENCE_BLOCK + """
+Then write the tag on the last line, alone.""",
+            "last_tag",
+        ),
+        # T12-T15 add extra input: the typer's own lexical evidence (T12), the model's
+        # own word-by-word gloss (T13), both (T14), and both on T9's two-step framing
+        # (T15), so the effect of the extra input can be told apart from the framing.
+        "T12": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + EVIDENCE_BLOCK
+            + """
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + REASON_TAIL_2, "last_tag"),
-
-    "T13": PromptVariant(SYSTEM_EN, ITEM + GLOSS_BLOCK + """
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + REASON_TAIL_2,
+            "last_tag",
+        ),
+        "T13": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + GLOSS_BLOCK
+            + """
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + REASON_TAIL_2, "last_tag"),
-
-    "T14": PromptVariant(SYSTEM_EN, ITEM + GLOSS_BLOCK + EVIDENCE_BLOCK + """
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + REASON_TAIL_2,
+            "last_tag",
+        ),
+        "T14": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + GLOSS_BLOCK
+            + EVIDENCE_BLOCK
+            + """
 Which of these describes how the reuse word relates to the source word?
 
-""" + DEFINITIONS + "\n\n" + RULES + REASON_TAIL_2, "last_tag"),
-
-    "T15": PromptVariant(SYSTEM_EN, ITEM + GLOSS_BLOCK + EVIDENCE_BLOCK + """
+"""
+            + DEFINITIONS
+            + "\n\n"
+            + RULES
+            + REASON_TAIL_2,
+            "last_tag",
+        ),
+        "T15": PromptVariant(
+            SYSTEM_EN,
+            ITEM
+            + GLOSS_BLOCK
+            + EVIDENCE_BLOCK
+            + """
 Answer in two steps.
 
 Step 1. Is there any semantic relation between the two words as used in these passages,
@@ -341,23 +475,36 @@ Step 2. If there is no relation, the answer is SUBST. If the words share a lemma
 differ only in form, the answer is MORPH; if they share a stem across parts of speech,
 POS. Otherwise choose the relation:
 
-""" + DEFINITIONS + """
+"""
+            + DEFINITIONS
+            + """
 
-Write step 1 in one sentence, then the tag on the last line, alone.""", "last_tag"),
-})
+Write step 1 in one sentence, then the tag on the last line, alone.""",
+            "last_tag",
+        ),
+    }
+)
 
 
 # =============================================================================
 # The propose job's variants
 # =============================================================================
 
-PROPOSE = PromptRegistry({
-    "P0": PromptVariant(SYSTEM_EN, PROPOSE_HEAD + """
+PROPOSE = PromptRegistry(
+    {
+        "P0": PromptVariant(
+            SYSTEM_EN,
+            PROPOSE_HEAD
+            + """
 
 Answer as JSON only:
-{{"SYN": [...], "HYPER": [...], "HYPO": [...], "ANT": [...]}}""", "json_relations"),
-
-    "P1": PromptVariant(SYSTEM_EN, PROPOSE_HEAD + """
+{{"SYN": [...], "HYPER": [...], "HYPO": [...], "ANT": [...]}}""",
+            "json_relations",
+        ),
+        "P1": PromptVariant(
+            SYSTEM_EN,
+            PROPOSE_HEAD
+            + """
 
 SYN   words that could stand in its place with the same sense
 HYPER more general words (its genus)
@@ -367,9 +514,13 @@ ANT   opposites
 Up to three per relation, best first; leave a list empty rather than guessing.
 
 Answer as JSON only:
-{{"SYN": [...], "HYPER": [...], "HYPO": [...], "ANT": [...]}}""", "json_relations"),
-
-    "P2": PromptVariant(SYSTEM_EN, PROPOSE_HEAD + """
+{{"SYN": [...], "HYPER": [...], "HYPO": [...], "ANT": [...]}}""",
+            "json_relations",
+        ),
+        "P2": PromptVariant(
+            SYSTEM_EN,
+            PROPOSE_HEAD
+            + """
 
 SYN   words that could stand in its place with the same sense
 HYPER more general words (its genus)
@@ -381,9 +532,13 @@ Up to three per relation, best first; leave a list empty rather than guessing.
 Example, for "gladius" (noun):
 {{"SYN": ["ensis", "ferrum", "mucro"], "HYPER": ["telum", "arma"], "HYPO": [], "ANT": []}}
 
-Answer as JSON only, in that shape.""", "json_relations"),
-
-    "P3": PromptVariant(SYSTEM_EN, PROPOSE_HEAD + """
+Answer as JSON only, in that shape.""",
+            "json_relations",
+        ),
+        "P3": PromptVariant(
+            SYSTEM_EN,
+            PROPOSE_HEAD
+            + """
 
 SYN   words that could stand in its place with the same sense
 HYPER more general words (its genus)
@@ -395,16 +550,21 @@ Beside each word put a two-word gloss, so a reader can check it.
 
 Answer as JSON only:
 {{"SYN": [["ensis", "sword"], ...], "HYPER": [...], "HYPO": [...], "ANT": [...]}}""",
-                        "json_relations_glossed"),
-})
+            "json_relations_glossed",
+        ),
+    }
+)
 
 
 # =============================================================================
 # The gloss job's one variant (stage A of the evidence-fed prompts, T12-T15)
 # =============================================================================
 
-GLOSS = PromptRegistry({
-    "G0": PromptVariant(SYSTEM_EN, """Two Latin passages. The later one rewrites the earlier one.
+GLOSS = PromptRegistry(
+    {
+        "G0": PromptVariant(
+            SYSTEM_EN,
+            """Two Latin passages. The later one rewrites the earlier one.
 
 EARLIER passage: {context_source}
 LATER passage:   {context_target}
@@ -418,5 +578,8 @@ EARLIER
 
 LATER
 <word> = <dictionary form> = <gloss>
-...""", "gloss"),
-})
+...""",
+            "gloss",
+        ),
+    }
+)

@@ -42,8 +42,16 @@ def aligner(table=None, names=(), **extra):
 
 
 def record(source, reuse):
-    return Record(id="t/1", level="gold", fold=4, source_work="", source_tokens=source, reuse_work="",
-                  reuse_tokens=reuse, pair_label="cit")
+    return Record(
+        id="t/1",
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=source,
+        reuse_work="",
+        reuse_tokens=reuse,
+        pair_label="cit",
+    )
 
 
 def parse(upos, deprel, head):
@@ -69,7 +77,7 @@ def test_ws_align_identical_sequences():
 def test_ws_align_leaves_single_words_to_later_stages():
     a = aligner()
     links = a.ws_align(["gladius"], ["gladius"])
-    assert links == []          # length 1 < MIN_LEN
+    assert links == []  # length 1 < MIN_LEN
 
 
 def test_punct_align_lone_punctuation_by_rank():
@@ -107,7 +115,7 @@ def test_punct_align_feeds_used_sets_to_ws_align():
     punct = a.punct_align(S, T, used_s, used_t)
     assert punct == [(1, 1)]
     ws = a.ws_align(S, T, used_s, used_t)
-    assert ws == []            # "arma ." as a run would double-claim index 1
+    assert ws == []  # "arma ." as a run would double-claim index 1
 
 
 # =============================================================================
@@ -144,18 +152,21 @@ def test_dep_context_relation_equivalence_table():
 
 def test_text_context_window_and_stopwords():
     a = aligner({("gladius", "ensis"): {"wn_syn": 1}})
-    S = ["a", "b", "gladius", "c", "et", "d", "e"]          # gladius at 2; "et" a stop word at 4
+    S = ["a", "b", "gladius", "c", "et", "d", "e"]  # gladius at 2; "et" a stop word at 4
     T = ["x", "ensis", "y"]
     ps = parse(["X"] * len(S), ["dep"] * len(S), [-1] * len(S))
     pt = parse(["X"] * len(S), ["dep"] * len(T), [-1] * len(T))
     # window is +-3 of index 2: positions -1..5 clipped to 0..5, excluding 2 itself and the stop word "et"
     ctx = a.text_context(S, T, ps, pt, 2, 1)
-    assert (5, 1) not in ctx or True  # "d" at index 5 has no word_sim entry, contributes nothing either way
-    assert (4, 1) not in ctx          # "et" is a stop word: excluded from the neighbourhood
+    assert (
+        5,
+        1,
+    ) not in ctx or True  # "d" at index 5 has no word_sim entry, contributes nothing either way
+    assert (4, 1) not in ctx  # "et" is a stop word: excluded from the neighbourhood
     a2 = aligner({("gladius", "ensis"): {"wn_syn": 1}, ("e", "x"): {"same_form": 1}})
     # index 6 ("e") sits exactly at the +3 boundary of index 2 (2+3=5)... it does not, it's outside
     ctx2 = a2.text_context(S, T, ps, pt, 2, 1)
-    assert (6, 0) not in ctx2         # outside the window (2+3=5 is the last included index)
+    assert (6, 0) not in ctx2  # outside the window (2+3=5 is the last included index)
 
 
 # =============================================================================
@@ -210,7 +221,7 @@ def test_cw_text_align_competitor_blocks_alignment():
     parse_s = parse(["NOUN", "NOUN"], ["root", "conj"], [-1, 0])
     parse_t = parse(["NOUN"], ["root"], [-1])
     links = a.cw_text_align(S, T, parse_s, parse_t, set(), set())
-    assert links == [(0, 0)]      # ppdb_sim (0.9) beats the plain wn_syn-only similarity
+    assert links == [(0, 0)]  # ppdb_sim (0.9) beats the plain wn_syn-only similarity
 
 
 # =============================================================================
@@ -226,9 +237,10 @@ def test_align_never_aligns_a_word_twice():
     parse_s = parse(["ADJ", "NOUN", "X", "NOUN"], ["amod", "root", "cc", "conj"], [1, -1, 1, 1])
     parse_t = parse(["ADJ", "NOUN", "X", "NOUN"], ["amod", "root", "cc", "conj"], [1, -1, 1, 1])
     links = a.align(S, T, parse_s, parse_t)
-    sources = [s for s, _ in links]; targets = [t for _, t in links]
+    sources = [s for s, _ in links]
+    targets = [t for _, t in links]
     assert len(sources) == len(set(sources)) and len(targets) == len(set(targets))
-    assert (3, 3) in links        # "et arma" is a 2-word identical run: aligned whole by ws_align
+    assert (3, 3) in links  # "et arma" is a 2-word identical run: aligned whole by ws_align
     assert (2, 2) in links
 
 
@@ -240,7 +252,7 @@ def test_sw_fallback_align_is_opt_in_and_off_by_default():
     a_on = aligner({("et", "et"): {"same_form": 1}}, stopword_fallback=True)
     assert a_on.stopword_fallback is True
     used_s, used_t = set(), set()
-    links = a_on.sw_fallback_align(["et"], ["et"], used_s, used_t)   # "et": a real Latin stop word
+    links = a_on.sw_fallback_align(["et"], ["et"], used_s, used_t)  # "et": a real Latin stop word
     assert links == [(0, 0)]
 
 
@@ -261,7 +273,9 @@ def test_cross_orientation_is_opt_in_and_finds_parent_child_pairs():
     # dep_context(s=0 "uidit", t=0 "spectat"): s's child is 1 ("regem", deprel "obj");
     # t's parent is 1 ("rex", t's deprel[0] = "obj"). Cross: child(s)/parent(t).
     assert a.dep_context(["uidit", "regem"], ["spectat", "rex"], parse_s, parse_t, 0, 0) == []
-    assert a_on.dep_context(["uidit", "regem"], ["spectat", "rex"], parse_s, parse_t, 0, 0) == [(1, 1)]
+    assert a_on.dep_context(["uidit", "regem"], ["spectat", "rex"], parse_s, parse_t, 0, 0) == [
+        (1, 1)
+    ]
 
 
 # =============================================================================
@@ -311,16 +325,16 @@ def test_the_driver_never_touches_evidence():
     source), which used to crash ``SultanAligner`` because word similarity was wired
     to that same attribute. ``self.evidence`` must be untouched by that overwrite."""
     method = SultanAligner(BaselineConfig(device="cpu", extra={"lang": "en"}))
-    assert method.featurizer is None                 # Baseline's own default, untouched
-    assert method.evidence is not None                # SultanAligner's own, set in __init__
-    method.featurizer = None                          # exactly what run_baseline.py does for --set
-    assert method.word_sim("dog", "dog") == 1.0        # must not raise or depend on .featurizer
+    assert method.featurizer is None  # Baseline's own default, untouched
+    assert method.evidence is not None  # SultanAligner's own, set in __init__
+    method.featurizer = None  # exactly what run_baseline.py does for --set
+    assert method.word_sim("dog", "dog") == 1.0  # must not raise or depend on .featurizer
 
 
 def test_plain_normalize_does_not_fold_latin_orthography():
     from retexo.baselines.sultan_aligner import plain_normalize
 
-    assert plain_normalize("Very") == "very"           # not "uery": no u/v folding for English
+    assert plain_normalize("Very") == "very"  # not "uery": no u/v folding for English
     assert plain_normalize("John's") == "johns"
     assert plain_normalize(",") == ""
 
@@ -332,9 +346,9 @@ def test_english_dependency_parser_root_and_pos():
     toks = "The soldiers fired weapons at the crowd .".split()
     parsed = parser.parse_all([toks])[" ".join(toks)]
     assert len(parsed) == len(toks)
-    upos, deprel, head = parsed[2]                      # "fired", the root
-    assert upos == "VERB" and head == -1                # ROOT maps to -1, not to itself
-    assert parsed[1][0] == "NOUN"                        # "soldiers"
+    upos, deprel, head = parsed[2]  # "fired", the root
+    assert upos == "VERB" and head == -1  # ROOT maps to -1, not to itself
+    assert parsed[1][0] == "NOUN"  # "soldiers"
     # caching: a second call with the same tokens must not re-parse (same object back)
     again = parser.parse_all([toks])[" ".join(toks)]
     assert again is parsed
@@ -348,20 +362,30 @@ def test_english_featurizer_word_sim_tiers():
     assert phi["same_form"] == 1.0
     phi = dict(zip(FEATURE_NAMES, f("car", "automobile")))  # a real WordNet synonym pair
     assert phi["wn_syn"] == 1.0
-    assert f.is_name("Barack") or True                    # spaCy NER is context-free here; smoke only
+    assert f.is_name("Barack") or True  # spaCy NER is context-free here; smoke only
 
 
 def test_sultan_aligner_english_mode_end_to_end():
     """The exact MSR-RTE test-split pair the driver run was checked against by hand."""
     method = SultanAligner(BaselineConfig(device="cpu", extra={"lang": "en"}))
-    rec = Record(id="msr_rte/test/0", level="external", fold=-1, source_work="", reuse_work="",
-                source_tokens=("Mangla was summoned after Madhumita 's sister Nidhi Shukla , "
-                               "who was the first witness in the case .").split(),
-                reuse_tokens="Shukla is related to Mangla .".split(), pair_label="cf", split="test")
+    rec = Record(
+        id="msr_rte/test/0",
+        level="external",
+        fold=-1,
+        source_work="",
+        reuse_work="",
+        source_tokens=(
+            "Mangla was summoned after Madhumita 's sister Nidhi Shukla , "
+            "who was the first witness in the case ."
+        ).split(),
+        reuse_tokens="Shukla is related to Mangla .".split(),
+        pair_label="cf",
+        split="test",
+    )
     pred = method.predict([rec])[0]
     links = {(s, t) for t, s in enumerate(pred.links) if s >= 0}
-    assert (8, 0) in links      # source "Shukla" (8) -> reuse "Shukla" (0)
-    assert (0, 4) in links      # source "Mangla" (0) -> reuse "Mangla" (4)
+    assert (8, 0) in links  # source "Shukla" (8) -> reuse "Shukla" (0)
+    assert (0, 4) in links  # source "Mangla" (0) -> reuse "Mangla" (4)
 
 
 def main() -> int:

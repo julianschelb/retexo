@@ -20,7 +20,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from retexo.paths import home
 
@@ -62,14 +62,14 @@ class BenchmarkData:
         ```
     """
 
-    labels: "pd.DataFrame"  # noqa: F821
-    corpus: "pd.DataFrame"  # noqa: F821
+    labels: pd.DataFrame  # noqa: F821
+    corpus: pd.DataFrame  # noqa: F821
     _cross_fold: set = field(default_factory=set, repr=False)
 
     # ---------- Construction ----------
 
     @classmethod
-    def load(cls, data_dir: Optional[Path] = None) -> "BenchmarkData":
+    def load(cls, data_dir: Optional[Path] = None) -> BenchmarkData:
         """Read the processed corpus and labels.
 
         Raises:
@@ -88,8 +88,7 @@ class BenchmarkData:
         labels = pd.read_csv(labels_path)
         corpus = pd.read_csv(corpus_path)
         spanning = labels.groupby("text_corpus_cleaned").fold_id.nunique()
-        return cls(labels=labels, corpus=corpus,
-                   _cross_fold=set(spanning[spanning > 1].index))
+        return cls(labels=labels, corpus=corpus, _cross_fold=set(spanning[spanning > 1].index))
 
     # ---------- Vocabulary ----------
 
@@ -111,12 +110,11 @@ class BenchmarkData:
         that appears in more than one fold at all, since the second case cannot
         be assigned to a side of the split without risking leakage.
         """
-        held = set(
-            self.labels.loc[self.labels.fold_id == held_out, "text_corpus_cleaned"]
-        )
+        held = set(self.labels.loc[self.labels.fold_id == held_out, "text_corpus_cleaned"])
         train = self.labels[self.labels.fold_id != held_out]
         passages = {
-            text for text in train.text_corpus_cleaned.dropna().unique()
+            text
+            for text in train.text_corpus_cleaned.dropna().unique()
             if text not in held and text not in self._cross_fold
         }
         return sorted(p for p in passages if len(str(p).split()) >= min_tokens)
@@ -125,6 +123,7 @@ class BenchmarkData:
 
     def pairs(self, held_out: int) -> Tuple[List[LabelledPair], List[LabelledPair]]:
         """Training and held-out annotated pairs, by the benchmark's folds."""
+
         def build(frame) -> List[LabelledPair]:
             out = []
             for row in frame.itertuples():
@@ -133,7 +132,9 @@ class BenchmarkData:
                     continue
                 out.append(
                     LabelledPair(
-                        source=source, target=target, ref_type=row.ref_type,
+                        source=source,
+                        target=target,
+                        ref_type=row.ref_type,
                         fold=int(row.fold_id),
                         source_author=str(row.prefix_corpus_author),
                         query_author=str(row.prefix_query_author),
@@ -163,14 +164,13 @@ class BenchmarkData:
         attested = set(zip(train.text_corpus_cleaned, train.text_query_cleaned))
 
         queries = [
-            t for t in train.text_query_cleaned.dropna().unique()
+            t
+            for t in train.text_query_cleaned.dropna().unique()
             if len(str(t).split()) >= min_tokens
         ]
         by_author: Dict[str, List[str]] = {}
         for row in train.itertuples():
-            by_author.setdefault(str(row.prefix_corpus_author), []).append(
-                row.text_corpus_cleaned
-            )
+            by_author.setdefault(str(row.prefix_corpus_author), []).append(row.text_corpus_cleaned)
         authors = [a for a, v in by_author.items() if v]
         if not queries or not authors:
             return []
@@ -187,8 +187,14 @@ class BenchmarkData:
             if len(source.split()) < min_tokens:
                 continue
             out.append(
-                LabelledPair(source=source, target=query, ref_type="no_match",
-                             fold=-1, source_author=author, query_author="")
+                LabelledPair(
+                    source=source,
+                    target=query,
+                    ref_type="no_match",
+                    fold=-1,
+                    source_author=author,
+                    query_author="",
+                )
             )
         return out
 

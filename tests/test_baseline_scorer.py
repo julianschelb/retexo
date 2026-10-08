@@ -16,10 +16,18 @@ from retexo.baselines.record import Edge, Record, Span, links_of  # noqa: E402
 
 
 def record(source, reuse, edges, spans=(), rid="t/1"):
-    return Record(id=rid, level="gold", fold=4, source_work="", source_tokens=source, reuse_work="",
-                  reuse_tokens=reuse, pair_label="cit",
-                  links=[Edge(r, s, op, sure) for r, s, op, sure in edges],
-                  spans=[Span(a, b, "FRAME") for a, b in spans])
+    return Record(
+        id=rid,
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=source,
+        reuse_work="",
+        reuse_tokens=reuse,
+        pair_label="cit",
+        links=[Edge(r, s, op, sure) for r, s, op, sure in edges],
+        spans=[Span(a, b, "FRAME") for a, b in spans],
+    )
 
 
 def gold_pred(rec):
@@ -28,8 +36,12 @@ def gold_pred(rec):
 
 
 def test_gold_against_itself():
-    rec = record(["arma", "uirum", "cano", "te"], ["ut", "ait", "arma", "uirumque", "cano"],
-                 [(2, 0, "COPY", True), (3, 1, "MORPH", True), (4, 2, "COPY", True)], spans=[(0, 2)])
+    rec = record(
+        ["arma", "uirum", "cano", "te"],
+        ["ut", "ait", "arma", "uirumque", "cano"],
+        [(2, 0, "COPY", True), (3, 1, "MORPH", True), (4, 2, "COPY", True)],
+        spans=[(0, 2)],
+    )
     pred = gold_pred(rec)
     assert sc.token_accuracy([rec], [pred]) == 1.0
     link = sc.link_prf([rec], [pred])
@@ -41,12 +53,18 @@ def test_gold_against_itself():
 
 
 def test_sure_possible():
-    rec = record(["a", "b", "c"], ["a", "b", "c"], [(0, 0, "COPY", True), (1, 1, "COPY", True), (2, 2, "COPY", False)])
+    rec = record(
+        ["a", "b", "c"],
+        ["a", "b", "c"],
+        [(0, 0, "COPY", True), (1, 1, "COPY", True), (2, 2, "COPY", False)],
+    )
     first = Prediction(links=[0, -1, 2], tags=["COPY", "", "COPY"], frame=[0, 0, 0])
     link = sc.link_prf([rec], [first])
     assert link["precision"] == 1.0 and link["recall"] == 0.5 and abs(link["f1"] - 2 / 3) < 1e-9
-    assert abs(link["aer"] - 0.25) < 1e-9                       # 1 - (2 + 1) / (2 + 2)
-    assert abs(sc.token_accuracy([rec], [first]) - 2 / 3) < 1e-9   # token 2 right (possible), token 1 wrong
+    assert abs(link["aer"] - 0.25) < 1e-9  # 1 - (2 + 1) / (2 + 2)
+    assert (
+        abs(sc.token_accuracy([rec], [first]) - 2 / 3) < 1e-9
+    )  # token 2 right (possible), token 1 wrong
     second = Prediction(links=[0, 1, 2], tags=["COPY"] * 3, frame=[0, 0, 0])
     link = sc.link_prf([rec], [second])
     assert link["precision"] == 1.0 and link["recall"] == 1.0
@@ -57,35 +75,49 @@ def test_fraser_marcu_example():
     # |A| = 100, |S| = 100, |P and A| = |S and A| = 50: F 0.5 and 1 - AER 0.5
     sure = [(t, t, "COPY", True) for t in range(100)]
     rec = record(["w"] * 200, ["w"] * 200, sure + [(t, t, "COPY", False) for t in range(100, 200)])
-    links = [t if t < 50 else (t + 100 if t < 100 else -1) for t in range(200)]   # 50 sure hits, 50 misses onto non-links
+    links = [
+        t if t < 50 else (t + 100 if t < 100 else -1) for t in range(200)
+    ]  # 50 sure hits, 50 misses onto non-links
     links = [-1] * 200
     for t in range(50):
-        links[t] = t             # sure and possible hit
+        links[t] = t  # sure and possible hit
     for t in range(50, 100):
-        links[t] = 150           # a wrong source: neither sure nor possible
+        links[t] = 150  # a wrong source: neither sure nor possible
     pred = Prediction(links=links, tags=["COPY" if s >= 0 else "" for s in links], frame=[0] * 200)
     link = sc.link_prf([rec], [pred])
-    assert link["n_pred"] == 100 and abs(link["f1"] - 0.5) < 1e-9 and abs(1 - link["aer"] - 0.5) < 1e-9
+    assert (
+        link["n_pred"] == 100 and abs(link["f1"] - 0.5) < 1e-9 and abs(1 - link["aer"] - 0.5) < 1e-9
+    )
     # |P and A| = 75, |S and A| = 25: F 0.375, 1 - AER still 0.5
     links = [-1] * 200
     for t in range(25):
-        links[t] = t             # sure hits
+        links[t] = t  # sure hits
     for t in range(100, 150):
-        links[t] = t             # possible-only hits
+        links[t] = t  # possible-only hits
     for t in range(25, 50):
-        links[t] = 199           # wrong
+        links[t] = 199  # wrong
     pred = Prediction(links=links, tags=["COPY" if s >= 0 else "" for s in links], frame=[0] * 200)
     link = sc.link_prf([rec], [pred])
-    assert link["n_pred"] == 100 and abs(link["precision"] - 0.75) < 1e-9 and abs(link["recall"] - 0.25) < 1e-9
+    assert (
+        link["n_pred"] == 100
+        and abs(link["precision"] - 0.75) < 1e-9
+        and abs(link["recall"] - 0.25) < 1e-9
+    )
     assert abs(link["f1"] - 0.375) < 1e-9 and abs(1 - link["aer"] - 0.5) < 1e-9
 
 
 def test_op_f1_levels():
-    rec = record(["a", "b", "c", "d"], ["x", "y", "c", "ut"],
-                 [(0, 0, "MORPH", True), (1, 1, "SUBST", True), (2, 2, "SPLIT", True)], spans=[(3, 4)])
-    wrong_source = Prediction(links=[1, 1, 2, -1], tags=["MORPH", "SUBST", "SPLIT", ""], frame=[0, 0, 0, 1])
+    rec = record(
+        ["a", "b", "c", "d"],
+        ["x", "y", "c", "ut"],
+        [(0, 0, "MORPH", True), (1, 1, "SUBST", True), (2, 2, "SPLIT", True)],
+        spans=[(3, 4)],
+    )
+    wrong_source = Prediction(
+        links=[1, 1, 2, -1], tags=["MORPH", "SUBST", "SPLIT", ""], frame=[0, 0, 0, 1]
+    )
     v1 = sc.op_scores([rec], [wrong_source], "V1")["per_class"]["MORPH"]
-    assert v1["P"] == 0.0 and v1["R"] == 0.0 and v1["support"] == 1     # FP and FN at once
+    assert v1["P"] == 0.0 and v1["R"] == 0.0 and v1["support"] == 1  # FP and FN at once
     syn = Prediction(links=[0, 1, 2, -1], tags=["MORPH", "SYN", "SPLIT", ""], frame=[0, 0, 0, 1])
     assert sc.op_scores([rec], [syn], "V1")["per_class"]["SUBST"]["F1"] == 1.0
     assert sc.op_scores([rec], [syn], "V3")["per_class"]["SUBST"]["R"] == 0.0
@@ -93,7 +125,9 @@ def test_op_f1_levels():
     assert sc.op_scores([rec], [syn], "group")["per_class"]["cardinality"]["F1"] == 1.0
     mode = sc.op_scores([rec], [gold_pred(rec)], "mode")["per_class"]
     assert mode["FRAME"]["F1"] == 1.0
-    assert sc.op_scores([rec], [gold_pred(rec)], "V1")["per_class"]["INS"]["support"] == 1   # the frame token is INS at V1
+    assert (
+        sc.op_scores([rec], [gold_pred(rec)], "V1")["per_class"]["INS"]["support"] == 1
+    )  # the frame token is INS at V1
 
 
 def test_ins_del_f1():
@@ -113,17 +147,35 @@ def test_structure():
 
     assert ScriptDecoder.reordered_targets([5, 3, 4]) == {0}
     assert ScriptDecoder.quote_spans([0, 1, -1], ["NOP", "NOP", "INS"], minimum=2) == [(0, 1)]
-    assert ScriptDecoder.quote_spans([0, 1, -1], ["NOP", "NOP", "INS"], minimum=ScriptDecoder.QUOTE_MIN) == []
+    assert (
+        ScriptDecoder.quote_spans(
+            [0, 1, -1], ["NOP", "NOP", "INS"], minimum=ScriptDecoder.QUOTE_MIN
+        )
+        == []
+    )
     rec = record(["a", "b", "c"], ["a", "b", "z"], [(0, 0, "COPY", True), (1, 1, "COPY", True)])
     out = sc.structure_scores([rec], [gold_pred(rec)])
     assert out["quote_span"]["F1"] == 1.0 and out["del"]["F1"] == 1.0
 
 
 def test_invented_links():
-    neg = [Record(id=f"n/{i}", level="gold", fold=4, source_work="", source_tokens=["a", "b", "c"], reuse_work="",
-                  reuse_tokens=["x", "y", "z"], pair_label="no_match") for i in range(2)]
-    preds = [Prediction(links=[-1, -1, -1], tags=["", "", ""], frame=[0, 0, 0]),
-             Prediction(links=[0, 1, 2], tags=["SUBST"] * 3, frame=[0, 0, 0])]
+    neg = [
+        Record(
+            id=f"n/{i}",
+            level="gold",
+            fold=4,
+            source_work="",
+            source_tokens=["a", "b", "c"],
+            reuse_work="",
+            reuse_tokens=["x", "y", "z"],
+            pair_label="no_match",
+        )
+        for i in range(2)
+    ]
+    preds = [
+        Prediction(links=[-1, -1, -1], tags=["", "", ""], frame=[0, 0, 0]),
+        Prediction(links=[0, 1, 2], tags=["SUBST"] * 3, frame=[0, 0, 0]),
+    ]
     out = sc.invented_links(neg, preds)
     assert out["links"] == 3 and out["pairs_with_links"] == 0.5 and out["pairs"] == 2
 
@@ -132,13 +184,22 @@ def test_aggregate_and_split_half():
     per = [{"token_accuracy": v, "link": {"f1": v / 2}} for v in (0.1, 0.2, 0.3, 0.4, 0.5)]
     agg = sc.aggregate_folds(per)
     m = agg["metrics"]["token_accuracy"]
-    assert abs(m["mean"] - 0.3) < 1e-9 and m["min"] == 0.1 and m["max"] == 0.5 and abs(m["std"] - 0.1414213562) < 1e-6
-    recs = [record(["a", "b"], ["a", "b"], [(0, 0, "COPY", True), (1, 1, "COPY", True)], rid=f"p/{i}") for i in range(12)]
+    assert (
+        abs(m["mean"] - 0.3) < 1e-9
+        and m["min"] == 0.1
+        and m["max"] == 0.5
+        and abs(m["std"] - 0.1414213562) < 1e-6
+    )
+    recs = [
+        record(["a", "b"], ["a", "b"], [(0, 0, "COPY", True), (1, 1, "COPY", True)], rid=f"p/{i}")
+        for i in range(12)
+    ]
     good = [gold_pred(r) for r in recs]
     bad = [Prediction(links=[-1, -1], tags=["", ""], frame=[0, 0]) for _ in recs]
     with tempfile.TemporaryDirectory() as tmp:
         a, b = Path(tmp) / "a.jsonl", Path(tmp) / "b.jsonl"
-        write_dump(recs, good, a); write_dump(recs, bad, b)
+        write_dump(recs, good, a)
+        write_dump(recs, bad, b)
         out = sc.split_half(a, b, "token_accuracy")
         assert out["agree"] == 20 and out["confirmed"]
         mixed = [good[i] if i % 2 else bad[i] for i in range(12)]
@@ -157,7 +218,9 @@ def test_agreement_and_flat():
     rec = record(["a"], ["a"], [(0, 0, "COPY", True)])
     result = sc.score([rec], [gold_pred(rec)])
     flat = sc.flat(result)
-    assert all(k.startswith("test_") for k in flat) and all(isinstance(v, float) for v in flat.values())
+    assert all(k.startswith("test_") for k in flat) and all(
+        isinstance(v, float) for v in flat.values()
+    )
     assert "test_token_accuracy" in flat and "test_ops.V1.macro_f1" in flat
 
 

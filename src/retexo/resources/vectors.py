@@ -48,9 +48,7 @@ class Vectors:
     def _get(self):
         if self._vectors is None:
             if not self.available:
-                raise RuntimeError(
-                    f"no word vectors at {self.model_path}; SYN-DIST is unavailable"
-                )
+                raise RuntimeError(f"no word vectors at {self.model_path}; SYN-DIST is unavailable")
             import gensim
 
             model = gensim.models.Word2Vec.load(str(self.model_path))

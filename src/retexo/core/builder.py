@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import List, Optional, Sequence, Tuple, Union
 
-from retexo.operations import EditOperation, OperationRegistry
 from retexo.core.script import EditScript
+from retexo.operations import EditOperation, OperationRegistry
 
 # =============================================================================
 # Builder
@@ -85,17 +85,17 @@ class VariantBuilder:
 
     # ---------- Token operations ----------
 
-    def keep(self, source_index: int, detail: str = "") -> "VariantBuilder":
+    def keep(self, source_index: int, detail: str = "") -> VariantBuilder:
         """Copy a source token unchanged."""
         return self._one_to_one("NOP", source_index, self.source_tokens[source_index], detail)
 
     def substitute(
         self, source_index: int, replacement: str, *, tag: str = "SYN", detail: str = ""
-    ) -> "VariantBuilder":
+    ) -> VariantBuilder:
         """Replace a source token, recording why under ``tag``."""
         return self._one_to_one(tag, source_index, replacement, detail)
 
-    def inflect(self, source_index: int, form: str, detail: str = "") -> "VariantBuilder":
+    def inflect(self, source_index: int, form: str, detail: str = "") -> VariantBuilder:
         """Rewrite a source token in a different inflection."""
         return self._one_to_one("MORPH", source_index, form, detail)
 
@@ -107,49 +107,49 @@ class VariantBuilder:
     # can be written without passing an operation tag as a string. ``substitute``
     # stays available for the case where the tag is chosen at runtime.
 
-    def syn(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def syn(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Substitute an attested synonym."""
         return self._one_to_one("SYN", source_index, replacement, detail)
 
-    def subst(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def subst(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Replace a word with one no named relation fits: the residual."""
         return self._one_to_one("SUBST", source_index, replacement, detail)
 
-    def form(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def form(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """E31 back-off: the same lemma or stem in another form, kind not settled."""
         return self._one_to_one("FORM", source_index, replacement, detail)
 
-    def sense(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def sense(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """E31 back-off: a different word with a nameable relation, not settled."""
         return self._one_to_one("SENSE", source_index, replacement, detail)
 
-    def syn_dist(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def syn_dist(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Substitute a distributional near-synonym."""
         return self._one_to_one("SYN-DIST", source_index, replacement, detail)
 
-    def hyper(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def hyper(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Generalize: name a broader category."""
         return self._one_to_one("HYPER", source_index, replacement, detail)
 
-    def hypo(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def hypo(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Specify: name a narrower category."""
         return self._one_to_one("HYPO", source_index, replacement, detail)
 
-    def ant(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def ant(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Substitute an antonym, usually alongside a negation."""
         return self._one_to_one("ANT", source_index, replacement, detail)
 
-    def ne_sub(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def ne_sub(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Substitute one named entity for another."""
         return self._one_to_one("NE-SUB", source_index, replacement, detail)
 
-    def pos(self, source_index: int, replacement: str, detail: str = "") -> "VariantBuilder":
+    def pos(self, source_index: int, replacement: str, detail: str = "") -> VariantBuilder:
         """Derivational shift: same root, different word class."""
         return self._one_to_one("POS", source_index, replacement, detail)
 
     # ---------- Structural ----------
 
-    def insert(self, token: str, detail: str = "") -> "VariantBuilder":
+    def insert(self, token: str, detail: str = "") -> VariantBuilder:
         """Add a token with no source."""
         op = EditOperation(
             tag="INS",
@@ -161,7 +161,7 @@ class VariantBuilder:
         self._operations.append(op)
         return self
 
-    def delete(self, source_index: int, detail: str = "") -> "VariantBuilder":
+    def delete(self, source_index: int, detail: str = "") -> VariantBuilder:
         """Drop a source token from the reuse."""
         self._operations.append(
             EditOperation(
@@ -173,7 +173,7 @@ class VariantBuilder:
         )
         return self
 
-    def mark_reordered(self, source_index: int, detail: str = "") -> "VariantBuilder":
+    def mark_reordered(self, source_index: int, detail: str = "") -> VariantBuilder:
         """Record that an already-written token crossed another's position."""
         self._operations.append(
             EditOperation(
@@ -187,7 +187,7 @@ class VariantBuilder:
 
     # ---------- Cardinality ----------
 
-    def split(self, source_index: int, tokens: Sequence[str], detail: str = "") -> "VariantBuilder":
+    def split(self, source_index: int, tokens: Sequence[str], detail: str = "") -> VariantBuilder:
         """Expand one source token into several reuse tokens."""
         indices = tuple(range(self._next_target, self._next_target + len(tokens)))
         self._next_target += len(tokens)
@@ -203,9 +203,7 @@ class VariantBuilder:
         )
         return self
 
-    def merge(
-        self, source_indices: Sequence[int], token: str, detail: str = ""
-    ) -> "VariantBuilder":
+    def merge(self, source_indices: Sequence[int], token: str, detail: str = "") -> VariantBuilder:
         """Compress several source tokens into one reuse token."""
         self._operations.append(
             EditOperation(
@@ -222,7 +220,7 @@ class VariantBuilder:
 
     # ---------- Spans ----------
 
-    def quote(self, source_indices: Sequence[int], detail: str = "") -> "VariantBuilder":
+    def quote(self, source_indices: Sequence[int], detail: str = "") -> VariantBuilder:
         """Copy a contiguous span verbatim as one act."""
         tokens = tuple(self.source_tokens[i] for i in source_indices)
         indices = tuple(range(self._next_target, self._next_target + len(tokens)))
@@ -239,7 +237,7 @@ class VariantBuilder:
         )
         return self
 
-    def frame(self, tokens: Sequence[str], detail: str = "") -> "VariantBuilder":
+    def frame(self, tokens: Sequence[str], detail: str = "") -> VariantBuilder:
         """Insert an attribution formula as one act rather than several."""
         indices = tuple(range(self._next_target, self._next_target + len(tokens)))
         self._next_target += len(tokens)
@@ -253,11 +251,11 @@ class VariantBuilder:
         )
         return self
 
-    def mark_adapted(self, source_indices: Sequence[int], detail: str = "") -> "VariantBuilder":
+    def mark_adapted(self, source_indices: Sequence[int], detail: str = "") -> VariantBuilder:
         """Note that a region was reused with substitutions inside it."""
         return self._marker("ADAPT", source_indices, detail)
 
-    def mark_dispersed(self, source_indices: Sequence[int], detail: str = "") -> "VariantBuilder":
+    def mark_dispersed(self, source_indices: Sequence[int], detail: str = "") -> VariantBuilder:
         """Note that shared material was split across a clause boundary."""
         return self._marker("DISPERSE", source_indices, detail)
 
@@ -279,9 +277,7 @@ class VariantBuilder:
 
     # ---------- Internals ----------
 
-    def _one_to_one(
-        self, tag: str, source_index: int, token: str, detail: str
-    ) -> "VariantBuilder":
+    def _one_to_one(self, tag: str, source_index: int, token: str, detail: str) -> VariantBuilder:
         self._operations.append(
             EditOperation(
                 tag=tag,
@@ -295,9 +291,7 @@ class VariantBuilder:
         self._next_target += 1
         return self
 
-    def _marker(
-        self, tag: str, source_indices: Sequence[int], detail: str
-    ) -> "VariantBuilder":
+    def _marker(self, tag: str, source_indices: Sequence[int], detail: str) -> VariantBuilder:
         self._operations.append(
             EditOperation(
                 tag=tag,

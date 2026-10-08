@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 BASE = "https://latinwordnet.exeter.ac.uk/api"
 
@@ -33,7 +33,10 @@ RELATIONS = {"@": "hypernyms", "~": "hyponyms", "!": "antonyms"}
 LEMMA_RELATIONS = {"/": "derivatives"}
 
 EMPTY: Dict[str, List[str]] = {
-    "synonyms": [], "hypernyms": [], "hyponyms": [], "antonyms": [],
+    "synonyms": [],
+    "hypernyms": [],
+    "hyponyms": [],
+    "antonyms": [],
     "derivatives": [],
 }
 
@@ -152,9 +155,7 @@ class LatinWordNet:
                     if not field:
                         continue
                     for target in targets:
-                        record[field].extend(
-                            self._synset_lemmas(target["pos"], target["offset"])
-                        )
+                        record[field].extend(self._synset_lemmas(target["pos"], target["offset"]))
 
         lemma_relations = self._get(f"lemmas/{lemma}/{pos}/relations")
         for result in lemma_relations.get("results", []):
@@ -162,9 +163,7 @@ class LatinWordNet:
                 field = LEMMA_RELATIONS.get(symbol)
                 if not field:
                     continue
-                record[field].extend(
-                    target["lemma"] for target in targets if target.get("lemma")
-                )
+                record[field].extend(target["lemma"] for target in targets if target.get("lemma"))
 
         return {k: sorted({x for x in v if x != lemma}) for k, v in record.items()}
 

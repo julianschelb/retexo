@@ -22,15 +22,14 @@ unsplit token. ``pooling="mean"`` averages the word's pieces instead.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional, Sequence
 
 from retexo.formulations.pair_encoding import PairEncoder
 
 #: E24: fine tags a hand-labelled SUBST may resolve to, and the sentinel used
 #: as the typer target for such a link.
-LEXICAL_TAGS = frozenset({"SYN", "HYPER", "HYPO", "ANT", "SYN-DIST", "NE-SUB", "POS",
-                          "SUBST"})
+LEXICAL_TAGS = frozenset({"SYN", "HYPER", "HYPO", "ANT", "SYN-DIST", "NE-SUB", "POS", "SUBST"})
 GROUP_TARGET = -2
 
 # =============================================================================
@@ -261,15 +260,12 @@ class ChangeDetector:
         encoder_kwargs = {}
         if "modernbert" in self.config.base_model.lower():
             encoder_kwargs["reference_compile"] = False
-        self._encoder = AutoModel.from_pretrained(self.config.base_model,
-                                                  **encoder_kwargs)
+        self._encoder = AutoModel.from_pretrained(self.config.base_model, **encoder_kwargs)
         hidden = self._encoder.config.hidden_size
         self._classes = list(self.config.operations) or None
         self._index = {c: i for i, c in enumerate(self._classes or [])}
         self._head = torch.nn.Linear(hidden, len(self._classes) if self._classes else 2)
-        self._source_head = (
-            torch.nn.Linear(hidden, 2) if self.config.source_head else None
-        )
+        self._source_head = torch.nn.Linear(hidden, 2) if self.config.source_head else None
         # Two projections and a learned null, after Vinyals' pointer networks:
         # score(j, i) = f(h_j).g(h_i)/sqrt(d), with the null competing in the
         # same softmax so that "from nowhere" is a choice among the candidates
@@ -278,29 +274,26 @@ class ChangeDetector:
         # at hidden 768 it otherwise does not.
         colbert = self.config.pointer_style == "colbert"
         width = self.config.pointer_dim if colbert else hidden
-        self._pointer_source = (
-            torch.nn.Linear(hidden, width) if self.config.pointer else None
-        )
-        self._pointer_target = (
-            torch.nn.Linear(hidden, width) if self.config.pointer else None
-        )
+        self._pointer_source = torch.nn.Linear(hidden, width) if self.config.pointer else None
+        self._pointer_target = torch.nn.Linear(hidden, width) if self.config.pointer else None
         self._pointer_null = (
             torch.nn.Parameter(torch.zeros(width).normal_(std=0.02))
-            if self.config.pointer else None
+            if self.config.pointer
+            else None
         )
         # Cosine is bounded in [-1, 1], so a fixed 1/sqrt(d) would leave the
         # softmax almost flat; ColBERT-style scoring gets a learned temperature
         # instead, initialised where the logits have usable gradients.
         self._pointer_temperature = (
             torch.nn.Parameter(torch.tensor(float(self.config.pointer_temperature)))
-            if self.config.pointer and colbert else None
+            if self.config.pointer and colbert
+            else None
         )
-        self._pointer_scale = 1.0 if colbert else hidden ** 0.5
+        self._pointer_scale = 1.0 if colbert else hidden**0.5
         if self._pointer_null is not None:
             self._pointer_null.data = self._pointer_null.data.to(self.config.device)
         if self._pointer_temperature is not None:
-            self._pointer_temperature.data = \
-                self._pointer_temperature.data.to(self.config.device)
+            self._pointer_temperature.data = self._pointer_temperature.data.to(self.config.device)
         # E24: the link typer names the kind of change on a link the pointer
         # has already placed. It reads both words' contextual vectors, their
         # elementwise difference and product, and the symbolic evidence for
@@ -309,33 +302,42 @@ class ChangeDetector:
         self._fine = list(self.config.fine_operations) or None
         self._fine_index = {c: i for i, c in enumerate(self._fine or [])}
         #: The classes a hand-labelled SUBST may resolve to.
-        self._lexical_index = [i for i, c in enumerate(self._fine or [])
-                               if c in LEXICAL_TAGS]
+        self._lexical_index = [i for i, c in enumerate(self._fine or []) if c in LEXICAL_TAGS]
         self._typer = None
         self._typer_evidence = None
         if self._fine:
             self._typer = torch.nn.Sequential(
                 torch.nn.Linear(4 * hidden, self.config.typer_hidden),
-                torch.nn.ReLU(), torch.nn.Dropout(0.1),
-                torch.nn.Linear(self.config.typer_hidden, len(self._fine)))
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(self.config.typer_hidden, len(self._fine)),
+            )
             if self.config.use_link_features and self.config.feature_dim:
                 # A direct linear path from the evidence to the logits. Fed
                 # through the MLP beside 3,072 contextual dimensions, 23 flags
                 # were drowned: the first full run's typer scored *below* the
                 # lemma rule whose output it could see. Here "same lemma ->
                 # MORPH" is one weight.
-                self._typer_evidence = torch.nn.Linear(self.config.feature_dim,
-                                                       len(self._fine))
-        self._frame_head = (torch.nn.Linear(hidden, 2)
-                            if self.config.frame_head else None)
+                self._typer_evidence = torch.nn.Linear(self.config.feature_dim, len(self._fine))
+        self._frame_head = torch.nn.Linear(hidden, 2) if self.config.frame_head else None
         self._channels = None
         if getattr(self.config, "channels", ""):
             from retexo.formulations.word_channels import WordChannels
 
-            self._channels = WordChannels(tuple(k.strip() for k in self.config.channels.split(",") if k.strip()), hidden)
-        for module in (self._encoder, self._head, self._source_head,
-                       self._pointer_source, self._pointer_target,
-                       self._typer, self._typer_evidence, self._frame_head, self._channels):
+            self._channels = WordChannels(
+                tuple(k.strip() for k in self.config.channels.split(",") if k.strip()), hidden
+            )
+        for module in (
+            self._encoder,
+            self._head,
+            self._source_head,
+            self._pointer_source,
+            self._pointer_target,
+            self._typer,
+            self._typer_evidence,
+            self._frame_head,
+            self._channels,
+        ):
             if module is not None:
                 module.to(self.config.device)
 
@@ -360,7 +362,7 @@ class ChangeDetector:
             return self._encoder(**{k: v for k, v in batch.items() if k != "channel_ids"})
         encoder = getattr(self._encoder, "module", self._encoder)
         embeddings = encoder.embeddings
-        table = getattr(embeddings, "word_embeddings", None) or getattr(embeddings, "tok_embeddings")
+        table = getattr(embeddings, "word_embeddings", None) or embeddings.tok_embeddings
         embeds = table(batch["input_ids"]) + self._channels(batch["channel_ids"])
         rest = {k: v for k, v in batch.items() if k not in ("input_ids", "channel_ids")}
         return self._encoder(inputs_embeds=embeds, **rest)
@@ -370,10 +372,16 @@ class ChangeDetector:
 
         pairs = [(list(e.source_tokens), list(e.target_tokens)) for e in examples]
         batch, spans = self._pair_encoder.encode(pairs, self.config.max_length)
-        self._last_label_positions = getattr(self._pair_encoder, "last_label_positions", None)   # E35
+        self._last_label_positions = getattr(
+            self._pair_encoder, "last_label_positions", None
+        )  # E35
         if self._channels is not None:
             batch["channel_ids"] = self._channels.ids(
-                tuple(batch["input_ids"].shape), spans, getattr(self._pair_encoder, "last_source_spans", ()), pairs)
+                tuple(batch["input_ids"].shape),
+                spans,
+                getattr(self._pair_encoder, "last_source_spans", ()),
+                pairs,
+            )
 
         rows, starts, ends, targets, align = [], [], [], [], []
         fine_targets, frame_targets, features = [], [], []
@@ -405,17 +413,20 @@ class ChangeDetector:
                 tag = fine[word] if fine and word < len(fine) else None
                 if self._fine and link is not None and link >= 0:
                     # "?" is a lexical change of unknown kind: the group target
-                    fine_targets.append(GROUP_TARGET if tag == "?"
-                                        else self._fine_index.get(tag, -100))
+                    fine_targets.append(
+                        GROUP_TARGET if tag == "?" else self._fine_index.get(tag, -100)
+                    )
                 else:
                     fine_targets.append(-100)
                 frames = example.frame_labels
-                frame_targets.append(int(frames[word])
-                                     if frames and word < len(frames) else -100)
+                frame_targets.append(int(frames[word]) if frames and word < len(frames) else -100)
                 phi = example.link_features
                 vec = phi[word] if phi and word < len(phi) else None
-                features.append(list(vec) if vec is not None and len(vec) == feature_dim
-                                else [0.0] * feature_dim)
+                features.append(
+                    list(vec)
+                    if vec is not None and len(vec) == feature_dim
+                    else [0.0] * feature_dim
+                )
         source = None
         # The source side is encoded for the deletion head, and also for the
         # pointer, which needs every source word as a candidate whether or not
@@ -425,25 +436,41 @@ class ChangeDetector:
             s_rows, s_starts, s_ends, s_targets, s_words = [], [], [], [], []
             for row, example in enumerate(examples):
                 labels = example.source_labels or []
-                limit = (len(example.source_tokens) if self.config.pointer
-                         else len(labels))
+                limit = len(example.source_tokens) if self.config.pointer else len(labels)
                 for word, (start, end) in enumerate(src_spans[row]):
                     if word >= limit:
                         break
-                    s_rows.append(row); s_starts.append(start)
-                    s_ends.append(max(end, start + 1)); s_words.append(word)
+                    s_rows.append(row)
+                    s_starts.append(start)
+                    s_ends.append(max(end, start + 1))
+                    s_words.append(word)
                     # -100 where the pointer widened the set past the labels,
                     # so the deletion head is unaffected by the extra words.
                     s_targets.append(labels[word] if word < len(labels) else -100)
-            source = (torch.tensor(s_rows), torch.tensor(s_starts),
-                      torch.tensor(s_ends), torch.tensor(s_targets),
-                      torch.tensor(s_words))
-        extra = (torch.tensor(fine_targets), torch.tensor(frame_targets),
-                 torch.tensor(features, dtype=torch.float32)
-                 if features else torch.zeros((0, feature_dim)))
-        return (batch, torch.tensor(rows), torch.tensor(starts),
-                torch.tensor(ends), torch.tensor(targets), source,
-                torch.tensor(align), extra)
+            source = (
+                torch.tensor(s_rows),
+                torch.tensor(s_starts),
+                torch.tensor(s_ends),
+                torch.tensor(s_targets),
+                torch.tensor(s_words),
+            )
+        extra = (
+            torch.tensor(fine_targets),
+            torch.tensor(frame_targets),
+            torch.tensor(features, dtype=torch.float32)
+            if features
+            else torch.zeros((0, feature_dim)),
+        )
+        return (
+            batch,
+            torch.tensor(rows),
+            torch.tensor(starts),
+            torch.tensor(ends),
+            torch.tensor(targets),
+            source,
+            torch.tensor(align),
+            extra,
+        )
 
     def _word_vectors(self, hidden, rows, starts, ends):
         """One vector per labelled word, pooled as the config asks."""
@@ -453,7 +480,7 @@ class ChangeDetector:
             return hidden[rows, starts]
         # Mean over each word's subwords. Spans are short, so a gather over a
         # padded index matrix is cheaper than a Python loop per word.
-        widths = (ends - starts)
+        widths = ends - starts
         longest = int(widths.max().item()) if len(widths) else 1
         offsets = torch.arange(longest, device=hidden.device).unsqueeze(0)
         index = starts.unsqueeze(1).to(hidden.device) + offsets
@@ -464,8 +491,6 @@ class ChangeDetector:
         return gathered.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp(min=1)
 
     def _logits(self, examples: Sequence[ChangeExample]):
-        import torch
-
         batch, rows, starts, ends, targets, source, align, extra = self._encode(examples)
         batch = {k: v.to(self.config.device) for k, v in batch.items()}
         hidden = self._run_encoder(batch).last_hidden_state
@@ -477,12 +502,12 @@ class ChangeDetector:
             s_rows, s_starts, s_ends, s_targets, s_words = source
             s_vectors = self._word_vectors(hidden, s_rows, s_starts, s_ends)
             if self._source_head is not None:
-                source_out = (self._source_head(s_vectors),
-                              s_targets.to(self.config.device))
+                source_out = (self._source_head(s_vectors), s_targets.to(self.config.device))
         pointer_out = None
         if self.config.pointer and s_vectors is not None and rows.numel():
             pointer_out = self._pointer_scores(
-                vectors, rows, s_vectors, source[0], source[4], align)
+                vectors, rows, s_vectors, source[0], source[4], align
+            )
         # E24 heads. The typer is trained on the *gold* link -- the source
         # word the example says the reuse word came from -- so that typing is
         # learned separately from locating and a pointer error never teaches
@@ -490,12 +515,18 @@ class ChangeDetector:
         typer_out, frame_out = None, None
         fine_t, frame_t, phi = extra
         if self._typer is not None and s_vectors is not None and rows.numel():
-            typer_out = self._typer_logits(vectors, rows, s_vectors, source[0],
-                                           source[4], align, fine_t, phi)
+            typer_out = self._typer_logits(
+                vectors, rows, s_vectors, source[0], source[4], align, fine_t, phi
+            )
         if self._frame_head is not None and rows.numel():
             frame_out = (self._frame_head(vectors), frame_t.to(self.config.device))
-        return (logits, targets.to(self.config.device), source_out, pointer_out,
-                (typer_out, frame_out))
+        return (
+            logits,
+            targets.to(self.config.device),
+            source_out,
+            pointer_out,
+            (typer_out, frame_out),
+        )
 
     def _typer_forward(self, h_t, h_s, phi):
         """Logits for one link: both vectors, how they differ, plus evidence."""
@@ -523,8 +554,9 @@ class ChangeDetector:
         same = phi[:, 0] > 0.5
         if "NOP" in index:
             masked[~same, index["NOP"]] = neg
-            others = torch.tensor([i for c, i in index.items() if c != "NOP"],
-                                  device=logits.device, dtype=torch.long)
+            others = torch.tensor(
+                [i for c, i in index.items() if c != "NOP"], device=logits.device, dtype=torch.long
+            )
             rows_same = same.nonzero(as_tuple=True)[0]
             if len(others) and len(rows_same):
                 masked[rows_same.unsqueeze(1), others.unsqueeze(0)] = neg
@@ -556,8 +588,7 @@ class ChangeDetector:
             return logits
         return self.evidence_veto(logits, phi.to(logits.device), self._fine_index)
 
-    def _typer_logits(self, vectors, rows, s_vectors, s_rows, s_words, align,
-                      fine_t, phi):
+    def _typer_logits(self, vectors, rows, s_vectors, s_rows, s_words, align, fine_t, phi):
         """Logits over the fine operations for every reuse word with a known link."""
         import torch
 
@@ -567,7 +598,8 @@ class ChangeDetector:
         sel_t, sel_s = [], []
         for k, (r, a, f) in enumerate(zip(rows.tolist(), align.tolist(), fine_t.tolist())):
             if a >= 0 and f != -100 and (r, a) in flat:
-                sel_t.append(k); sel_s.append(flat[(r, a)])
+                sel_t.append(k)
+                sel_s.append(flat[(r, a)])
         if not sel_t:
             return None
         device = vectors.device
@@ -576,7 +608,6 @@ class ChangeDetector:
         evidence = phi[torch.tensor(sel_t)]
         logits = self._typer_forward(h_t, h_s, evidence)
         return logits, fine_t[torch.tensor(sel_t)].to(device)
-
 
     def _pointer_scores(self, vectors, rows, s_vectors, s_rows, s_words, align):
         """Scores over [null, every source word of the same pair].
@@ -589,12 +620,18 @@ class ChangeDetector:
         import torch
 
         device = self.config.device
-        rows = rows.to(device); s_rows = s_rows.to(device)
-        s_words = s_words.to(device); align = align.to(device)
+        rows = rows.to(device)
+        s_rows = s_rows.to(device)
+        s_words = s_words.to(device)
+        align = align.to(device)
 
         # every pair of the chunk, whether or not both sides survived truncation: a source row
         # with no target row (or the reverse) must still index inside the tables
-        n_rows = int(max(rows.max().item(), s_rows.max().item())) + 1 if rows.numel() and s_rows.numel() else 0
+        n_rows = (
+            int(max(rows.max().item(), s_rows.max().item())) + 1
+            if rows.numel() and s_rows.numel()
+            else 0
+        )
         counts = torch.bincount(s_rows, minlength=n_rows) if n_rows else s_rows.new_zeros(0)
         width = int(counts.max().item()) if counts.numel() else 0
         if width == 0:
@@ -612,8 +649,8 @@ class ChangeDetector:
         gather[s_rows, columns] = torch.arange(len(s_rows), device=device)
         valid[s_rows, columns] = True
 
-        projected = self._pointer_source(s_vectors)               # [S, H]
-        queries = self._pointer_target(vectors)                   # [T, H]
+        projected = self._pointer_source(s_vectors)  # [S, H]
+        queries = self._pointer_target(vectors)  # [T, H]
         null_vector = self._pointer_null
         if self.config.pointer_style == "colbert":
             # Late interaction: unit vectors, so the dot product is a cosine and
@@ -631,11 +668,11 @@ class ChangeDetector:
             scale = 1.0 / self._pointer_temperature.clamp(min=1e-3)
         else:
             scale = self._pointer_scale
-        candidates = projected[gather[rows]]                      # [T, width, H]
+        candidates = projected[gather[rows]]  # [T, width, H]
         scores = torch.einsum("th,twh->tw", queries, candidates) / scale
         scores = scores.masked_fill(~valid[rows], float("-inf"))
         null = (queries @ null_vector) / scale
-        scores = torch.cat([null.unsqueeze(1), scores], dim=1)    # column 0 = null
+        scores = torch.cat([null.unsqueeze(1), scores], dim=1)  # column 0 = null
 
         # gold column: 0 for null, else the source word's own column + 1
         word_to_column = torch.zeros((n_rows, width), dtype=torch.long, device=device)
@@ -644,8 +681,7 @@ class ChangeDetector:
         present[s_rows, s_words.clamp(max=width - 1)] = True
         safe = align.clamp(min=0, max=width - 1)
         found = present[rows, safe] & (align >= 0)
-        gold = torch.where(found, word_to_column[rows, safe] + 1,
-                           torch.zeros_like(align))
+        gold = torch.where(found, word_to_column[rows, safe] + 1, torch.zeros_like(align))
         # A word whose source was truncated away has no column to point at, so
         # it is dropped rather than relabelled as null -- calling it null would
         # teach the model that truncation means the author invented the word.
@@ -663,22 +699,27 @@ class ChangeDetector:
         if self.config.class_weights and self._classes:
             table = dict(self.config.class_weights)
             weights = torch.tensor(
-                [float(table.get(c, 1.0)) for c in self._classes],
-                device=self.config.device)
+                [float(table.get(c, 1.0)) for c in self._classes], device=self.config.device
+            )
         fine_weights = None
         if self._fine and self.config.fine_class_weights:
             table = dict(self.config.fine_class_weights)
-            fine_weights = torch.tensor([float(table.get(c, 1.0)) for c in self._fine],
-                                        device=self.config.device)
+            fine_weights = torch.tensor(
+                [float(table.get(c, 1.0)) for c in self._fine], device=self.config.device
+            )
         return {
-            "weights": weights, "fine_weights": fine_weights,
+            "weights": weights,
+            "fine_weights": fine_weights,
             "loss": torch.nn.CrossEntropyLoss(ignore_index=-100, weight=weights),
             # The source head is binary (deleted / not), so it must not inherit a
             # weight vector sized for the operation classes.
             "source": torch.nn.CrossEntropyLoss(ignore_index=-100),
             "frame": torch.nn.CrossEntropyLoss(
                 ignore_index=-100,
-                weight=torch.tensor([1.0, float(self.config.frame_positive_weight)], device=self.config.device)),
+                weight=torch.tensor(
+                    [1.0, float(self.config.frame_positive_weight)], device=self.config.device
+                ),
+            ),
         }
 
     def _chunk_loss(self, chunk: Sequence[ChangeExample], fns: Dict[str, object]):
@@ -686,8 +727,11 @@ class ChangeDetector:
         logits, targets, source_out, pointer_out, extra = self._logits(chunk)
         if targets.numel() == 0:
             return None
-        loss = (self._focal(logits, targets, fns["weights"])
-                if self.config.focal_gamma else fns["loss"](logits, targets))
+        loss = (
+            self._focal(logits, targets, fns["weights"])
+            if self.config.focal_gamma
+            else fns["loss"](logits, targets)
+        )
         if source_out is not None:
             # Both sides weigh equally: a missed deletion is as wrong
             # as a missed substitution.
@@ -709,13 +753,19 @@ class ChangeDetector:
         total, n = 0.0, 0
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
-                loss = self._chunk_loss(list(examples[start:start + self.config.batch_size]), fns)
+                loss = self._chunk_loss(list(examples[start : start + self.config.batch_size]), fns)
                 if loss is not None:
-                    total += float(loss.item()); n += 1
+                    total += float(loss.item())
+                    n += 1
         return total / n if n else None
 
-    def fit(self, examples: Sequence[ChangeExample], *, log=None,
-            on_batch: Optional[Callable[[int, int], None]] = None) -> "ChangeDetector":
+    def fit(
+        self,
+        examples: Sequence[ChangeExample],
+        *,
+        log=None,
+        on_batch: Optional[Callable[[int, int], None]] = None,
+    ) -> ChangeDetector:
         """Train on ``examples``; ``on_batch(done, total)`` is called after every optimizer step (a training
         monitor's evaluations inside the epoch)."""
         import torch
@@ -740,14 +790,14 @@ class ChangeDetector:
         if fresh:
             groups.append({"params": fresh, "lr": self.config.typer_lr})
         if self.config.pointer and self._pointer_temperature is not None:
-            groups.append({"params": [self._pointer_temperature],
-                           "lr": self.config.temperature_lr})
+            groups.append({"params": [self._pointer_temperature], "lr": self.config.temperature_lr})
         optimizer = torch.optim.AdamW(groups, lr=self.config.learning_rate)
         fns = self._loss_functions()
         order = list(examples)
         rng = random.Random(self.config.seed)
 
-        self._encoder.train(); self._head.train()
+        self._encoder.train()
+        self._head.train()
         if self._source_head is not None:
             self._source_head.train()
         if self._typer is not None:
@@ -755,7 +805,8 @@ class ChangeDetector:
         if self._frame_head is not None:
             self._frame_head.train()
         if self.config.pointer:
-            self._pointer_source.train(); self._pointer_target.train()
+            self._pointer_source.train()
+            self._pointer_target.train()
         for epoch in range(self.config.epochs):
             rng.shuffle(order)
             epoch_losses = []
@@ -820,9 +871,11 @@ class ChangeDetector:
         labelled = gold != -100
         if not bool(labelled.any()):
             return scores.sum() * 0.0
-        weights = torch.where(gold == 0,
-                              torch.full_like(losses, self.config.null_pointer_weight),
-                              torch.ones_like(losses))
+        weights = torch.where(
+            gold == 0,
+            torch.full_like(losses, self.config.null_pointer_weight),
+            torch.ones_like(losses),
+        )
         weights = weights * labelled.float()
         return (losses * weights).sum() / weights.sum().clamp(min=1e-6)
 
@@ -833,7 +886,6 @@ class ChangeDetector:
         that are already correct. Focal loss scales each by ``(1 - p)^gamma``,
         so the rare classes keep influencing the gradient.
         """
-        import torch
         import torch.nn.functional as F
 
         log_probability = F.log_softmax(logits, dim=-1)
@@ -851,7 +903,8 @@ class ChangeDetector:
         """Mean loss on held-out examples, for the early-stopping criterion."""
         import torch
 
-        self._encoder.eval(); self._head.eval()
+        self._encoder.eval()
+        self._head.eval()
         if self._source_head is not None:
             self._source_head.eval()
         loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
@@ -864,12 +917,18 @@ class ChangeDetector:
                 logits, targets, source_out, _, _ = self._logits(chunk)
                 if targets.numel() == 0:
                     continue
-                loss = (self._focal(logits, targets, None)    # unweighted, like the plain branch's loss_fn
-                        if self.config.focal_gamma else loss_fn(logits, targets))
+                loss = (
+                    self._focal(
+                        logits, targets, None
+                    )  # unweighted, like the plain branch's loss_fn
+                    if self.config.focal_gamma
+                    else loss_fn(logits, targets)
+                )
                 if source_out is not None:
                     loss = loss + loss_fn(*source_out)
                 losses.append(float(loss.item()))
-        self._encoder.train(); self._head.train()
+        self._encoder.train()
+        self._head.train()
         if self._source_head is not None:
             self._source_head.train()
         return sum(losses) / max(len(losses), 1)
@@ -880,7 +939,8 @@ class ChangeDetector:
             raise ValueError("configure `operations` to predict tags")
         import torch
 
-        self._encoder.eval(); self._head.eval()
+        self._encoder.eval()
+        self._head.eval()
         out: List[List[str]] = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -889,13 +949,17 @@ class ChangeDetector:
                     continue
                 batch, spans = self._pair_encoder.encode(
                     [(list(e.source_tokens), list(e.target_tokens)) for e in chunk],
-                    self.config.max_length)
+                    self.config.max_length,
+                )
                 batch_on = {k: v.to(self.config.device) for k, v in batch.items()}
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     tags = ["INS"] * len(example.target_tokens)
-                    usable = [(w, a, b) for w, (a, b) in enumerate(spans[row])
-                              if w < len(example.target_tokens)]
+                    usable = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.target_tokens)
+                    ]
                     if usable:
                         st = torch.tensor([a for _, a, _ in usable])
                         en = torch.tensor([max(b, a + 1) for _, a, b in usable])
@@ -906,13 +970,15 @@ class ChangeDetector:
                             table = dict(self.config.logit_bias)
                             bias = torch.tensor(
                                 [float(table.get(c, 0.0)) for c in self._classes],
-                                device=logits.device)
+                                device=logits.device,
+                            )
                             logits = logits + bias
                         chosen = logits.argmax(dim=-1).tolist()
                         for (word, _, _), guess in zip(usable, chosen):
                             tags[word] = self._classes[guess]
                     out.append(tags)
-        self._encoder.train(); self._head.train()
+        self._encoder.train()
+        self._head.train()
         return out
 
     def predict_alignment(self, examples: Sequence[ChangeExample]) -> List[List[int]]:
@@ -926,7 +992,9 @@ class ChangeDetector:
 
         if not self.config.pointer:
             raise ValueError("predict_alignment needs pointer=True")
-        self._encoder.eval(); self._pointer_source.eval(); self._pointer_target.eval()
+        self._encoder.eval()
+        self._pointer_source.eval()
+        self._pointer_target.eval()
         out: List[List[int]] = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -935,22 +1003,29 @@ class ChangeDetector:
                     continue
                 batch, spans = self._pair_encoder.encode(
                     [(list(e.source_tokens), list(e.target_tokens)) for e in chunk],
-                    self.config.max_length)
+                    self.config.max_length,
+                )
                 source_spans = self._pair_encoder.last_source_spans
                 batch_on = {k: v.to(self.config.device) for k, v in batch.items()}
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     links = [-1] * len(example.target_tokens)
-                    words = [(w, a, b) for w, (a, b) in enumerate(spans[row])
-                             if w < len(example.target_tokens)]
-                    sources = [(w, a, b) for w, (a, b) in enumerate(source_spans[row])
-                               if w < len(example.source_tokens)]
+                    words = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.target_tokens)
+                    ]
+                    sources = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(source_spans[row])
+                        if w < len(example.source_tokens)
+                    ]
                     if words and sources:
-                        def vectors_for(items):
+
+                        def vectors_for(items, hidden=hidden, row=row):
                             st = torch.tensor([a for _, a, _ in items])
                             en = torch.tensor([max(b, a + 1) for _, a, b in items])
-                            return self._word_vectors(
-                                hidden, torch.full_like(st, row), st, en)
+                            return self._word_vectors(hidden, torch.full_like(st, row), st, en)
 
                         queries = self._pointer_target(vectors_for(words))
                         keys = self._pointer_source(vectors_for(sources))
@@ -972,7 +1047,9 @@ class ChangeDetector:
                         for (word, _, _), guess in zip(words, chosen):
                             links[word] = -1 if guess == 0 else sources[guess - 1][0]
                     out.append(links)
-        self._encoder.train(); self._pointer_source.train(); self._pointer_target.train()
+        self._encoder.train()
+        self._pointer_source.train()
+        self._pointer_target.train()
         return out
 
     def predict_alignment_scores(self, examples: Sequence[ChangeExample]):
@@ -988,7 +1065,9 @@ class ChangeDetector:
 
         if not self.config.pointer:
             raise ValueError("predict_alignment_scores needs pointer=True")
-        self._encoder.eval(); self._pointer_source.eval(); self._pointer_target.eval()
+        self._encoder.eval()
+        self._pointer_source.eval()
+        self._pointer_target.eval()
         out = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -997,22 +1076,29 @@ class ChangeDetector:
                     continue
                 batch, spans = self._pair_encoder.encode(
                     [(list(e.source_tokens), list(e.target_tokens)) for e in chunk],
-                    self.config.max_length)
+                    self.config.max_length,
+                )
                 source_spans = self._pair_encoder.last_source_spans
                 batch_on = {k: v.to(self.config.device) for k, v in batch.items()}
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     per_word = [[] for _ in example.target_tokens]
-                    words = [(w, a, b) for w, (a, b) in enumerate(spans[row])
-                             if w < len(example.target_tokens)]
-                    sources = [(w, a, b) for w, (a, b) in enumerate(source_spans[row])
-                               if w < len(example.source_tokens)]
+                    words = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.target_tokens)
+                    ]
+                    sources = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(source_spans[row])
+                        if w < len(example.source_tokens)
+                    ]
                     if words and sources:
-                        def vectors_for(items):
+
+                        def vectors_for(items, hidden=hidden, row=row):
                             st = torch.tensor([a for _, a, _ in items])
                             en = torch.tensor([max(b, a + 1) for _, a, b in items])
-                            return self._word_vectors(
-                                hidden, torch.full_like(st, row), st, en)
+                            return self._word_vectors(hidden, torch.full_like(st, row), st, en)
 
                         queries = self._pointer_target(vectors_for(words))
                         keys = self._pointer_source(vectors_for(sources))
@@ -1033,15 +1119,17 @@ class ChangeDetector:
                         probability = torch.softmax(scores, dim=-1)
                         candidates = [-1] + [w for w, _, _ in sources]
                         for (word, _, _), row_p in zip(words, probability):
-                            pairs = sorted(zip(candidates, row_p.tolist()),
-                                           key=lambda x: -x[1])
+                            pairs = sorted(zip(candidates, row_p.tolist()), key=lambda x: -x[1])
                             per_word[word] = pairs
                     out.append(per_word)
-        self._encoder.train(); self._pointer_source.train(); self._pointer_target.train()
+        self._encoder.train()
+        self._pointer_source.train()
+        self._pointer_target.train()
         return out
 
-    def predict_typed(self, examples: Sequence[ChangeExample], alignments,
-                      featurizer=None) -> List[List[str]]:
+    def predict_typed(
+        self, examples: Sequence[ChangeExample], alignments, featurizer=None
+    ) -> List[List[str]]:
         """E24: name the operation on every predicted link.
 
         ``alignments`` is whatever the inference stack decided -- Hungarian,
@@ -1055,7 +1143,8 @@ class ChangeDetector:
 
         if self._typer is None:
             raise ValueError("configure `fine_operations` to predict typed links")
-        self._encoder.eval(); self._typer.eval()
+        self._encoder.eval()
+        self._typer.eval()
         out: List[List[str]] = []
         dim = self.config.feature_dim
         with torch.no_grad():
@@ -1065,33 +1154,53 @@ class ChangeDetector:
                     continue
                 batch, spans = self._pair_encoder.encode(
                     [(list(e.source_tokens), list(e.target_tokens)) for e in chunk],
-                    self.config.max_length)
+                    self.config.max_length,
+                )
                 source_spans = self._pair_encoder.last_source_spans
                 batch_on = {k: v.to(self.config.device) for k, v in batch.items()}
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     links = alignments[start + row]
                     tags = ["INS"] * len(example.target_tokens)
-                    t_span = {w: (a, b) for w, (a, b) in enumerate(spans[row])
-                              if w < len(example.target_tokens)}
-                    s_span = {w: (a, b) for w, (a, b) in enumerate(source_spans[row])
-                              if w < len(example.source_tokens)}
-                    chosen = [(t, s) for t, s in enumerate(links)
-                              if s is not None and s >= 0 and t in t_span and s in s_span]
+                    t_span = {
+                        w: (a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.target_tokens)
+                    }
+                    s_span = {
+                        w: (a, b)
+                        for w, (a, b) in enumerate(source_spans[row])
+                        if w < len(example.source_tokens)
+                    }
+                    chosen = [
+                        (t, s)
+                        for t, s in enumerate(links)
+                        if s is not None and s >= 0 and t in t_span and s in s_span
+                    ]
                     if not chosen:
-                        out.append(tags); continue
-                    def vectors_for(items):
+                        out.append(tags)
+                        continue
+
+                    def vectors_for(items, hidden=hidden, row=row):
                         st = torch.tensor([a for a, _ in items])
                         en = torch.tensor([max(b, a + 1) for a, b in items])
                         return self._word_vectors(hidden, torch.full_like(st, row), st, en)
+
                     h_t = vectors_for([t_span[t] for t, _ in chosen])
                     h_s = vectors_for([s_span[s] for _, s in chosen])
                     rows_phi = []
                     for t, s in chosen:
                         if featurizer is not None and dim:
-                            rows_phi.append(featurizer(
-                                example.source_tokens[s], example.target_tokens[t], s, t,
-                                len(example.source_tokens), len(example.target_tokens)))
+                            rows_phi.append(
+                                featurizer(
+                                    example.source_tokens[s],
+                                    example.target_tokens[t],
+                                    s,
+                                    t,
+                                    len(example.source_tokens),
+                                    len(example.target_tokens),
+                                )
+                            )
                         else:
                             rows_phi.append([0.0] * dim)
                     phi = torch.tensor(rows_phi, dtype=torch.float32)
@@ -1101,12 +1210,20 @@ class ChangeDetector:
                     for (t, _), k in zip(chosen, logits.argmax(dim=-1).tolist()):
                         tags[t] = self._fine[k]
                     out.append(tags)
-        self._encoder.train(); self._typer.train()
+        self._encoder.train()
+        self._typer.train()
         return out
 
-    def refine_heads(self, examples: Sequence[ChangeExample], *, epochs: int = 6,
-                     lr: float = 1e-3, batch_size: int = 512, log=None,
-                     frame_examples: Optional[Sequence[ChangeExample]] = None) -> None:
+    def refine_heads(
+        self,
+        examples: Sequence[ChangeExample],
+        *,
+        epochs: int = 6,
+        lr: float = 1e-3,
+        batch_size: int = 512,
+        log=None,
+        frame_examples: Optional[Sequence[ChangeExample]] = None,
+    ) -> None:
         """E24: train the typer and frame head alone, on cached encodings.
 
         The two heads ride along with the encoder for a few hundred steps
@@ -1149,39 +1266,51 @@ class ChangeDetector:
                 if self._frame_head is not None:
                     keep = (frame_t != -100) & in_frame_set
                     if bool(keep.any()):
-                        frame_rows.append((vectors[keep.to(device)].half().cpu(),
-                                           frame_t[keep]))
+                        frame_rows.append((vectors[keep.to(device)].half().cpu(), frame_t[keep]))
                 fine_t = torch.where(in_typer_set, fine_t, torch.full_like(fine_t, -100))
                 if self._typer is not None and source is not None and source[0].numel():
                     s_rows, s_starts, s_ends, _, s_words = source
                     s_vectors = self._word_vectors(hidden, s_rows, s_starts, s_ends)
-                    flat = {(r, w): k for k, (r, w) in
-                            enumerate(zip(s_rows.tolist(), s_words.tolist()))}
+                    flat = {
+                        (r, w): k for k, (r, w) in enumerate(zip(s_rows.tolist(), s_words.tolist()))
+                    }
                     sel_t, sel_s = [], []
-                    for k, (r, a, f) in enumerate(zip(rows.tolist(), align.tolist(),
-                                                      fine_t.tolist())):
+                    for k, (r, a, f) in enumerate(
+                        zip(rows.tolist(), align.tolist(), fine_t.tolist())
+                    ):
                         if a >= 0 and f != -100 and (r, a) in flat:
-                            sel_t.append(k); sel_s.append(flat[(r, a)])
+                            sel_t.append(k)
+                            sel_s.append(flat[(r, a)])
                     if sel_t:
                         it = torch.tensor(sel_t, device=device)
-                        link_rows.append((vectors[it].half().cpu(),
-                                          s_vectors[torch.tensor(sel_s, device=device)].half().cpu(),
-                                          phi[torch.tensor(sel_t)], fine_t[torch.tensor(sel_t)]))
+                        link_rows.append(
+                            (
+                                vectors[it].half().cpu(),
+                                s_vectors[torch.tensor(sel_s, device=device)].half().cpu(),
+                                phi[torch.tensor(sel_t)],
+                                fine_t[torch.tensor(sel_t)],
+                            )
+                        )
         self._encoder.train()
 
         fine_weights = None
         if self._fine and self.config.fine_class_weights:
             table = dict(self.config.fine_class_weights)
-            fine_weights = torch.tensor([float(table.get(c, 1.0)) for c in self._fine],
-                                        device=device)
+            fine_weights = torch.tensor(
+                [float(table.get(c, 1.0)) for c in self._fine], device=device
+            )
         frame_loss_fn = torch.nn.CrossEntropyLoss(
-            weight=torch.tensor([1.0, float(self.config.frame_positive_weight)], device=device))
+            weight=torch.tensor([1.0, float(self.config.frame_positive_weight)], device=device)
+        )
 
         if link_rows and self._typer is not None:
-            h_t = torch.cat([r[0] for r in link_rows]); h_s = torch.cat([r[1] for r in link_rows])
-            phi = torch.cat([r[2] for r in link_rows]); y = torch.cat([r[3] for r in link_rows])
+            h_t = torch.cat([r[0] for r in link_rows])
+            h_s = torch.cat([r[1] for r in link_rows])
+            phi = torch.cat([r[2] for r in link_rows])
+            y = torch.cat([r[3] for r in link_rows])
             params = list(self._typer.parameters()) + (
-                list(self._typer_evidence.parameters()) if self._typer_evidence is not None else [])
+                list(self._typer_evidence.parameters()) if self._typer_evidence is not None else []
+            )
             opt = torch.optim.Adam(params, lr=lr)
             n = len(y)
             for epoch in range(epochs):
@@ -1189,15 +1318,21 @@ class ChangeDetector:
                 total = 0.0
                 for start in range(0, n, batch_size):
                     idx = order[start : start + batch_size]
-                    logits = self._typer_forward(h_t[idx].float().to(device),
-                                                 h_s[idx].float().to(device), phi[idx])
+                    logits = self._typer_forward(
+                        h_t[idx].float().to(device), h_s[idx].float().to(device), phi[idx]
+                    )
                     loss = self._typer_loss(logits, y[idx].to(device), fine_weights)
-                    opt.zero_grad(); loss.backward(); opt.step()
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
                     total += float(loss.item()) * len(idx)
                 if log:
-                    log(f"    typer refine {epoch + 1}/{epochs}  loss {total / n:.4f}  ({n:,} links)")
+                    log(
+                        f"    typer refine {epoch + 1}/{epochs}  loss {total / n:.4f}  ({n:,} links)"
+                    )
         if frame_rows and self._frame_head is not None:
-            h = torch.cat([r[0] for r in frame_rows]); y = torch.cat([r[1] for r in frame_rows])
+            h = torch.cat([r[0] for r in frame_rows])
+            y = torch.cat([r[1] for r in frame_rows])
             opt = torch.optim.Adam(self._frame_head.parameters(), lr=lr)
             n = len(y)
             for epoch in range(epochs):
@@ -1205,12 +1340,17 @@ class ChangeDetector:
                 total = 0.0
                 for start in range(0, n, batch_size):
                     idx = order[start : start + batch_size]
-                    loss = frame_loss_fn(self._frame_head(h[idx].float().to(device)),
-                                         y[idx].to(device))
-                    opt.zero_grad(); loss.backward(); opt.step()
+                    loss = frame_loss_fn(
+                        self._frame_head(h[idx].float().to(device)), y[idx].to(device)
+                    )
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
                     total += float(loss.item()) * len(idx)
                 if log:
-                    log(f"    frame refine {epoch + 1}/{epochs}  loss {total / n:.4f}  ({n:,} words)")
+                    log(
+                        f"    frame refine {epoch + 1}/{epochs}  loss {total / n:.4f}  ({n:,} words)"
+                    )
 
     def predict_frames(self, examples: Sequence[ChangeExample]) -> List[List[int]]:
         """E24: per reuse word, 1 if it belongs to an attribution formula."""
@@ -1218,7 +1358,8 @@ class ChangeDetector:
 
         if self._frame_head is None:
             return [[0] * len(e.target_tokens) for e in examples]
-        self._encoder.eval(); self._frame_head.eval()
+        self._encoder.eval()
+        self._frame_head.eval()
         out: List[List[int]] = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -1227,13 +1368,17 @@ class ChangeDetector:
                     continue
                 batch, spans = self._pair_encoder.encode(
                     [(list(e.source_tokens), list(e.target_tokens)) for e in chunk],
-                    self.config.max_length)
+                    self.config.max_length,
+                )
                 batch_on = {k: v.to(self.config.device) for k, v in batch.items()}
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     flags = [0] * len(example.target_tokens)
-                    usable = [(w, a, b) for w, (a, b) in enumerate(spans[row])
-                              if w < len(example.target_tokens)]
+                    usable = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.target_tokens)
+                    ]
                     if usable:
                         st = torch.tensor([a for _, a, _ in usable])
                         en = torch.tensor([max(b, a + 1) for _, a, b in usable])
@@ -1242,7 +1387,8 @@ class ChangeDetector:
                         for (w, _, _), c in zip(usable, chosen):
                             flags[w] = int(c)
                     out.append(flags)
-        self._encoder.train(); self._frame_head.train()
+        self._encoder.train()
+        self._frame_head.train()
         return out
 
     def operations_from_alignment(self, examples, alignments=None) -> List[List[str]]:
@@ -1280,7 +1426,8 @@ class ChangeDetector:
         """
         import torch
 
-        self._encoder.eval(); self._head.eval()
+        self._encoder.eval()
+        self._head.eval()
         out: List[List[int]] = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -1295,8 +1442,9 @@ class ChangeDetector:
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     predictions = [0] * len(example.labels)
-                    usable = [(w, s, e) for w, (s, e) in enumerate(spans[row])
-                              if w < len(example.labels)]
+                    usable = [
+                        (w, s, e) for w, (s, e) in enumerate(spans[row]) if w < len(example.labels)
+                    ]
                     if usable:
                         words = torch.tensor([w for w, _, _ in usable])
                         starts = torch.tensor([s for _, s, _ in usable])
@@ -1308,7 +1456,6 @@ class ChangeDetector:
                             predictions[word] = int(prediction)
                     out.append(predictions)
         return out
-
 
     def predict_source(self, examples: Sequence[ChangeExample]) -> List[List[int]]:
         """Per example, one 0/1 prediction per *source* word (1 = deleted).
@@ -1322,7 +1469,9 @@ class ChangeDetector:
         if self._source_head is None:
             return [[0] * len(e.source_tokens) for e in examples]
 
-        self._encoder.eval(); self._head.eval(); self._source_head.eval()
+        self._encoder.eval()
+        self._head.eval()
+        self._source_head.eval()
         out: List[List[int]] = []
         with torch.no_grad():
             for start in range(0, len(examples), self.config.batch_size):
@@ -1338,8 +1487,11 @@ class ChangeDetector:
                 hidden = self._run_encoder(batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     predictions = [0] * len(example.source_tokens)
-                    usable = [(w, a, b) for w, (a, b) in enumerate(spans[row])
-                              if w < len(example.source_tokens)]
+                    usable = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.source_tokens)
+                    ]
                     if usable:
                         starts = torch.tensor([a for _, a, _ in usable])
                         ends = torch.tensor([max(b, a + 1) for _, a, b in usable])

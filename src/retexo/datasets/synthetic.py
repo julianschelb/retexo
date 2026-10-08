@@ -40,16 +40,16 @@ import sys
 from dataclasses import asdict, dataclass, field, replace
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from retexo.formulations.change_detector import ChangeExample
-from retexo.edit_typing.link_features import LinkFeaturizer
 from retexo.core.normalize import normalize
 from retexo.edit_typing.dep_features import DEP_FEATURES, DependencyParser
+from retexo.edit_typing.link_features import LinkFeaturizer
+from retexo.formulations.change_detector import ChangeExample
 
 # =============================================================================
 # The untyped shape (E4): operations, and the measured targets
 # =============================================================================
 
-OPERATIONS = ("COPY", "SUBST", "INS")   # reuse side; DEL has its own head
+OPERATIONS = ("COPY", "SUBST", "INS")  # reuse side; DEL has its own head
 
 #: Measured from data/gold/labels.json. Generation aims at these, and the run record
 #: reports what it actually produced so drift stays visible.
@@ -72,9 +72,19 @@ FRAGMENTS = ((1, 0.62), (2, 0.31), (3, 0.03), (4, 0.02), (0, 0.02))
 #: The tail matters: cit32 in the hand labels is a twenty-token verbatim
 #: quotation. Capping at eight starves the model of the long runs that make a
 #: citation a citation.
-FRAGMENT_LENGTHS = ((1, 0.62), (2, 0.18), (3, 0.03), (4, 0.05), (5, 0.02),
-                    (6, 0.02), (7, 0.02), (8, 0.01), (11, 0.02), (14, 0.02),
-                    (20, 0.01))
+FRAGMENT_LENGTHS = (
+    (1, 0.62),
+    (2, 0.18),
+    (3, 0.03),
+    (4, 0.05),
+    (5, 0.02),
+    (6, 0.02),
+    (7, 0.02),
+    (8, 0.01),
+    (11, 0.02),
+    (14, 0.02),
+    (20, 0.01),
+)
 
 #: Share of COPY tokens whose surface differs from the source's, measured over
 #: the hand labels: **75 of 255 aligned copies, 29.4%**. Punctuation and
@@ -105,24 +115,23 @@ def _variant(token: str, rng) -> str:
     if not body:
         return token
     kind = rng.random()
-    if kind < 0.45:                                   # punctuation
+    if kind < 0.45:  # punctuation
         candidate = body + rng.choice(_TRAILING)
-    elif kind < 0.75:                                 # capitalisation
-        candidate = (body.lower() if body[:1].isupper() else body.capitalize()) \
-                    + token[len(body):]
-    elif rng.random() < 0.5:                          # aspiration, word-initial
+    elif kind < 0.75:  # capitalisation
+        candidate = (body.lower() if body[:1].isupper() else body.capitalize()) + token[len(body) :]
+    elif rng.random() < 0.5:  # aspiration, word-initial
         source, target = rng.choice(_INITIAL)
         if not body.lower().startswith(source):
             return token
-        candidate = target + body[len(source):] + token[len(body):]
+        candidate = target + body[len(source) :] + token[len(body) :]
         if body[:1].isupper():
             candidate = candidate.capitalize()
-    else:                                             # medial variation
+    else:  # medial variation
         source, target = rng.choice(_ANYWHERE)
         if source not in body.lower():
             return token
         at = body.lower().index(source)
-        candidate = body[:at] + target + body[at + len(source):] + token[len(body):]
+        candidate = body[:at] + target + body[at + len(source) :] + token[len(body) :]
     # Only accept a variant the comparison actually folds; otherwise the label
     # would be wrong, which is worse than a missing example.
     return candidate if normalize(candidate) == normalize(token) else token
@@ -160,15 +169,16 @@ def _make_substitute(vectors_path, attested=None, accept=1.0):
             if not replacement:
                 continue
             if attested is not None and normalize(replacement) not in attested:
-                continue        # a form no author wrote is not a substitution
+                continue  # a form no author wrote is not a substitution
             return replacement
         return None
 
     return substitute
 
 
-def calibrate_acceptance(passages, vectors_path=None, attested=None, *,
-                         target=None, sample=3000, seed=11):
+def calibrate_acceptance(
+    passages, vectors_path=None, attested=None, *, target=None, sample=3000, seed=11
+):
     """Acceptance rate that makes the realized SUBST share meet the target.
 
     Only some tokens have a substitute the filter will pass, so proposing at the
@@ -221,8 +231,13 @@ def coarse(op: str) -> str:
     for it as a general-purpose collapse; use ``retexo.baselines.labels``
     for that.
     """
-    return {"NOP": "COPY", "REORDER": "COPY", "QUOTE": "COPY",
-            "MORPH": "SUBST", "FRAME": "INS"}.get(op, op if op in OPERATIONS else "SUBST")
+    return {
+        "NOP": "COPY",
+        "REORDER": "COPY",
+        "QUOTE": "COPY",
+        "MORPH": "SUBST",
+        "FRAME": "INS",
+    }.get(op, op if op in OPERATIONS else "SUBST")
 
 
 def _fragments(operations):
@@ -232,7 +247,8 @@ def _fragments(operations):
         if op != "INS":
             current += 1
         elif current:
-            runs.append(current); current = 0
+            runs.append(current)
+            current = 0
     if current:
         runs.append(current)
     return runs
@@ -268,8 +284,8 @@ def realism_report(examples, gold, vocabulary) -> dict:
 
     gen_frag = [_fragments(o) for o in gen_ops]
     ref_frag = [_fragments(o) for o in gold_ops]
-    gen_lengths = [l for f in gen_frag for l in f] or [0]
-    ref_lengths = [l for f in ref_frag for l in f] or [0]
+    gen_lengths = [length for f in gen_frag for length in f] or [0]
+    ref_lengths = [length for f in ref_frag for length in f] or [0]
 
     gen_del = sum(sum(e.source_labels or []) for e in examples)
     gen_src = sum(len(e.source_labels or []) for e in examples) or 1
@@ -291,8 +307,9 @@ def realism_report(examples, gold, vocabulary) -> dict:
                     variant += 1
         return variant / max(exact + variant, 1)
 
-    substitutes = [t for e in examples for t, o in zip(e.target_tokens, e.operations)
-                   if o == "SUBST"]
+    substitutes = [
+        t for e in examples for t, o in zip(e.target_tokens, e.operations) if o == "SUBST"
+    ]
     attested = sum(1 for w in substitutes if normalize(w) in vocabulary)
 
     return {
@@ -300,16 +317,23 @@ def realism_report(examples, gold, vocabulary) -> dict:
         "SUBST share": (gen.get("SUBST", 0), ref.get("SUBST", 0)),
         "INS share": (gen.get("INS", 0), ref.get("INS", 0)),
         "DEL share": (gen_del / gen_src, ref_del / ref_src),
-        "fragments/pair": (statistics.mean([len(f) for f in gen_frag] or [0]),
-                           statistics.mean([len(f) for f in ref_frag] or [0])),
+        "fragments/pair": (
+            statistics.mean([len(f) for f in gen_frag] or [0]),
+            statistics.mean([len(f) for f in ref_frag] or [0]),
+        ),
         "fragment length": (statistics.mean(gen_lengths), statistics.mean(ref_lengths)),
-        "source length": (statistics.mean([len(e.source_tokens) for e in examples]),
-                          statistics.mean([len(g.source_tokens) for g in gold])),
-        "target length": (statistics.mean([len(e.target_tokens) for e in examples]),
-                          statistics.mean([len(g.target_tokens) for g in gold])),
+        "source length": (
+            statistics.mean([len(e.source_tokens) for e in examples]),
+            statistics.mean([len(g.source_tokens) for g in gold]),
+        ),
+        "target length": (
+            statistics.mean([len(e.target_tokens) for e in examples]),
+            statistics.mean([len(g.target_tokens) for g in gold]),
+        ),
         "COPY differing surface": (
             copy_variant_share(examples, gen_ops, lambda e: e.source_tokens),
-            copy_variant_share(gold, gold_ops, lambda g: g.source_tokens)),
+            copy_variant_share(gold, gold_ops, lambda g: g.source_tokens),
+        ),
         "substitutes attested": (attested / max(len(substitutes), 1), 1.0),
     }
 
@@ -332,8 +356,10 @@ def all_insert_baseline(examples):
     The degenerate script, and a strong one: it is 83% correct on the reuse side
     of real pairs.
     """
-    return ([["INS"] * len(e.target_tokens) for e in examples],
-            [[1] * len(e.source_tokens) for e in examples])
+    return (
+        [["INS"] * len(e.target_tokens) for e in examples],
+        [[1] * len(e.source_tokens) for e in examples],
+    )
 
 
 # =============================================================================
@@ -344,8 +370,20 @@ def all_insert_baseline(examples):
 #: named relation fits -- a class the typer must be able to *say*, because on
 #: real links the reader says it for two in five (adjudication, fold 4) and a
 #: head that lacks it spends those on the nearest relation it knows.
-FINE_OPERATIONS = ("NOP", "MORPH", "SYN", "HYPER", "HYPO", "ANT", "SYN-DIST",
-                   "NE-SUB", "POS", "SPLIT", "MERGE", "SUBST")
+FINE_OPERATIONS = (
+    "NOP",
+    "MORPH",
+    "SYN",
+    "HYPER",
+    "HYPO",
+    "ANT",
+    "SYN-DIST",
+    "NE-SUB",
+    "POS",
+    "SPLIT",
+    "MERGE",
+    "SUBST",
+)
 
 #: Tags a typed substitution source is asked for, in the mix the oracle finds on
 #: real pairs (generation.DEFAULT_WEIGHTS), renormalised over what it can
@@ -353,9 +391,17 @@ FINE_OPERATIONS = ("NOP", "MORPH", "SYN", "HYPER", "HYPO", "ANT", "SYN-DIST",
 #: hand labels carry 901 MORPH against 415 lexical SUBST. SUBST here is the
 #: residual: a real word in the same slot with no attested relation and no
 #: distributional closeness.
-TYPED_WEIGHTS = {"MORPH": 0.50, "SYN": 0.14, "SYN-DIST": 0.07, "HYPER": 0.05,
-                 "HYPO": 0.04, "ANT": 0.03, "NE-SUB": 0.04, "POS": 0.04,
-                 "SUBST": 0.09}
+TYPED_WEIGHTS = {
+    "MORPH": 0.50,
+    "SYN": 0.14,
+    "SYN-DIST": 0.07,
+    "HYPER": 0.05,
+    "HYPO": 0.04,
+    "ANT": 0.03,
+    "NE-SUB": 0.04,
+    "POS": 0.04,
+    "SUBST": 0.09,
+}
 
 #: Cosine above which a candidate is too close to count as unrelated.
 RESIDUAL_MAX_COS = 0.35
@@ -395,12 +441,15 @@ def select_pool(pool, size: int, rng, rare_min: int = 1200):
                 break
             if k in taken or tag not in ex.fine_operations:
                 continue
-            chosen.append(ex); taken.add(k); n += 1
+            chosen.append(ex)
+            taken.add(k)
+            n += 1
     for k, ex in enumerate(pool):
         if len(chosen) >= size:
             break
         if k not in taken:
-            chosen.append(ex); taken.add(k)
+            chosen.append(ex)
+            taken.add(k)
     rng.shuffle(chosen)
     return chosen
 
@@ -423,6 +472,7 @@ def fine_mix(examples) -> Dict[str, int]:
 # Frame templates
 # =============================================================================
 
+
 def frame_pool(gold_dir, folds_by_id: Dict[str, int], exclude_fold: int) -> List[List[str]]:
     """Attribution formulas from the hand labels, minus the held-out fold.
 
@@ -442,7 +492,7 @@ def frame_pool(gold_dir, folds_by_id: Dict[str, int], exclude_fold: int) -> List
             continue
         target = pairs[key]["target"].split()
         for a, b in label.get("frame", []):
-            span = target[a:b + 1]
+            span = target[a : b + 1]
             if 1 <= len(span) <= 14:
                 out.append(span)
     return out
@@ -452,8 +502,19 @@ def frame_pool(gold_dir, folds_by_id: Dict[str, int], exclude_fold: int) -> List
 # Typed substitution
 # =============================================================================
 
-def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, subst_weight=None, cohypo=False,
-                           norel_share=0.0, stem_subst=0.0, lexical_share=None, rel_share=None):
+
+def _make_typed_substitute(
+    vectors_path,
+    attested=None,
+    accept=1.0,
+    mlm=None,
+    subst_weight=None,
+    cohypo=False,
+    norel_share=0.0,
+    stem_subst=0.0,
+    lexical_share=None,
+    rel_share=None,
+):
     """Like ``_make_substitute``, but returns the tag beside the replacement.
 
     ``mlm`` (E38): a ContextualSubstituter; the SUBST tag then draws a word the
@@ -468,12 +529,18 @@ def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, su
     weights = [TYPED_WEIGHTS[t] for t in tags]
     if subst_weight is not None:
         rest = sum(w for t, w in zip(tags, weights) if t != "SUBST")
-        weights = [subst_weight if t == "SUBST" else w * (1 - subst_weight) / rest for t, w in zip(tags, weights)]
+        weights = [
+            subst_weight if t == "SUBST" else w * (1 - subst_weight) / rest
+            for t, w in zip(tags, weights)
+        ]
     if lexical_share is not None:
         # the error analysis of 2026-09-26: the share of every lexical tag together against MORPH; 0 = inflections
         # only, the synthetic data then teaches no substitution at all
         rest = sum(w for t, w in zip(tags, weights) if t != "MORPH")
-        weights = [(1 - lexical_share) if t == "MORPH" else w * lexical_share / rest for t, w in zip(tags, weights)]
+        weights = [
+            (1 - lexical_share) if t == "MORPH" else w * lexical_share / rest
+            for t, w in zip(tags, weights)
+        ]
     names: Optional[List[str]] = None
     # ``rel_share`` (2026-09-27, Synthetic Stage): the realised share of relation-bearing substitutions among the
     # lexical ones. A lexical draw tries the related tags while the running share is below the target and, if none
@@ -488,8 +555,7 @@ def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, su
         if names is None:
             names = []
             if resources.has("entities") and attested is not None:
-                names = sorted(n for n in resources.entities.names
-                               if normalize(n) in attested)
+                names = sorted(n for n in resources.entities.names if normalize(n) in attested)
         return names
 
     def ne_sub(token, rng):
@@ -570,7 +636,7 @@ def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, su
                 if len(word) < 5:
                     continue
                 for offset in range(0, min(4, len(word) - 4)):
-                    stem_index.setdefault(word[offset:offset + 5], []).append(word)
+                    stem_index.setdefault(word[offset : offset + 5], []).append(word)
         norm = normalize(token)
         if len(norm) < 5:
             return None
@@ -601,7 +667,11 @@ def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, su
             # the lexical part of the order follows the target, also after a failed MORPH draw (the fallback would
             # otherwise take the generator's own weights and leak its related share, 0.46 in the smoke)
             want_related = counts["related"] < rel_share * (counts["lexical"] + 1)
-            lexical = rng.choices(related_tags, weights=related_weights, k=len(related_tags)) if want_related else ["SUBST"]
+            lexical = (
+                rng.choices(related_tags, weights=related_weights, k=len(related_tags))
+                if want_related
+                else ["SUBST"]
+            )
             order = (["MORPH"] if order[0] == "MORPH" else []) + lexical
         if force:
             order = ["SUBST"] + [t for t in order if t != "SUBST"]
@@ -617,8 +687,13 @@ def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, su
             elif tag == "SUBST":
                 if mlm is not None and not (norel_share > 0 and rng.random() < norel_share):
                     # E38: the slot-fitting word or nothing -- no random fallback
-                    replacement = mlm.propose(context[0], context[1], rng, attested=attested, resources=resources) \
-                        if context is not None else None
+                    replacement = (
+                        mlm.propose(
+                            context[0], context[1], rng, attested=attested, resources=resources
+                        )
+                        if context is not None
+                        else None
+                    )
                 elif mlm is not None:
                     # failure-mode row 15 (``norel_share``): the relation-free residual beside the
                     # slot filler -- a real same-POS word with no attested relation and no vector
@@ -645,6 +720,7 @@ def _make_typed_substitute(vectors_path, attested=None, accept=1.0, mlm=None, su
 # One example
 # =============================================================================
 
+
 @dataclass
 class TypedReport:
     attempted: int = 0
@@ -664,10 +740,27 @@ RELATED_TAGS = ("SYN", "SYN-DIST", "HYPER", "HYPO", "ANT", "NE-SUB", "POS")
 
 #: Orthographic alternations the COPY gate folds (``Repairer.spelling_key``), in the direction that writes a
 #: variant: (pattern, replacement) on the lowercased body; the result must keep the spelling key and change the form.
-_SPELLING_RULES = (("ae", "e"), ("e", "ae"), ("oe", "e"), ("i", "y"), ("nt", "mpt"), ("mpt", "nt"), ("f", "ph"),
-                   ("ph", "f"), (r"^([aeiou])", r"h\1"), (r"^h", ""), (r"([bcdfglmnprst])\1", r"\1"),
-                   (r"([aeiou])([lmnrst])([aeiou])", r"\1\2\2\3"), (r"ii$", "i"), (r"i$", "ii"), (r"d$", "t"),
-                   (r"t$", "d"), (r"ies$", "iens"), (r"iens$", "ies"), (r"m$", "n"))
+_SPELLING_RULES = (
+    ("ae", "e"),
+    ("e", "ae"),
+    ("oe", "e"),
+    ("i", "y"),
+    ("nt", "mpt"),
+    ("mpt", "nt"),
+    ("f", "ph"),
+    ("ph", "f"),
+    (r"^([aeiou])", r"h\1"),
+    (r"^h", ""),
+    (r"([bcdfglmnprst])\1", r"\1"),
+    (r"([aeiou])([lmnrst])([aeiou])", r"\1\2\2\3"),
+    (r"ii$", "i"),
+    (r"i$", "ii"),
+    (r"d$", "t"),
+    (r"t$", "d"),
+    (r"ies$", "iens"),
+    (r"iens$", "ies"),
+    (r"m$", "n"),
+)
 
 
 def spelling_variant(token: str, rng, attested=None) -> Optional[str]:
@@ -680,14 +773,18 @@ def spelling_variant(token: str, rng, attested=None) -> Optional[str]:
     if not attested:
         return None
     bare = re.sub(r"[^A-Za-z]+$", "", token)
-    trail = token[len(bare):]
+    trail = token[len(bare) :]
     if len(bare) < 3:
         return None
     lower = bare.lower()
     key = Repairer.spelling_key(lower)
     for pattern, repl in rng.sample(_SPELLING_RULES, len(_SPELLING_RULES)):
         cand = re.sub(pattern, repl, lower, count=1)
-        if cand == lower or Repairer.spelling_key(cand) != key or normalize(cand) == normalize(lower):
+        if (
+            cand == lower
+            or Repairer.spelling_key(cand) != key
+            or normalize(cand) == normalize(lower)
+        ):
             continue
         if normalize(cand) not in attested:
             continue
@@ -700,7 +797,7 @@ def spelling_variant(token: str, rng, attested=None) -> Optional[str]:
 def _attach_enclitic(token: str, rng, attested) -> Optional[str]:
     """``uirum`` -> ``uirumque``, if that is a form somebody wrote."""
     bare = re.sub(r"[^A-Za-z]+$", "", token)
-    trail = token[len(bare):]
+    trail = token[len(bare) :]
     for enclitic in rng.sample(ENCLITICS, len(ENCLITICS)):
         merged = bare + enclitic
         if attested is None or normalize(merged) in attested:
@@ -708,11 +805,25 @@ def _attach_enclitic(token: str, rng, attested) -> Optional[str]:
     return None
 
 
-def _make_one_typed(seed_tokens, context_pool, substitute, featurizer, rng, *,
-                    frames: Sequence[Sequence[str]] = (), frame_rate=FRAME_RATE,
-                    enclitic_rate=ENCLITIC_RATE, reorder_inter=0.0,
-                    reorder_intra=0.0, attested=None, dense_rate=0.0, ins_slot=0.0,
-                    slot_words: Optional[List[str]] = None, copy_variants=0.0, frameless_fill=""):
+def _make_one_typed(
+    seed_tokens,
+    context_pool,
+    substitute,
+    featurizer,
+    rng,
+    *,
+    frames: Sequence[Sequence[str]] = (),
+    frame_rate=FRAME_RATE,
+    enclitic_rate=ENCLITIC_RATE,
+    reorder_inter=0.0,
+    reorder_intra=0.0,
+    attested=None,
+    dense_rate=0.0,
+    ins_slot=0.0,
+    slot_words: Optional[List[str]] = None,
+    copy_variants=0.0,
+    frameless_fill="",
+):
     """One pair with typed links, optional frame, enclitic events, reorderings.
 
     ``copy_variants`` (2026-09-27, the convention wall of the error analysis): enclitic events on copied words are
@@ -736,12 +847,15 @@ def _make_one_typed(seed_tokens, context_pool, substitute, featurizer, rng, *,
 
     for _ in range(n_fragments):
         length = min(_draw(FRAGMENT_LENGTHS, rng), len(source))
-        starts = [i for i in range(len(source) - length + 1)
-                  if not any(j in taken for j in range(i, i + length))]
+        starts = [
+            i
+            for i in range(len(source) - length + 1)
+            if not any(j in taken for j in range(i, i + length))
+        ]
         if not starts:
             break
         start = rng.choice(starts)
-        core = source[start:start + length]
+        core = source[start : start + length]
         for offset in range(len(core)):
             taken.add(start + offset)
             source_del[start + offset] = 0
@@ -752,42 +866,60 @@ def _make_one_typed(seed_tokens, context_pool, substitute, featurizer, rng, *,
         reworked, ops, fine, links = [], [], [], []
         for offset, token in enumerate(core):
             links.append(start + offset)
-            drawn = substitute(token, rng, (source, start + offset), force=(dense and len(normalize(token)) >= 4))
+            drawn = substitute(
+                token, rng, (source, start + offset), force=(dense and len(normalize(token)) >= 4)
+            )
             if drawn:
                 replacement, tag = drawn
-                reworked.append(replacement); ops.append("SUBST"); fine.append(tag)
+                reworked.append(replacement)
+                ops.append("SUBST")
+                fine.append(tag)
                 continue
             # cardinality: detach or attach an enclitic on a copied word
             if rng.random() < enclitic_rate:
                 split = featurizer.enclitic(token)
                 if split and normalize(split[0]) != normalize(token):
                     if copy_variants > 0:
-                        reworked.append(split[0]); ops.append("COPY"); fine.append("NOP")
+                        reworked.append(split[0])
+                        ops.append("COPY")
+                        fine.append("NOP")
                     else:
-                        reworked.append(split[0]); ops.append("SUBST"); fine.append("SPLIT")
+                        reworked.append(split[0])
+                        ops.append("SUBST")
+                        fine.append("SPLIT")
                     stats["enclitic"] += 1
                     continue
                 merged = _attach_enclitic(token, rng, attested)
                 if merged and featurizer.enclitic(merged) and not featurizer.enclitic(token):
                     if copy_variants > 0:
-                        reworked.append(merged); ops.append("COPY"); fine.append("NOP")
+                        reworked.append(merged)
+                        ops.append("COPY")
+                        fine.append("NOP")
                     else:
-                        reworked.append(merged); ops.append("SUBST"); fine.append("MERGE")
+                        reworked.append(merged)
+                        ops.append("SUBST")
+                        fine.append("MERGE")
                     stats["enclitic"] += 1
                     continue
             if copy_variants > 0 and rng.random() < copy_variants:
                 variant = spelling_variant(token, rng, attested)
                 if variant:
-                    reworked.append(variant); ops.append("COPY"); fine.append("NOP")
+                    reworked.append(variant)
+                    ops.append("COPY")
+                    fine.append("NOP")
                     stats["spelling"] += 1
                     continue
             if rng.random() < COPY_VARIANT_SHARE:
                 token = _variant(token, rng)
-            reworked.append(token); ops.append("COPY"); fine.append("NOP")
+            reworked.append(token)
+            ops.append("COPY")
+            fine.append("NOP")
         if frameless_fill == "nolink":
             kept = [o == "COPY" or f == "MORPH" for o, f in zip(ops, fine)]
             for i, f in enumerate(fine):
-                if f == "SUBST" and not any(kept[j] for j in range(max(0, i - 2), min(len(fine), i + 3)) if j != i):
+                if f == "SUBST" and not any(
+                    kept[j] for j in range(max(0, i - 2), min(len(fine), i + 3)) if j != i
+                ):
                     source_del[links[i]] = 1
                     ops[i], fine[i], links[i] = "INS", "INS", -1
                     stats["frameless"] += 1
@@ -800,7 +932,10 @@ def _make_one_typed(seed_tokens, context_pool, substitute, featurizer, rng, *,
                 word = rng.choice(slot_words)
                 if normalize(word) not in source_norm:
                     at = rng.randrange(1, len(reworked))
-                    reworked.insert(at, word); ops.insert(at, "INS"); fine.insert(at, "INS"); links.insert(at, -1)
+                    reworked.insert(at, word)
+                    ops.insert(at, "INS")
+                    fine.insert(at, "INS")
+                    links.insert(at, -1)
                     break
         # intra-fragment inversion: a two-word fragment turned around, which is
         # what *iter durum* -> *durum iter* is. Only ever the whole fragment.
@@ -832,7 +967,8 @@ def _make_one_typed(seed_tokens, context_pool, substitute, featurizer, rng, *,
             fine_ops[at:at] = ["INS"] * len(formula)
             alignments[at:at] = [-1] * len(formula)
             frame_mask[at:at] = [1] * len(formula)
-            grown += len(formula); at += len(formula)
+            grown += len(formula)
+            at += len(formula)
             stats["frame"] = 1
         target[at:at] = reworked
         operations[at:at] = ops
@@ -848,13 +984,18 @@ def _make_one_typed(seed_tokens, context_pool, substitute, featurizer, rng, *,
             features[t] = featurizer(source[s], target[t], s, t, len(source), len(target))
 
     example = ChangeExample(
-        source_tokens=source, target_tokens=target,
+        source_tokens=source,
+        target_tokens=target,
         labels=[0 if o == "COPY" else 1 for o in operations],
-        operations=operations, n_operations=len(taken),
+        operations=operations,
+        n_operations=len(taken),
         source_labels=source_del,
         source_operations=["DEL" if d else "COPY" for d in source_del],
         alignments=alignments,
-        fine_operations=fine_ops, frame_labels=frame_mask, link_features=features)
+        fine_operations=fine_ops,
+        frame_labels=frame_mask,
+        link_features=features,
+    )
     return example, stats
 
 
@@ -866,23 +1007,62 @@ _WORKER: dict = {}
 _MLM_CACHE: dict = {}
 
 
-def _init_worker(vectors_path, attested, accept, frames, frame_rate, enclitic_rate,
-                 reorder_inter, reorder_intra, mlm_subst=False, subst_weight=None, mlm_model=None, cohypo=False, dense_rate=0.0,
-                 norel_share=0.0, stem_subst=0.0, ins_slot=0.0, lexical_share=None, rel_share=None, copy_variants=0.0,
-                 frameless_fill=""):
+def _init_worker(
+    vectors_path,
+    attested,
+    accept,
+    frames,
+    frame_rate,
+    enclitic_rate,
+    reorder_inter,
+    reorder_intra,
+    mlm_subst=False,
+    subst_weight=None,
+    mlm_model=None,
+    cohypo=False,
+    dense_rate=0.0,
+    norel_share=0.0,
+    stem_subst=0.0,
+    ins_slot=0.0,
+    lexical_share=None,
+    rel_share=None,
+    copy_variants=0.0,
+    frameless_fill="",
+):
     mlm = None
     if mlm_subst:
         from retexo.datasets.mlm_subst import ContextualSubstituter
+
         mlm = ContextualSubstituter(mlm_model) if mlm_model else ContextualSubstituter()
-        mlm.cache = _MLM_CACHE.get("cache")            # inherited from the parent through fork
-    substitute, resources = _make_typed_substitute(vectors_path, attested, accept, mlm=mlm, subst_weight=subst_weight, cohypo=cohypo, lexical_share=lexical_share,
-                                                   norel_share=norel_share, stem_subst=stem_subst, rel_share=rel_share)
+        mlm.cache = _MLM_CACHE.get("cache")  # inherited from the parent through fork
+    substitute, resources = _make_typed_substitute(
+        vectors_path,
+        attested,
+        accept,
+        mlm=mlm,
+        subst_weight=subst_weight,
+        cohypo=cohypo,
+        lexical_share=lexical_share,
+        norel_share=norel_share,
+        stem_subst=stem_subst,
+        rel_share=rel_share,
+    )
     slot_words = sorted(w for w in attested if len(w) >= 5) if (ins_slot > 0 and attested) else None
-    _WORKER.update(substitute=substitute, featurizer=LinkFeaturizer(resources),
-                   frames=frames, frame_rate=frame_rate, enclitic_rate=enclitic_rate,
-                   reorder_inter=reorder_inter, reorder_intra=reorder_intra,
-                   attested=attested, dense_rate=dense_rate, ins_slot=ins_slot, slot_words=slot_words,
-                   copy_variants=copy_variants, frameless_fill=frameless_fill)
+    _WORKER.update(
+        substitute=substitute,
+        featurizer=LinkFeaturizer(resources),
+        frames=frames,
+        frame_rate=frame_rate,
+        enclitic_rate=enclitic_rate,
+        reorder_inter=reorder_inter,
+        reorder_intra=reorder_intra,
+        attested=attested,
+        dense_rate=dense_rate,
+        ins_slot=ins_slot,
+        slot_words=slot_words,
+        copy_variants=copy_variants,
+        frameless_fill=frameless_fill,
+    )
 
 
 def _chunk(args):
@@ -895,12 +1075,23 @@ def _chunk(args):
         for _ in range(per_seed):
             report.attempted += 1
             example, stats = _make_one_typed(
-                tokens, context_pool, w["substitute"], w["featurizer"], rng,
-                frames=w["frames"], frame_rate=w["frame_rate"],
-                enclitic_rate=w["enclitic_rate"], reorder_inter=w["reorder_inter"],
-                reorder_intra=w["reorder_intra"], attested=w["attested"], dense_rate=w.get("dense_rate", 0.0),
-                ins_slot=w.get("ins_slot", 0.0), slot_words=w.get("slot_words"),
-                copy_variants=w.get("copy_variants", 0.0), frameless_fill=w.get("frameless_fill", ""))
+                tokens,
+                context_pool,
+                w["substitute"],
+                w["featurizer"],
+                rng,
+                frames=w["frames"],
+                frame_rate=w["frame_rate"],
+                enclitic_rate=w["enclitic_rate"],
+                reorder_inter=w["reorder_inter"],
+                reorder_intra=w["reorder_intra"],
+                attested=w["attested"],
+                dense_rate=w.get("dense_rate", 0.0),
+                ins_slot=w.get("ins_slot", 0.0),
+                slot_words=w.get("slot_words"),
+                copy_variants=w.get("copy_variants", 0.0),
+                frameless_fill=w.get("frameless_fill", ""),
+            )
             if example is None:
                 report.no_substitute += 1
                 continue
@@ -919,16 +1110,40 @@ def _chunk(args):
     return out, report.__dict__
 
 
-def generate_typed(seeds, context_pool, *, workers=24, per_seed=4, seed=1,
-                   chunk_size=200, vectors_path=None, attested=None, accept=None,
-                   frames=(), frame_rate=FRAME_RATE, enclitic_rate=ENCLITIC_RATE,
-                   reorder_inter=0.0, reorder_intra=0.0, log=None, mlm_subst=False, subst_weight=None, mlm_model=None, cohypo=False, dense_rate=0.0,
-                   norel_share=0.0, stem_subst=0.0, ins_slot=0.0, lexical_share=None, rel_share=None,
-                   copy_variants=0.0, frameless_fill=""):
+def generate_typed(
+    seeds,
+    context_pool,
+    *,
+    workers=24,
+    per_seed=4,
+    seed=1,
+    chunk_size=200,
+    vectors_path=None,
+    attested=None,
+    accept=None,
+    frames=(),
+    frame_rate=FRAME_RATE,
+    enclitic_rate=ENCLITIC_RATE,
+    reorder_inter=0.0,
+    reorder_intra=0.0,
+    log=None,
+    mlm_subst=False,
+    subst_weight=None,
+    mlm_model=None,
+    cohypo=False,
+    dense_rate=0.0,
+    norel_share=0.0,
+    stem_subst=0.0,
+    ins_slot=0.0,
+    lexical_share=None,
+    rel_share=None,
+    copy_variants=0.0,
+    frameless_fill="",
+):
     """Generate in parallel, offline. Returns examples and a report."""
     import multiprocessing as mp
 
-    chunks = [list(seeds[i:i + chunk_size]) for i in range(0, len(seeds), chunk_size)]
+    chunks = [list(seeds[i : i + chunk_size]) for i in range(0, len(seeds), chunk_size)]
     context_pool = [list(p) for p in context_pool]
     frames = [list(f) for f in frames]
     tasks = [(c, context_pool, seed + i, per_seed) for i, c in enumerate(chunks)]
@@ -941,21 +1156,48 @@ def generate_typed(seeds, context_pool, *, workers=24, per_seed=4, seed=1,
             log(f"substitute coverage {coverage:.1%} -> accept {accept:.1%}")
     if mlm_subst:
         from retexo.datasets.mlm_subst import ContextualSubstituter
-        _MLM_CACHE["cache"] = ContextualSubstituter.precompute(seeds, mlm_model or "bowphs/LaBerta", log=log)
+
+        _MLM_CACHE["cache"] = ContextualSubstituter.precompute(
+            seeds, mlm_model or "bowphs/LaBerta", log=log
+        )
     context = mp.get_context("fork" if sys.platform.startswith("linux") else "spawn")
     out, totals = [], TypedReport()
-    with context.Pool(workers, initializer=_init_worker,
-                      initargs=(vectors_path, attested, accept, frames, frame_rate,
-                                enclitic_rate, reorder_inter, reorder_intra, mlm_subst, subst_weight, mlm_model, cohypo, dense_rate,
-                                norel_share, stem_subst, ins_slot, lexical_share, rel_share, copy_variants,
-                                frameless_fill)) as pool:
+    with context.Pool(
+        workers,
+        initializer=_init_worker,
+        initargs=(
+            vectors_path,
+            attested,
+            accept,
+            frames,
+            frame_rate,
+            enclitic_rate,
+            reorder_inter,
+            reorder_intra,
+            mlm_subst,
+            subst_weight,
+            mlm_model,
+            cohypo,
+            dense_rate,
+            norel_share,
+            stem_subst,
+            ins_slot,
+            lexical_share,
+            rel_share,
+            copy_variants,
+            frameless_fill,
+        ),
+    ) as pool:
         for examples, report in pool.imap_unordered(_chunk, tasks):
             out.extend(examples)
-            totals.attempted += report["attempted"]; totals.kept += report["kept"]
+            totals.attempted += report["attempted"]
+            totals.kept += report["kept"]
             totals.no_substitute += report["no_substitute"]
-            totals.frames += report["frames"]; totals.reorders += report["reorders"]
+            totals.frames += report["frames"]
+            totals.reorders += report["reorders"]
             totals.enclitics += report["enclitics"]
-            totals.spelling += report["spelling"]; totals.frameless += report["frameless"]
+            totals.spelling += report["spelling"]
+            totals.frameless += report["frameless"]
             for k, v in report["op_counts"].items():
                 totals.op_counts[k] = totals.op_counts.get(k, 0) + v
             for k, v in report["fine_counts"].items():
@@ -993,13 +1235,14 @@ def _feat_init(vectors_path):
 
 def _feat_chunk(items):
     import numpy as np
+
     from retexo.edit_typing.link_features import N_FEATURES
 
     fz = _FEAT["fz"]
     out = []
     for item in items:
         source, target = item[0], item[1]
-        dep = item[2] if len(item) > 2 else None                       # E41: (dep_s, dep_t)
+        dep = item[2] if len(item) > 2 else None  # E41: (dep_s, dep_t)
         width = N_FEATURES + (len(DEP_FEATURES) if dep is not None else 0)
         arr = np.zeros((len(target), len(source), width), dtype=np.float16)
         n_s, n_t = len(source), len(target)
@@ -1007,7 +1250,9 @@ def _feat_chunk(items):
             for s, sw in enumerate(source):
                 row = fz(sw, tw, s, t, n_s, n_t)
                 if dep is not None:
-                    row = list(row) + DependencyParser.cell_features(source, target, dep[0], dep[1], s, t, lemma=fz.lemma)
+                    row = list(row) + DependencyParser.cell_features(
+                        source, target, dep[0], dep[1], s, t, lemma=fz.lemma
+                    )
                 arr[t, s] = row
         out.append(arr)
     return out
@@ -1020,9 +1265,12 @@ def frame_support_channel(arr, window: int = 2, slack: int = 3):
     ``2 * window``. The error analysis of 2026-09-26 measured the same count on links: sure substitutions sit in a
     kept frame (mean support 2.1), invented links do not (0.8)."""
     import numpy as np
+
     from retexo.edit_typing.link_features import FEATURE_NAMES
 
-    anchor = (arr[..., FEATURE_NAMES.index("same_form")] > 0) | (arr[..., FEATURE_NAMES.index("same_lemma")] > 0)
+    anchor = (arr[..., FEATURE_NAMES.index("same_form")] > 0) | (
+        arr[..., FEATURE_NAMES.index("same_lemma")] > 0
+    )
     n_t, n_s = anchor.shape
     # a reuse neighbour counts once, however many source offsets match
     per_neighbour = np.zeros((n_t, n_s), dtype=np.float32)
@@ -1036,7 +1284,7 @@ def frame_support_channel(arr, window: int = 2, slack: int = 3):
             t0, t1 = max(0, -dt), min(n_t, n_t - dt)
             s0, s1 = max(0, -ds), min(n_s, n_s - ds)
             if t0 < t1 and s0 < s1:
-                hit[t0:t1, s0:s1] |= anchor[t0 + dt:t1 + dt, s0 + ds:s1 + ds]
+                hit[t0:t1, s0:s1] |= anchor[t0 + dt : t1 + dt, s0 + ds : s1 + ds]
         per_neighbour += hit
     return (per_neighbour / (2 * window)).astype(arr.dtype)
 
@@ -1054,24 +1302,29 @@ def featurize_pairs(examples, *, vectors_path=None, workers=24, chunk_size=48, l
     items = [(list(e.source_tokens), list(e.target_tokens)) for e in examples]
     if DEP_FEATURES_ON:
         parses = _dep_parser().parse_all(
-            [e.source_tokens for e in examples] + [e.target_tokens for e in examples], log=log)
+            [e.source_tokens for e in examples] + [e.target_tokens for e in examples], log=log
+        )
         items = [(s, t, (parses[" ".join(s)], parses[" ".join(t)])) for s, t in items]
-    tasks = [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+    tasks = [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
     context = mp.get_context("fork" if sys.platform.startswith("linux") else "spawn")
     done = 0
     with context.Pool(workers, initializer=_feat_init, initargs=(vectors_path,)) as pool:
         for i, arrays in enumerate(pool.imap(_feat_chunk, tasks)):
-            for e, a in zip(examples[i * chunk_size:(i + 1) * chunk_size], arrays):
+            for e, a in zip(examples[i * chunk_size : (i + 1) * chunk_size], arrays):
                 if FRAME_CHANNEL_ON:
                     import numpy as np
+
                     a = np.concatenate([a, frame_support_channel(a)[..., None]], axis=-1)
                 # ChangeExample is frozen; this is the one field filled in after
                 # construction, and it is filled exactly once
                 object.__setattr__(e, "pair_features", a)
             done += len(arrays)
     if log:
-        cells = sum(e.pair_features.shape[0] * e.pair_features.shape[1]
-                    for e in examples if e.pair_features is not None)
+        cells = sum(
+            e.pair_features.shape[0] * e.pair_features.shape[1]
+            for e in examples
+            if e.pair_features is not None
+        )
         log(f"evidence for {done:,} pairs, {cells:,} cells")
     return examples
 
@@ -1080,12 +1333,15 @@ def featurize_pairs(examples, *, vectors_path=None, workers=24, chunk_size=48, l
 # Gold with fine labels and evidence
 # =============================================================================
 
+
 def _link_only_coarse(pair, t: int) -> str:
     """The coarse view of a link-only edge: ``NOP`` for the same normalised form, ``SUBST`` for any change."""
     from retexo.core.normalize import normalize
 
     s = pair.target_align[t]
-    return "NOP" if normalize(pair.source_tokens[s]) == normalize(pair.target_tokens[t]) else "SUBST"
+    return (
+        "NOP" if normalize(pair.source_tokens[s]) == normalize(pair.target_tokens[t]) else "SUBST"
+    )
 
 
 def fine_from_gold(pair, featurizer: LinkFeaturizer, *, gold_fine: bool = False):
@@ -1101,46 +1357,69 @@ def fine_from_gold(pair, featurizer: LinkFeaturizer, *, gold_fine: bool = False)
     ``FINE_OPERATIONS`` is the fine target itself; the ``detail`` of a link
     (HYPER, ANT, the MORPH features) is never a label.
     """
-    target_ops = list(pair.target_ops)          # fine: NOP / MORPH / SUBST / FRAME / INS
+    target_ops = list(pair.target_ops)  # fine: NOP / MORPH / SUBST / FRAME / INS
     fine, frame, features = [], [], []
     for t, op in enumerate(target_ops):
         s = pair.target_align[t] if pair.target_align and t < len(pair.target_align) else -1
         if op == "FRAME":
-            fine.append("INS"); frame.append(1); features.append(None); continue
+            fine.append("INS")
+            frame.append(1)
+            features.append(None)
+            continue
         frame.append(0)
         if s < 0:
-            fine.append("INS"); features.append(None); continue
+            fine.append("INS")
+            features.append(None)
+            continue
         if op == "NOP":
             fine.append("NOP")
         elif op == "MORPH":
             fine.append("MORPH")
         elif op == "LINK":
-            fine.append("LINK")       # a link-only edge (self-training): the link trains, no type head does
+            fine.append(
+                "LINK"
+            )  # a link-only edge (self-training): the link trains, no type head does
         elif gold_fine and op in FINE_OPERATIONS:
-            fine.append(op)           # the annotated V3 operation
+            fine.append(op)  # the annotated V3 operation
         else:
-            fine.append("?")          # unsupervised lexical change
-        features.append(featurizer(pair.source_tokens[s], pair.target_tokens[t], s, t,
-                                   len(pair.source_tokens), len(pair.target_tokens)))
+            fine.append("?")  # unsupervised lexical change
+        features.append(
+            featurizer(
+                pair.source_tokens[s],
+                pair.target_tokens[t],
+                s,
+                t,
+                len(pair.source_tokens),
+                len(pair.target_tokens),
+            )
+        )
     # The coarse head and the pointer see exactly what E4-era training saw:
     # COPY / SUBST / INS. Only the typer and the frame head see the fine view.
     # A link-only edge says nothing about its kind: the coarse head gets COPY where the two words are the same
     # form and SUBST (a change, INFLECT included) otherwise, never a lexical class it was not shown.
-    coarse_ops = [coarse(_link_only_coarse(pair, t) if op == "LINK" else op) for t, op in enumerate(target_ops)]
+    coarse_ops = [
+        coarse(_link_only_coarse(pair, t) if op == "LINK" else op)
+        for t, op in enumerate(target_ops)
+    ]
     return ChangeExample(
-        source_tokens=list(pair.source_tokens), target_tokens=list(pair.target_tokens),
+        source_tokens=list(pair.source_tokens),
+        target_tokens=list(pair.target_tokens),
         labels=[0 if op == "COPY" else 1 for op in coarse_ops],
         operations=coarse_ops,
         n_operations=sum(1 for op in coarse_ops if op != "COPY"),
         source_labels=list(pair.source_del),
         source_operations=["DEL" if d else "COPY" for d in pair.source_del],
         alignments=list(pair.target_align) if pair.target_align else None,
-        fine_operations=fine, frame_labels=frame, link_features=features)
+        fine_operations=fine,
+        frame_labels=frame,
+        link_features=features,
+    )
 
 
 # =============================================================================
 # A reusable generator object
 # =============================================================================
+
 
 @dataclass
 class GeneratorConfig:
@@ -1184,8 +1463,7 @@ class TypedGenerator:
     def __init__(self, config: Optional[GeneratorConfig] = None, **overrides):
         self.config = replace(config or GeneratorConfig(), **overrides)
 
-    def generate(self, seeds, context_pool, *, log=None
-                 ) -> Tuple[List[ChangeExample], TypedReport]:
+    def generate(self, seeds, context_pool, *, log=None) -> Tuple[List[ChangeExample], TypedReport]:
         return generate_typed(seeds, context_pool, log=log, **asdict(self.config))
 
     @staticmethod
@@ -1198,12 +1476,32 @@ class TypedGenerator:
 
 
 __all__ = [
-    "OPERATIONS", "TARGET", "FRAGMENTS", "FRAGMENT_LENGTHS", "COPY_VARIANT_SHARE",
-    "attested_forms", "calibrate_acceptance", "coarse", "realism_report", "log_realism",
+    "OPERATIONS",
+    "TARGET",
+    "FRAGMENTS",
+    "FRAGMENT_LENGTHS",
+    "COPY_VARIANT_SHARE",
+    "attested_forms",
+    "calibrate_acceptance",
+    "coarse",
+    "realism_report",
+    "log_realism",
     "all_insert_baseline",
-    "FINE_OPERATIONS", "TYPED_WEIGHTS", "RESIDUAL_MAX_COS", "FRAME_RATE",
-    "ENCLITIC_RATE", "ENCLITICS", "RARE_TAGS",
-    "select_pool", "balanced_subset", "fine_mix", "frame_pool",
-    "TypedReport", "generate_typed", "featurize_pairs", "fine_from_gold",
-    "GeneratorConfig", "TypedGenerator",
+    "FINE_OPERATIONS",
+    "TYPED_WEIGHTS",
+    "RESIDUAL_MAX_COS",
+    "FRAME_RATE",
+    "ENCLITIC_RATE",
+    "ENCLITICS",
+    "RARE_TAGS",
+    "select_pool",
+    "balanced_subset",
+    "fine_mix",
+    "frame_pool",
+    "TypedReport",
+    "generate_typed",
+    "featurize_pairs",
+    "fine_from_gold",
+    "GeneratorConfig",
+    "TypedGenerator",
 ]

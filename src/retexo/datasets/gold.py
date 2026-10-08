@@ -20,7 +20,6 @@ from typing import Dict, List, Optional
 
 from retexo.formulations.change_detector import ChangeExample
 
-
 # =============================================================================
 # The hand-labelled pairs
 # =============================================================================
@@ -53,17 +52,18 @@ class GoldPair:
 
     def as_example(self) -> ChangeExample:
         return ChangeExample(
-            source_tokens=self.source_tokens, target_tokens=self.target_tokens,
+            source_tokens=self.source_tokens,
+            target_tokens=self.target_tokens,
             labels=[0 if op == "NOP" else 1 for op in self.target_ops],
-            operations=self.target_ops, n_operations=sum(
-                1 for op in self.target_ops if op != "NOP"),
+            operations=self.target_ops,
+            n_operations=sum(1 for op in self.target_ops if op != "NOP"),
             source_labels=self.source_del,
             source_operations=["DEL" if d else "NOP" for d in self.source_del],
             alignments=self.target_align,
         )
 
     @classmethod
-    def load(cls, directory: Path) -> List["GoldPair"]:
+    def load(cls, directory: Path) -> List[GoldPair]:
         """Expand the exception-format hand labels into per-token operations.
 
         Unlisted target tokens are ``INS``, unlisted source tokens are ``DEL`` --
@@ -91,11 +91,18 @@ class GoldPair:
                         target_align[tgt] = src
                 if 0 <= src < len(source):
                     source_del[src] = 0
-            out.append(cls(id=key, ref_type=pair["ref_type"],
-                           source_tokens=source, target_tokens=target,
-                           target_ops=target_ops, source_del=source_del,
-                           target_align=target_align,
-                           note=label.get("note", "")))
+            out.append(
+                cls(
+                    id=key,
+                    ref_type=pair["ref_type"],
+                    source_tokens=source,
+                    target_tokens=target,
+                    target_ops=target_ops,
+                    source_del=source_del,
+                    target_align=target_align,
+                    note=label.get("note", ""),
+                )
+            )
         return out
 
 
@@ -118,8 +125,12 @@ class TypedScorer:
     def prf(tp: int, fp: int, fn: int) -> Dict[str, float]:
         p = tp / (tp + fp) if tp + fp else 0.0
         r = tp / (tp + fn) if tp + fn else 0.0
-        return {"precision": p, "recall": r,
-                "f1": 2 * p * r / (p + r) if p + r else 0.0, "support": tp + fn}
+        return {
+            "precision": p,
+            "recall": r,
+            "f1": 2 * p * r / (p + r) if p + r else 0.0,
+            "support": tp + fn,
+        }
 
     @classmethod
     def score_typed(cls, gold_ops, predicted_ops, classes) -> Dict[str, object]:
@@ -134,14 +145,20 @@ class TypedScorer:
                 total += 1
                 confusion[g][p] += 1
                 if g == p:
-                    correct += 1; counts[g][0] += 1
+                    correct += 1
+                    counts[g][0] += 1
                 else:
-                    counts[g][2] += 1; counts[p][1] += 1
+                    counts[g][2] += 1
+                    counts[p][1] += 1
         per = {c: cls.prf(*counts[c]) for c in classes}
         present = [c for c in classes if per[c]["support"] > 0]
-        return {"accuracy": correct / total if total else 0.0,
-                "macro_f1": sum(per[c]["f1"] for c in present) / len(present) if present else 0.0,
-                "per_operation": per, "confusion": confusion, "tokens": total}
+        return {
+            "accuracy": correct / total if total else 0.0,
+            "macro_f1": sum(per[c]["f1"] for c in present) / len(present) if present else 0.0,
+            "per_operation": per,
+            "confusion": confusion,
+            "tokens": total,
+        }
 
 
 __all__ = ["GoldPair", "TypedScorer"]

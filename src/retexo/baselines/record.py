@@ -181,25 +181,41 @@ class RecordCodec:
         links = []
         for e in obj.get("links", []):
             op, detail = labels.Labels.from_paper(str(e["op"]), e.get("detail", "") or "")
-            links.append(Edge(int(e["r"]), int(e["s"]), op, bool(e.get("sure", True)),
-                              detail, e.get("p"), str(e.get("sure_by", "") or "")))
-        spans = [Span(int(sp["start"]), int(sp["end"]), str(sp.get("label", "FRAME")))
-                 for sp in obj.get("spans", [])]
+            links.append(
+                Edge(
+                    int(e["r"]),
+                    int(e["s"]),
+                    op,
+                    bool(e.get("sure", True)),
+                    detail,
+                    e.get("p"),
+                    str(e.get("sure_by", "") or ""),
+                )
+            )
+        spans = [
+            Span(int(sp["start"]), int(sp["end"]), str(sp.get("label", "FRAME")))
+            for sp in obj.get("spans", [])
+        ]
         annotation = dict(obj.get("annotation", {}))
         annotation.update(obj.get("lookup", {}) or {})
         if obj.get("note"):
             annotation["note"] = str(obj["note"])
         source, reuse = obj.get("source", {}), obj.get("reuse", {})
         return Record(
-            id=str(obj["id"]), level=str(obj.get("level", "gold")), fold=int(obj.get("fold", -1)),
+            id=str(obj["id"]),
+            level=str(obj.get("level", "gold")),
+            fold=int(obj.get("fold", -1)),
             source_work=str(source.get("work", "")),
             source_tokens=list(source["tokens"]),
             reuse_work=str(reuse.get("work", "")),
             reuse_tokens=list(reuse["tokens"]),
             pair_label=str(obj.get("pair_label", "cit")),
-            links=links, spans=spans,
-            provenance=dict(obj.get("provenance", {})), annotation=annotation,
-            split=obj.get("split"), pred=obj.get("pred"),
+            links=links,
+            spans=spans,
+            provenance=dict(obj.get("provenance", {})),
+            annotation=annotation,
+            split=obj.get("split"),
+            pred=obj.get("pred"),
             benchmark_id=obj.get("benchmark_id"),
             source_meta={k: v for k, v in source.items() if k not in RecordCodec._SIDE_KEYS},
             reuse_meta={k: v for k, v in reuse.items() if k not in RecordCodec._SIDE_KEYS},
@@ -256,7 +272,9 @@ class RecordCodec:
 
     @staticmethod
     def _edge_json(edge: Edge, *, paper: bool = False) -> Dict[str, Any]:
-        op, detail = labels.Labels.to_paper(edge.op, edge.detail) if paper else (edge.op, edge.detail)
+        op, detail = (
+            labels.Labels.to_paper(edge.op, edge.detail) if paper else (edge.op, edge.detail)
+        )
         out: Dict[str, Any] = {"r": edge.r, "s": edge.s, "op": op, "sure": bool(edge.sure)}
         if edge.sure_by:
             out["sure_by"] = edge.sure_by
@@ -319,19 +337,33 @@ class RecordCodec:
                     canon, detail = labels.canonical(op)
                     if canon is not None:
                         edges.append(Edge(int(tgt), int(src), canon, True, detail))
-            spans = [Span(int(a), min(int(b) + 1, len(pair.target_tokens)), "FRAME")
-                     for a, b in label.get("frame", []) if a <= b]
-            out.append(Record(
-                id=pair.id, level="gold", fold=int(meta["fold"]),
-                source_work=str(meta.get("source_author", "")), source_tokens=list(pair.source_tokens),
-                reuse_work=str(meta.get("query_author", "")), reuse_tokens=list(pair.target_tokens),
-                pair_label=pair.ref_type.rstrip("."),
-                links=edges, spans=spans,
-                # the gold_full labels were read and corrected by an LLM from the E7 model's proposals
-                # (data/gold_full/README.md); no human has checked them yet, so they are silver
-                provenance={"links": "llm-silver", "fine_ops": "llm-silver-V1", "note": pair.note},
-                annotation={},
-            ))
+            spans = [
+                Span(int(a), min(int(b) + 1, len(pair.target_tokens)), "FRAME")
+                for a, b in label.get("frame", [])
+                if a <= b
+            ]
+            out.append(
+                Record(
+                    id=pair.id,
+                    level="gold",
+                    fold=int(meta["fold"]),
+                    source_work=str(meta.get("source_author", "")),
+                    source_tokens=list(pair.source_tokens),
+                    reuse_work=str(meta.get("query_author", "")),
+                    reuse_tokens=list(pair.target_tokens),
+                    pair_label=pair.ref_type.rstrip("."),
+                    links=edges,
+                    spans=spans,
+                    # the gold_full labels were read and corrected by an LLM from the E7 model's proposals
+                    # (data/gold_full/README.md); no human has checked them yet, so they are silver
+                    provenance={
+                        "links": "llm-silver",
+                        "fine_ops": "llm-silver-V1",
+                        "note": pair.note,
+                    },
+                    annotation={},
+                )
+            )
         return out
 
     @staticmethod
@@ -342,9 +374,16 @@ class RecordCodec:
 
         inverted = {"SPLIT": "MERGE", "MERGE": "SPLIT"}
         edges = [Edge(e.s, e.r, inverted.get(e.op, e.op), e.sure, e.detail) for e in record.links]
-        return replace(record, id=record.id + "~", source_tokens=list(record.reuse_tokens),
-                       reuse_tokens=list(record.source_tokens), links=edges, spans=[],
-                       source_meta=dict(record.reuse_meta), reuse_meta=dict(record.source_meta))
+        return replace(
+            record,
+            id=record.id + "~",
+            source_tokens=list(record.reuse_tokens),
+            reuse_tokens=list(record.source_tokens),
+            links=edges,
+            spans=[],
+            source_meta=dict(record.reuse_meta),
+            reuse_meta=dict(record.source_meta),
+        )
 
     #: Relations the record keeps in ``detail`` that the generator emits as fine operations of their own.
     CONSTRUCTED_RELATIONS = ("HYPER", "HYPO", "ANT", "SYN-DIST")
@@ -373,10 +412,14 @@ class RecordCodec:
                 ops.append(labels.TO_LINK_TAG.get(tag, tag))
         used = {s for s in links if s >= 0}
         return GoldPair(
-            id=record.id, ref_type=record.pair_label,
-            source_tokens=list(record.source_tokens), target_tokens=list(record.reuse_tokens),
-            target_ops=ops, source_del=[0 if s in used else 1 for s in range(record.n_source)],
-            target_align=list(links), note=str(record.provenance.get("note", "")),
+            id=record.id,
+            ref_type=record.pair_label,
+            source_tokens=list(record.source_tokens),
+            target_tokens=list(record.reuse_tokens),
+            target_ops=ops,
+            source_del=[0 if s in used else 1 for s in range(record.n_source)],
+            target_align=list(links),
+            note=str(record.provenance.get("note", "")),
         )
 
     @classmethod
@@ -460,11 +503,15 @@ class RecordInterface:
         return out
 
     @staticmethod
-    def edges_from(links: Sequence[int], tags: Sequence[str], frame: Sequence[int],
-                   extra: Sequence[Edge] = ()) -> List[Edge]:
+    def edges_from(
+        links: Sequence[int], tags: Sequence[str], frame: Sequence[int], extra: Sequence[Edge] = ()
+    ) -> List[Edge]:
         """The per-token triple back to edges; ``frame`` is not an edge and is ignored."""
-        out = [Edge(t, int(s), tags[t] if t < len(tags) and tags[t] else "SUBST")
-               for t, s in enumerate(links) if s is not None and s >= 0]
+        out = [
+            Edge(t, int(s), tags[t] if t < len(tags) and tags[t] else "SUBST")
+            for t, s in enumerate(links)
+            if s is not None and s >= 0
+        ]
         out.extend(Edge(e.r, e.s, e.op, e.sure, e.detail, e.p) for e in extra)
         return out
 

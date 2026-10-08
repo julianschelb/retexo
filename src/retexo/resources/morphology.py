@@ -17,6 +17,7 @@ from typing import List, Optional
 
 from retexo.core.normalize import normalize
 
+
 @functools.lru_cache(maxsize=1)
 def _enclitic_exceptions() -> frozenset:
     """CLTK's curated list of words that only look as if they end in one."""
@@ -25,9 +26,11 @@ def _enclitic_exceptions() -> frozenset:
 
         from cltk.tokenizers.lat.lat import LatinWordTokenizer
 
-        default = inspect.signature(
-            LatinWordTokenizer.tokenize
-        ).parameters["enclitics_exceptions"].default
+        default = (
+            inspect.signature(LatinWordTokenizer.tokenize)
+            .parameters["enclitics_exceptions"]
+            .default
+        )
         return frozenset(w.lower() for w in default)
     except Exception:
         return frozenset()
@@ -44,26 +47,47 @@ MIN_ENCLITIC_STEM = 3
 #: Collatinus tag positions, decoded. ``-`` means the slot does not apply.
 _NUMBER = {"s": "sg", "p": "pl"}
 _TENSE = {"p": "pres", "i": "impf", "f": "fut", "r": "perf", "l": "plup", "t": "futp"}
-_MOOD = {"i": "ind", "s": "subj", "m": "imp", "n": "inf", "p": "part", "g": "ger",
-         "d": "gerv", "u": "sup"}
+_MOOD = {
+    "i": "ind",
+    "s": "subj",
+    "m": "imp",
+    "n": "inf",
+    "p": "part",
+    "g": "ger",
+    "d": "gerv",
+    "u": "sup",
+}
 _VOICE = {"a": "act", "p": "pass", "d": "dep"}
-_CASE = {"n": "nom", "v": "voc", "a": "acc", "g": "gen", "d": "dat", "b": "abl",
-         "l": "loc"}
+_CASE = {"n": "nom", "v": "voc", "a": "acc", "g": "gen", "d": "dat", "b": "abl", "l": "loc"}
+
 
 def _decode_tag(label: Optional[str]) -> Optional[str]:
     """Decode one positional Collatinus tag into a readable gloss."""
     if not label or len(label) < 9:
         return None
     person, number, tense, mood, voice, _gender, case = (
-        label[1], label[2], label[3], label[4], label[5], label[6], label[7]
+        label[1],
+        label[2],
+        label[3],
+        label[4],
+        label[5],
+        label[6],
+        label[7],
     )
     parts = []
     if person in "123":
         parts.append(person)
-    parts += [p for p in (
-        _NUMBER.get(number), _TENSE.get(tense), _MOOD.get(mood),
-        _VOICE.get(voice), _CASE.get(case),
-    ) if p]
+    parts += [
+        p
+        for p in (
+            _NUMBER.get(number),
+            _TENSE.get(tense),
+            _MOOD.get(mood),
+            _VOICE.get(voice),
+            _CASE.get(case),
+        )
+        if p
+    ]
     return ".".join(parts) + "." if parts else None
 
 

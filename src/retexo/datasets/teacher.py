@@ -17,11 +17,11 @@ passages, not pre-trimmed ones, and learns to name the framing itself.
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Sequence, Tuple
 
+from retexo.core.script import EditScript
 from retexo.datasets.localize import Localized
 from retexo.operations import EditOperation
-from retexo.core.script import EditScript
 
 
 class RelabellingTeacher:
@@ -70,39 +70,49 @@ class RelabellingTeacher:
         self._frame_writing(operations, 0, span.target_offset, target_tokens)
 
         for op in inner.operations:
-            operations.append(EditOperation(
-                op.tag,
-                tuple(i + span.source_offset for i in op.source_indices),
-                tuple(i + span.target_offset for i in op.target_indices),
-                op.source_tokens,
-                op.target_tokens,
-            ))
+            operations.append(
+                EditOperation(
+                    op.tag,
+                    tuple(i + span.source_offset for i in op.source_indices),
+                    tuple(i + span.target_offset for i in op.target_indices),
+                    op.source_tokens,
+                    op.target_tokens,
+                )
+            )
 
         fragment_end = span.target_offset + len(span.target)
         self._frame_writing(operations, fragment_end, len(target_tokens), target_tokens)
 
-        script = EditScript(
-            list(source_tokens), list(target_tokens), operations, inner.registry
-        )
+        script = EditScript(list(source_tokens), list(target_tokens), operations, inner.registry)
         return script, (span.target_offset, fragment_end)
 
     @staticmethod
     def _frame_writing(operations, begin: int, end: int, tokens) -> None:
         """Context in the reuse: one FRAME writing the span."""
         if end > begin:
-            operations.append(EditOperation(
-                "FRAME", (), tuple(range(begin, end)), (),
-                tuple(tokens[begin:end]),
-            ))
+            operations.append(
+                EditOperation(
+                    "FRAME",
+                    (),
+                    tuple(range(begin, end)),
+                    (),
+                    tuple(tokens[begin:end]),
+                )
+            )
 
     @staticmethod
     def _frame_consuming(operations, begin: int, end: int, tokens) -> None:
         """Context in the source: one FRAME consuming the span, writing nothing."""
         if end > begin:
-            operations.append(EditOperation(
-                "FRAME", tuple(range(begin, end)), (),
-                tuple(tokens[begin:end]), (),
-            ))
+            operations.append(
+                EditOperation(
+                    "FRAME",
+                    tuple(range(begin, end)),
+                    (),
+                    tuple(tokens[begin:end]),
+                    (),
+                )
+            )
 
     def _add_aligner_arrows(self, inner, span):
         """Convert resource-silent DEL+INS residue into arrows the aligner trusts.
@@ -114,17 +124,16 @@ class RelabellingTeacher:
         relation; the provenance is recorded in the run configuration rather
         than the tag.
         """
-        deleted = {i for op in inner.operations if op.tag == "DEL"
-                   for i in op.source_indices}
-        inserted = {j for op in inner.operations if op.tag == "INS"
-                    for j in op.target_indices}
+        deleted = {i for op in inner.operations if op.tag == "DEL" for i in op.source_indices}
+        inserted = {j for op in inner.operations if op.tag == "INS" for j in op.target_indices}
         if not deleted or not inserted:
             return inner
 
         src = sorted(deleted)
         tgt = sorted(inserted)
         matches = self.aligner.mutual_best(
-            [span.source[i] for i in src], [span.target[j] for j in tgt],
+            [span.source[i] for i in src],
+            [span.target[j] for j in tgt],
             threshold=self.aligner_threshold,
         )
         if not matches:
@@ -140,14 +149,16 @@ class RelabellingTeacher:
             if op.tag == "DEL" and op.source_indices[0] in convert:
                 i = op.source_indices[0]
                 j = convert[i]
-                operations.append(EditOperation(
-                    "SYN-DIST", (i,), (j,), (span.source[i],), (span.target[j],)
-                ))
+                operations.append(
+                    EditOperation("SYN-DIST", (i,), (j,), (span.source[i],), (span.target[j],))
+                )
             elif op.tag == "INS" and op.target_indices[0] in converted_targets:
                 continue
             else:
                 operations.append(op)
         return EditScript(
-            list(inner.source_tokens), list(inner.target_tokens), operations,
+            list(inner.source_tokens),
+            list(inner.target_tokens),
+            operations,
             inner.registry,
         )

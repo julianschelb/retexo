@@ -9,6 +9,7 @@ and the decoder; section 5 for the arms). The parts that already work --
 joint encoding, the factorised cell grid, both orientations, the pair head --
 are inherited from ``formulations.typed_pointer`` unchanged.
 """
+
 from __future__ import annotations
 
 from retexo.unified.decoder import Augment, CellGrid, DecoderConfig, StructuredDecoder

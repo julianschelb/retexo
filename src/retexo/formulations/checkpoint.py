@@ -62,15 +62,22 @@ class PointerCheckpoint:
             model._source_head.load_state_dict(heads["source_head"])
         if config.pointer:
             if "pointer_source" not in heads:
-                raise ValueError(f"{directory} was saved before pointer weights were kept; "
-                                 "its pointer would reload randomly initialised")
+                raise ValueError(
+                    f"{directory} was saved before pointer weights were kept; "
+                    "its pointer would reload randomly initialised"
+                )
             model._pointer_source.load_state_dict(heads["pointer_source"])
             model._pointer_target.load_state_dict(heads["pointer_target"])
             model._pointer_null.data = heads["pointer_null"].to(device)
             if "pointer_temperature" in heads:
                 model._pointer_temperature.data = heads["pointer_temperature"].to(device)
-        for name, key in (("_typer", "typer"), ("_typer_evidence", "typer_evidence"), ("_frame_head", "frame_head"),
-                          ("_loc_evidence", "loc_evidence"), ("_loc_mlp", "loc_mlp")):
+        for name, key in (
+            ("_typer", "typer"),
+            ("_typer_evidence", "typer_evidence"),
+            ("_frame_head", "frame_head"),
+            ("_loc_evidence", "loc_evidence"),
+            ("_loc_mlp", "loc_mlp"),
+        ):
             module = getattr(model, name, None)
             if module is not None and key in heads:
                 module.load_state_dict(heads[key])

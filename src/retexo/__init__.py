@@ -15,11 +15,13 @@ Scriba().verify(script, "uox faucibus haesit".split(), variant)   # True
 Scriba().execute(script.invert(), variant)                        # back to the source
 ```
 """
+
 from __future__ import annotations
 
 __version__ = "0.1.0"
 
 from retexo.core.builder import VariantBuilder
+from retexo.core.normalize import normalize
 from retexo.core.oracle import (
     Aligner,
     EditPlanOracle,
@@ -27,8 +29,8 @@ from retexo.core.oracle import (
     OptimalAligner,
     OracleConfig,
 )
-from retexo.resources import Resources
-from retexo.core.normalize import normalize
+from retexo.core.scriba import Scriba, Validity
+from retexo.core.script import CostModel, EditScript
 from retexo.operations import (
     ALL_OPERATIONS,
     EditOperation,
@@ -37,8 +39,7 @@ from retexo.operations import (
     OperationRegistry,
     Role,
 )
-from retexo.core.scriba import Scriba, Validity
-from retexo.core.script import CostModel, EditScript
+from retexo.resources import Resources
 
 __all__ = [
     "ALL_OPERATIONS",

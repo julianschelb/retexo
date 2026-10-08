@@ -6,14 +6,25 @@ from pathlib import Path
 import pytest
 
 from retexo.cli import main
-from retexo.export import LABELS, convert_record, export_folds, label_of, label_shares, read_predictions
+from retexo.export import (
+    LABELS,
+    convert_record,
+    export_folds,
+    label_of,
+    label_shares,
+    read_predictions,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "raw_predictions.jsonl"
 
 
 @pytest.fixture(scope="module")
 def raw():
-    return [json.loads(line) for line in FIXTURE.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        json.loads(line)
+        for line in FIXTURE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +55,9 @@ def test_every_reuse_word_is_linked_inserted_or_in_a_citing_formula(records):
 def test_deletions_are_the_source_words_no_link_claims(records):
     for record in records:
         claimed = {link["source"] for link in record["links"]}
-        assert record["deletions"] == [s for s in range(len(record["source"]["tokens"])) if s not in claimed]
+        assert record["deletions"] == [
+            s for s in range(len(record["source"]["tokens"])) if s not in claimed
+        ]
 
 
 def test_labels_are_the_five_link_labels_and_a_relation_only_on_substitutions(records):
@@ -64,8 +77,18 @@ def test_fixture_covers_split_merge_frame_and_a_named_relation(records):
 
 def test_no_gold_leaks_into_a_record(records):
     for record in records:
-        assert set(record) == {"id", "benchmark_id", "fold", "reference_type", "source", "reuse", "links", "frame",
-                               "insertions", "deletions"}
+        assert set(record) == {
+            "id",
+            "benchmark_id",
+            "fold",
+            "reference_type",
+            "source",
+            "reuse",
+            "links",
+            "frame",
+            "insertions",
+            "deletions",
+        }
         assert set(record["source"]) == {"author", "work", "citation", "tokens"}
 
 
@@ -99,7 +122,9 @@ def _per_fold_files(raw, folder):
     out = []
     for fold, rows in sorted(paths.items()):
         path = folder / f"raw_f{fold}.jsonl"
-        path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+        path.write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8"
+        )
         out.append(path)
     return out
 
@@ -107,10 +132,14 @@ def _per_fold_files(raw, folder):
 def test_export_writes_one_file_per_fold_and_the_cli_does_the_same(tmp_path, raw, records):
     sources = _per_fold_files(raw, tmp_path)
     counts = export_folds(sources, tmp_path / "a")
-    assert counts == {f: sum(1 for r in records if r["fold"] == f) for f in sorted({r["fold"] for r in records})}
+    assert counts == {
+        f: sum(1 for r in records if r["fold"] == f) for f in sorted({r["fold"] for r in records})
+    }
     fold = next(iter(counts))
     lines = (tmp_path / "a" / f"fold_{fold}.jsonl").read_text(encoding="utf-8").splitlines()
-    assert [json.loads(line)["id"] for line in lines] == [r["id"] for r in records if r["fold"] == fold]
+    assert [json.loads(line)["id"] for line in lines] == [
+        r["id"] for r in records if r["fold"] == fold
+    ]
     assert main(["export", *map(str, sources), "--out", str(tmp_path / "b")]) == 0
     assert (tmp_path / "b" / f"fold_{fold}.jsonl").exists()
 

@@ -9,8 +9,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retexo.unified import (FRAME, INS, QUOTE, Augment, CellGrid, DecoderConfig, Run,  # noqa: E402
-                                Segmentation, StructuredDecoder, gate_log_probs, gate_loss, gate_targets)
+from retexo.unified import (  # noqa: E402
+    FRAME,
+    INS,
+    QUOTE,
+    Augment,
+    CellGrid,
+    DecoderConfig,
+    Run,
+    Segmentation,
+    StructuredDecoder,
+    gate_log_probs,
+    gate_loss,
+    gate_targets,
+)
 
 LOW = math.log(0.01)
 HIGH = math.log(0.9)
@@ -39,7 +51,7 @@ def test_from_links_reads_the_notebook_pair_into_three_runs():
 
 
 def test_from_links_breaks_a_run_at_a_gap_and_at_a_crossing():
-    links = [0, 1, 3, 4, 2]              # 0-1 contiguous, 3-4 contiguous, then back to 2
+    links = [0, 1, 3, 4, 2]  # 0-1 contiguous, 3-4 contiguous, then back to 2
     seg = Segmentation.from_links(links)
     assert [r.source_start for r in seg.runs] == [0, 3, 2]
     assert [r.length for r in seg.runs] == [2, 2, 1]
@@ -51,7 +63,7 @@ def test_segmentation_must_tile_the_reuse():
     with pytest.raises(ValueError):
         Segmentation([Run(0, 2, INS), Run(3, 4, INS)], 4)
     with pytest.raises(ValueError):
-        Segmentation([Run(0, 2, QUOTE)], 2)     # a quote needs a source_start
+        Segmentation([Run(0, 2, QUOTE)], 2)  # a quote needs a source_start
 
 
 # =============================================================================
@@ -61,13 +73,15 @@ def test_segmentation_must_tile_the_reuse():
 
 def test_decoder_keeps_a_quotation_together_against_a_stray_cell():
     # reuse words 0..3 come from source 0..3; word 2 also has a slightly *higher* cell at source 7
-    cells = [[0.6, 0, 0, 0, 0, 0, 0, 0],
-             [0, 0.6, 0, 0, 0, 0, 0, 0],
-             [0, 0, 0.5, 0, 0, 0, 0, 0.55],
-             [0, 0, 0, 0.6, 0, 0, 0, 0]]
+    cells = [
+        [0.6, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0.6, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0.5, 0, 0, 0, 0, 0.55],
+        [0, 0, 0, 0.6, 0, 0, 0, 0],
+    ]
     g = grid(cells, ins=[0.1] * 4, frame=[0.01] * 4)
     seg = StructuredDecoder(DecoderConfig(contiguity=0.5, crossing=1.0)).decode(g)
-    assert seg.links() == [0, 1, 2, 3]          # the per-word argmax would send word 2 to source 7
+    assert seg.links() == [0, 1, 2, 3]  # the per-word argmax would send word 2 to source 7
     assert len(seg.runs) == 1 and seg.runs[0].kind == QUOTE
 
 
@@ -137,7 +151,7 @@ def test_margin_is_zero_when_the_gold_wins_by_more_than_the_margin():
     decoder = StructuredDecoder(DecoderConfig(contiguity=0.0, cost=0.5))
     gold = Segmentation.from_links([0, 1])
     wrong = decoder.loss_augmented(g, gold)
-    assert wrong == gold                         # nothing wrong comes within the cost of the gold
+    assert wrong == gold  # nothing wrong comes within the cost of the gold
     assert decoder.margin_loss(g, gold, wrong) == 0.0
 
 
@@ -145,7 +159,7 @@ def test_augment_charges_exactly_the_disagreements():
     gold = Segmentation.from_links([0, -1, -1], frame=[0, 1, 0])
     a = Augment.against(gold)
     assert a.cell(0, 0) == 0.0 and a.cell(0, 1) == 1.0
-    assert a.null(0, INS) == 1.0                 # word 0 is linked in the gold
+    assert a.null(0, INS) == 1.0  # word 0 is linked in the gold
     assert a.null(1, FRAME) == 0.0 and a.null(1, INS) == 1.0
     assert a.null(2, INS) == 0.0 and a.null(2, FRAME) == 1.0
 
@@ -156,8 +170,13 @@ def test_margin_loss_backpropagates_through_a_tensor_grid():
     logits = torch.tensor([[0.0, 0.0, 2.0, 1.5], [0.0, 0.0, 1.5, 2.0]], requires_grad=True)
     log_soft = torch.log_softmax(logits, dim=-1)
     live = CellGrid(log_soft[:, 2:], log_soft[:, 0], log_soft[:, 1], 2, 2)
-    frozen = CellGrid(log_soft[:, 2:].detach().tolist(), log_soft[:, 0].detach().tolist(),
-                      log_soft[:, 1].detach().tolist(), 2, 2)
+    frozen = CellGrid(
+        log_soft[:, 2:].detach().tolist(),
+        log_soft[:, 0].detach().tolist(),
+        log_soft[:, 1].detach().tolist(),
+        2,
+        2,
+    )
     decoder = StructuredDecoder(DecoderConfig(contiguity=0.0, cost=2.0))
     gold = Segmentation.from_links([0, 1])
     wrong = decoder.loss_augmented(frozen, gold)
@@ -175,13 +194,13 @@ def test_margin_loss_backpropagates_through_a_tensor_grid():
 def test_gate_log_probs_factorises_the_location_row():
     import torch
 
-    loc_flat = torch.tensor([[0.0, 0.0, 3.0, 1.0, 1.0]])           # nulls, then 3 source columns
-    gate = torch.log(torch.tensor([[0.5, 0.3, 0.2]]))               # reused / not / frame
+    loc_flat = torch.tensor([[0.0, 0.0, 3.0, 1.0, 1.0]])  # nulls, then 3 source columns
+    gate = torch.log(torch.tensor([[0.5, 0.3, 0.2]]))  # reused / not / frame
     out = gate_log_probs(loc_flat, gate)
     p = torch.softmax(out, dim=-1)[0]
     assert abs(p[0].item() - 0.3) < 1e-5 and abs(p[1].item() - 0.2) < 1e-5
     assert abs(p[2:].sum().item() - 0.5) < 1e-5
-    assert p[2] > p[3] and abs(p[3].item() - p[4].item()) < 1e-6   # column ranking kept
+    assert p[2] > p[3] and abs(p[3].item() - p[4].item()) < 1e-6  # column ranking kept
 
 
 def test_gate_log_probs_with_no_source_columns_keeps_mass_on_the_nulls():
@@ -196,8 +215,13 @@ def test_gate_log_probs_with_no_source_columns_keeps_mass_on_the_nulls():
 
 def test_gate_targets_follow_the_gold():
     allowed = gate_targets([3, -1, -1, -1, -100], [0, 1, 0, -100, 0])
-    assert allowed == [[True, False, False], [False, False, True], [False, True, False],
-                       [False, True, True], [False, False, False]]
+    assert allowed == [
+        [True, False, False],
+        [False, False, True],
+        [False, True, False],
+        [False, True, True],
+        [False, False, False],
+    ]
 
 
 def test_gate_loss_prefers_logits_that_put_mass_on_the_allowed_class():
@@ -213,11 +237,12 @@ def test_gate_loss_prefers_logits_that_put_mass_on_the_allowed_class():
 def test_gate_log_probs_backward_is_finite_with_a_candidate_free_row():
     import torch
 
-    loc_flat = torch.tensor([[1.0, 0.0, float("-inf"), float("-inf")],
-                             [0.0, 0.0, 2.0, 1.0]], requires_grad=False)
+    loc_flat = torch.tensor(
+        [[1.0, 0.0, float("-inf"), float("-inf")], [0.0, 0.0, 2.0, 1.0]], requires_grad=False
+    )
     gate = torch.zeros((2, 3), requires_grad=True)
     out = gate_log_probs(loc_flat, gate)
-    loss = -(out[0, 0] + out[1, 2])          # a null on the first row, a source on the second
+    loss = -(out[0, 0] + out[1, 2])  # a null on the first row, a source on the second
     loss.backward()
     assert torch.isfinite(gate.grad).all()
 
@@ -225,13 +250,18 @@ def test_gate_log_probs_backward_is_finite_with_a_candidate_free_row():
 def test_resolve_overlaps_catches_a_clash_with_a_non_adjacent_earlier_run():
     # run A: words 0-1 <- source 0-1; a null run; run B: words 3-4 <- source 4-5;
     # run C: words 5-6 <- source 0-1 again (clashes with A, two runs back)
-    cells = [[0.9, 0, 0, 0, 0, 0], [0, 0.9, 0, 0, 0, 0],
-             [0.01] * 6,
-             [0, 0, 0, 0, 0.9, 0], [0, 0, 0, 0, 0, 0.9],
-             [0.6, 0, 0, 0, 0, 0], [0, 0.6, 0, 0, 0, 0]]
+    cells = [
+        [0.9, 0, 0, 0, 0, 0],
+        [0, 0.9, 0, 0, 0, 0],
+        [0.01] * 6,
+        [0, 0, 0, 0, 0.9, 0],
+        [0, 0, 0, 0, 0, 0.9],
+        [0.6, 0, 0, 0, 0, 0],
+        [0, 0.6, 0, 0, 0, 0],
+    ]
     g = grid(cells, ins=[0.05, 0.05, 0.9, 0.05, 0.05, 0.3, 0.3], frame=[0.001] * 7)
     seg = StructuredDecoder(DecoderConfig(crossing=0.0)).decode(g)
-    assert seg.links() == [0, 1, -1, 4, 5, -1, -1]      # C lost to A, the stronger run
+    assert seg.links() == [0, 1, -1, 4, 5, -1, -1]  # C lost to A, the stronger run
 
 
 def test_decoder_does_not_buy_a_crossing_overlap_with_a_junk_link():
@@ -241,9 +271,15 @@ def test_decoder_does_not_buy_a_crossing_overlap_with_a_junk_link():
     # against the previous run would link word 4 to the junk cell (a new
     # state), then land words 5-6 on source 0-1 as a crossing run, and the
     # overlap repair would strip the run but leave the junk link behind.
-    cells = [[0.9, 0, 0, 0, 0, 0], [0, 0.9, 0, 0, 0, 0], [0, 0, 0.9, 0, 0, 0], [0, 0, 0, 0.9, 0, 0],
-             [0.0005, 0, 0, 0, 0, 0.001],
-             [0.9, 0, 0, 0, 0, 0], [0, 0.9, 0, 0, 0, 0]]
+    cells = [
+        [0.9, 0, 0, 0, 0, 0],
+        [0, 0.9, 0, 0, 0, 0],
+        [0, 0, 0.9, 0, 0, 0],
+        [0, 0, 0, 0.9, 0, 0],
+        [0.0005, 0, 0, 0, 0, 0.001],
+        [0.9, 0, 0, 0, 0, 0],
+        [0, 0.9, 0, 0, 0, 0],
+    ]
     g = grid(cells, ins=[0.05, 0.05, 0.05, 0.05, 0.96, 0.005, 0.005], frame=[0.001] * 7)
     seg = StructuredDecoder(DecoderConfig(crossing=1.0)).decode(g)
     assert seg.links() == [0, 1, 2, 3, -1, -1, -1]
@@ -252,4 +288,12 @@ def test_decoder_does_not_buy_a_crossing_overlap_with_a_junk_link():
     cells = [row + [0, 0] for row in cells]
     cells[5], cells[6] = [0] * 6 + [0.9, 0], [0] * 6 + [0, 0.9]
     g = grid(cells, ins=[0.05, 0.05, 0.05, 0.05, 0.96, 0.005, 0.005], frame=[0.001] * 7)
-    assert StructuredDecoder(DecoderConfig(crossing=1.0)).decode(g).links() == [0, 1, 2, 3, -1, 6, 7]
+    assert StructuredDecoder(DecoderConfig(crossing=1.0)).decode(g).links() == [
+        0,
+        1,
+        2,
+        3,
+        -1,
+        6,
+        7,
+    ]

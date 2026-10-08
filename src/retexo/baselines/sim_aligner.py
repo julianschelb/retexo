@@ -77,7 +77,9 @@ class Embedder:
         ```
     """
 
-    def __init__(self, model_name: str, *, layer: int = LAYER, device: str = "cpu", max_length: int = 256):
+    def __init__(
+        self, model_name: str, *, layer: int = LAYER, device: str = "cpu", max_length: int = 256
+    ):
         self.model_name = model_name
         self.layer = layer
         self.device = device
@@ -101,18 +103,24 @@ class Embedder:
         self._model = AutoModel.from_pretrained(self.model_name).to(self.device).eval()
         if self.is_latin_bert:
             from locisimiles.tokenization.latin_bert import SubwordTextEncoder
+
             from retexo.formulations.pair_encoding import latin_bert_vocab
 
             self._latin_encoder = SubwordTextEncoder.from_file(latin_bert_vocab(self.model_name))
-            self._specials = {s: i for i, s in enumerate(self._latin_encoder._subtokens)
-                              if s in ("[CLS]", "[SEP]")}
+            self._specials = {
+                s: i
+                for i, s in enumerate(self._latin_encoder._subtokens)
+                if s in ("[CLS]", "[SEP]")
+            }
         else:
             from transformers import AutoTokenizer
 
             try:
                 # RoBERTa-style byte-level BPE (LaBerta, XLM-R) refuse pre-tokenized
                 # input without this; inert on every other tokenizer.
-                self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, add_prefix_space=True)
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_name, add_prefix_space=True
+                )
             except (TypeError, ValueError):
                 self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
@@ -124,14 +132,16 @@ class Embedder:
         self._ensure_backend()
         if not words:
             return self.torch.zeros((0, self._model.config.hidden_size), device=self.device)
-        return self._encode_latin_bert(words, grad) if self.is_latin_bert else self._encode_huggingface(words, grad)
+        return (
+            self._encode_latin_bert(words, grad)
+            if self.is_latin_bert
+            else self._encode_huggingface(words, grad)
+        )
 
     def _context(self, grad: bool):
         return self.torch.enable_grad() if grad else self.torch.no_grad()
 
     def _encode_latin_bert(self, words: Sequence[str], grad: bool = False):
-        from retexo.core.normalize import normalize
-
         torch = self.torch
         ids = [self._specials["[CLS]"]]
         spans = []
@@ -145,17 +155,26 @@ class Embedder:
         ids = ids[: self.max_length]
         spans = [(a, b) for a, b in spans if b <= len(ids)]
         with self._context(grad):
-            out = self._model(input_ids=torch.tensor([ids], device=self.device), output_hidden_states=True)
+            out = self._model(
+                input_ids=torch.tensor([ids], device=self.device), output_hidden_states=True
+            )
         hidden = out.hidden_states[self.layer][0]
         return torch.stack([hidden[a:b].mean(0) for a, b in spans]) if spans else hidden[:0]
 
     def _encode_huggingface(self, words: Sequence[str], grad: bool = False):
         torch = self.torch
-        batch = self._tokenizer([list(words)], is_split_into_words=True, truncation=True,
-                                max_length=self.max_length, return_tensors="pt")
+        batch = self._tokenizer(
+            [list(words)],
+            is_split_into_words=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
         word_ids = batch.word_ids(0)
         with self._context(grad):
-            out = self._model(**{k: v.to(self.device) for k, v in batch.items()}, output_hidden_states=True)
+            out = self._model(
+                **{k: v.to(self.device) for k, v in batch.items()}, output_hidden_states=True
+            )
         hidden = out.hidden_states[self.layer][0]
         spans: Dict[int, List[int]] = {}
         for position, word in enumerate(word_ids):
@@ -173,14 +192,26 @@ class Embedder:
 
         if self._pair_encoder is None:
             self._pair_encoder = PairEncoder.build(self.model_name)
-        batch, reuse_spans = self._pair_encoder.encode([(list(source_words), list(reuse_words))], self.max_length)
+        batch, reuse_spans = self._pair_encoder.encode(
+            [(list(source_words), list(reuse_words))], self.max_length
+        )
         source_spans = self._pair_encoder.last_source_spans[0]
         torch = self.torch
         with torch.no_grad():
-            out = self._model(**{k: v.to(self.device) for k, v in batch.items()}, output_hidden_states=True)
+            out = self._model(
+                **{k: v.to(self.device) for k, v in batch.items()}, output_hidden_states=True
+            )
         hidden = out.hidden_states[self.layer][0]
-        source_vectors = torch.stack([hidden[a:b].mean(0) for a, b in source_spans]) if source_spans else hidden[:0]
-        reuse_vectors = torch.stack([hidden[a:b].mean(0) for a, b in reuse_spans[0]]) if reuse_spans[0] else hidden[:0]
+        source_vectors = (
+            torch.stack([hidden[a:b].mean(0) for a, b in source_spans])
+            if source_spans
+            else hidden[:0]
+        )
+        reuse_vectors = (
+            torch.stack([hidden[a:b].mean(0) for a, b in reuse_spans[0]])
+            if reuse_spans[0]
+            else hidden[:0]
+        )
         return source_vectors, reuse_vectors
 
 
@@ -218,7 +249,9 @@ class SimilarityMatrix:
         self.normalise = normalise
 
     @classmethod
-    def of(cls, source_vectors, reuse_vectors, *, sim: str = "dot", normalise: bool = True) -> "SimilarityMatrix":
+    def of(
+        cls, source_vectors, reuse_vectors, *, sim: str = "dot", normalise: bool = True
+    ) -> SimilarityMatrix:
         source = _as_numpy(source_vectors)
         reuse = _as_numpy(reuse_vectors)
         if sim == "cos":
@@ -253,14 +286,19 @@ class SimilarityMatrix:
         else:
             weights = (matrix + 1.0) / 2.0
             if not self.normalise:
-                return [sorted(((s, float(p)) for s, p in enumerate(row)), key=lambda x: -x[1]) for row in weights]
+                return [
+                    sorted(((s, float(p)) for s, p in enumerate(row)), key=lambda x: -x[1])
+                    for row in weights
+                ]
         totals = np.clip(weights.sum(axis=1, keepdims=True), 1e-12, None)
         probs = weights / totals
-        return [sorted(((s, float(p)) for s, p in enumerate(row)), key=lambda x: -x[1]) for row in probs]
+        return [
+            sorted(((s, float(p)) for s, p in enumerate(row)), key=lambda x: -x[1]) for row in probs
+        ]
 
     # ---------- distortion and Itermax ----------
 
-    def distorted(self, kappa: float) -> "SimilarityMatrix":
+    def distorted(self, kappa: float) -> SimilarityMatrix:
         """SimAlign's distortion (section 2.2): fade a match by how far it sits off the diagonal."""
         if kappa == 0.0 or self.values.size == 0:
             return self
@@ -279,13 +317,16 @@ class SimilarityMatrix:
         for _ in range(n_max):
             row_aligned = np.array([t in aligned_t for t in range(self.n_reuse)])[:, None]
             col_aligned = np.array([s in aligned_s for s in range(self.n_source)])[None, :]
-            mask = np.where(row_aligned & col_aligned, 0.0, np.where(row_aligned | col_aligned, alpha, 1.0))
+            mask = np.where(
+                row_aligned & col_aligned, 0.0, np.where(row_aligned | col_aligned, alpha, 1.0)
+            )
             new_pairs = self._mutual_best(self.values * mask) - pairs
             if not new_pairs:
                 break
             pairs |= new_pairs
             for t, s in new_pairs:
-                aligned_t.add(t); aligned_s.add(s)
+                aligned_t.add(t)
+                aligned_s.add(s)
         return pairs
 
     @staticmethod
@@ -293,7 +334,9 @@ class SimilarityMatrix:
         """Pairs that are each other's best; a zero row or column links nothing."""
         row_best = matrix.argmax(axis=1)
         col_best = matrix.argmax(axis=0)
-        return {(t, int(s)) for t, s in enumerate(row_best) if matrix[t, s] > 0 and col_best[s] == t}
+        return {
+            (t, int(s)) for t, s in enumerate(row_best) if matrix[t, s] > 0 and col_best[s] == t
+        }
 
 
 def _as_numpy(vectors) -> np.ndarray:
@@ -340,9 +383,12 @@ class SimAligner(Baseline):
     def __init__(self, cfg: BaselineConfig):
         super().__init__(cfg)
         model_name = str(cfg.extra.get("model", "latin_bert"))
-        self.embedder = Embedder(MODEL_PRESETS.get(model_name, model_name),
-                                 layer=int(cfg.extra.get("layer", LAYER)), device=cfg.device,
-                                 max_length=cfg.max_length)
+        self.embedder = Embedder(
+            MODEL_PRESETS.get(model_name, model_name),
+            layer=int(cfg.extra.get("layer", LAYER)),
+            device=cfg.device,
+            max_length=cfg.max_length,
+        )
         self.sim = str(cfg.extra.get("sim", "dot"))
         self.normalise = bool(int(cfg.extra.get("norm", 1)))
         self.joint = bool(int(cfg.extra.get("joint", 0)))
@@ -363,7 +409,9 @@ class SimAligner(Baseline):
             if not matrix.n_reuse or not matrix.n_source:
                 continue
             kept = AgreementDecoder.mutual_argmax(matrix.rows(), matrix.rev_rows())
-            entropies.extend(AgreementDecoder.entropy(row) for row in kept if row and row[0][0] >= 0)
+            entropies.extend(
+                AgreementDecoder.entropy(row) for row in kept if row and row[0][0] >= 0
+            )
         self.entropy_tau = float(np.percentile(entropies, 95)) if entropies else None
         if log:
             log(f"[sim_aligner] entropy tau tuned on dev: {self.entropy_tau}")
@@ -373,11 +421,15 @@ class SimAligner(Baseline):
 
     def _matrix(self, record: Record) -> SimilarityMatrix:
         if self.joint:
-            source_vectors, reuse_vectors = self.embedder.encode_pair(record.source_tokens, record.reuse_tokens)
+            source_vectors, reuse_vectors = self.embedder.encode_pair(
+                record.source_tokens, record.reuse_tokens
+            )
         else:
             source_vectors = self.embedder.encode(record.source_tokens)
             reuse_vectors = self.embedder.encode(record.reuse_tokens)
-        matrix = SimilarityMatrix.of(source_vectors, reuse_vectors, sim=self.sim, normalise=self.normalise)
+        matrix = SimilarityMatrix.of(
+            source_vectors, reuse_vectors, sim=self.sim, normalise=self.normalise
+        )
         return matrix.distorted(self.kappa)
 
     def predict(self, records: List[Record]) -> List[Prediction]:
@@ -393,7 +445,10 @@ class SimAligner(Baseline):
                 rows = AgreementDecoder.entropy_filter(rows, rev_rows, self.entropy_tau)
             pred.scores, pred.rev_scores = rows, rev_rows
             if self.extract == "itermax":
-                n_max, alpha = int(self.cfg.extra.get("n_max", 2)), float(self.cfg.extra.get("alpha", 0.9))
+                n_max, alpha = (
+                    int(self.cfg.extra.get("n_max", 2)),
+                    float(self.cfg.extra.get("alpha", 0.9)),
+                )
                 pred.meta["itermax_links"] = {t: s for t, s in matrix.itermax(n_max, alpha)}
             out.append(pred)
         return out
@@ -405,8 +460,13 @@ class SimAligner(Baseline):
 
             mapping = pred.meta.pop("itermax_links")
             pred.links = [mapping.get(t, -1) for t in range(record.n_reuse)]
-            return PredictionAdapter.type_prediction(pred, record, self.typer, self.featurizer,
-                                                     frame_rule=str(dials.get("frame_rule", "keyword")))
+            return PredictionAdapter.type_prediction(
+                pred,
+                record,
+                self.typer,
+                self.featurizer,
+                frame_rule=str(dials.get("frame_rule", "keyword")),
+            )
         return super().postprocess(record, pred, dials)
 
 
@@ -443,7 +503,7 @@ class FineTunedSimAligner(SimAligner):
         super().__init__(cfg)
         self.temperature = float(cfg.extra.get("temperature", 0.1))
         self.pairs_per_step = int(cfg.extra.get("pairs_per_step", 16))
-        self.max_epochs = int(cfg.extra.get("epochs", 3))            # without early stopping
+        self.max_epochs = int(cfg.extra.get("epochs", 3))  # without early stopping
 
     def modules(self) -> Dict[str, object]:
         return {"encoder": self.embedder._model}
@@ -465,9 +525,15 @@ class FineTunedSimAligner(SimAligner):
         if not links or not record.source_tokens or not record.reuse_tokens:
             return None
         torch = self.embedder.torch
-        source = torch.nn.functional.normalize(self.embedder.encode(record.source_tokens, grad=True), dim=-1)
-        reuse = torch.nn.functional.normalize(self.embedder.encode(record.reuse_tokens, grad=True), dim=-1)
-        links = [(r, s) for r, s in links if r < reuse.shape[0] and s < source.shape[0]]    # truncated passages
+        source = torch.nn.functional.normalize(
+            self.embedder.encode(record.source_tokens, grad=True), dim=-1
+        )
+        reuse = torch.nn.functional.normalize(
+            self.embedder.encode(record.reuse_tokens, grad=True), dim=-1
+        )
+        links = [
+            (r, s) for r, s in links if r < reuse.shape[0] and s < source.shape[0]
+        ]  # truncated passages
         if not links:
             return None
         logits = reuse @ source.T / self.temperature
@@ -477,8 +543,9 @@ class FineTunedSimAligner(SimAligner):
         backward = torch.nn.functional.cross_entropy(logits.T[cols], rows)
         return (forward + backward) / 2
 
-    def fit(self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
-            ) -> "FineTunedSimAligner":
+    def fit(
+        self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
+    ) -> FineTunedSimAligner:
         import random
 
         from retexo.baselines.early_stopping import EarlyStopping
@@ -505,18 +572,30 @@ class FineTunedSimAligner(SimAligner):
                     pending.append(loss)
                 if pending and (len(pending) >= self.pairs_per_step or i == len(records)):
                     step = torch.stack(pending).mean()
-                    optimizer.zero_grad(); step.backward(); optimizer.step()
-                    total += float(step.detach()); n += 1; pending = []
+                    optimizer.zero_grad()
+                    step.backward()
+                    optimizer.step()
+                    total += float(step.detach())
+                    n += 1
+                    pending = []
                     if on_batch is not None:
                         on_batch(i, len(records))
                         model.train()
             model.eval()
             if log:
-                log(f"[sim_aligner_ft] epoch {label}: loss {total / max(n, 1):.4f} ({len(records)} pairs)")
+                log(
+                    f"[sim_aligner_ft] epoch {label}: loss {total / max(n, 1):.4f} ({len(records)} pairs)"
+                )
 
         monitor = stopper.monitor if stopper is not None else None
         if schedule is not None:
-            run_epoch(schedule.synthetic_epoch(), "synthetic", monitor.progress("synthetic", int(self.cfg.extra.get("synthetic_evals", 4))) if monitor else None)
+            run_epoch(
+                schedule.synthetic_epoch(),
+                "synthetic",
+                monitor.progress("synthetic", int(self.cfg.extra.get("synthetic_evals", 4)))
+                if monitor
+                else None,
+            )
             if monitor is not None:
                 monitor.evaluate("synthetic", fraction=1.0)
             if log:
@@ -531,4 +610,3 @@ class FineTunedSimAligner(SimAligner):
             stopper.release()
         model.eval()
         return self
-

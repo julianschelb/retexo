@@ -22,12 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
-from retexo.formulations.encoding import ScriptEncoder
-from retexo.formulations.base import FormulationConfig, ScriptExample, ScriptModel
-from retexo.operations import EditOperation, OperationRegistry, Role
-from retexo.datasets.parsing import ScriptParser
 from retexo.core.scriba import Scriba
 from retexo.core.script import EditScript
+from retexo.datasets.parsing import ScriptParser
+from retexo.formulations.base import FormulationConfig, ScriptExample, ScriptModel
+from retexo.formulations.encoding import ScriptEncoder
+from retexo.operations import EditOperation, OperationRegistry, Role
 
 # =============================================================================
 # Config
@@ -121,16 +121,12 @@ class Seq2SeqStepwiseModel(ScriptModel):
         tgt = ",".join(str(i) for i in op.target_indices) or "-"
         return f"{tag} {src}>{tgt} {' '.join(op.target_tokens)}".strip()
 
-    def _training_states(
-        self, example: ScriptExample
-    ) -> List[Tuple[str, str]]:
+    def _training_states(self, example: ScriptExample) -> List[Tuple[str, str]]:
         """Gold prefixes: at each step, what the gold script does next."""
         pairs = []
         operations = list(example.script.operations)
         for cut in range(len(operations)):
-            text = self._state_text(
-                example.source_tokens, example.target_tokens, operations[:cut]
-            )
+            text = self._state_text(example.source_tokens, example.target_tokens, operations[:cut])
             pairs.append(
                 (text, self._op_text(operations[cut], self.config.atomic_operation_tokens))
             )
@@ -144,7 +140,7 @@ class Seq2SeqStepwiseModel(ScriptModel):
 
     # ---------- Training ----------
 
-    def fit(self, train: Sequence[ScriptExample]) -> "Seq2SeqStepwiseModel":
+    def fit(self, train: Sequence[ScriptExample]) -> Seq2SeqStepwiseModel:
         """Train one step at a time, on gold prefixes or on the model's own states.
 
         Raises:
@@ -186,12 +182,18 @@ class Seq2SeqStepwiseModel(ScriptModel):
             for start in range(0, len(states), self.config.batch_size):
                 chunk = states[start : start + self.config.batch_size]
                 inputs = self._tokenizer(
-                    [c[0] for c in chunk], padding=True, truncation=True,
-                    max_length=self.config.max_length, return_tensors="pt",
+                    [c[0] for c in chunk],
+                    padding=True,
+                    truncation=True,
+                    max_length=self.config.max_length,
+                    return_tensors="pt",
                 ).to(self.config.device)
                 labels = self._tokenizer(
-                    [c[1] for c in chunk], padding=True, truncation=True,
-                    max_length=32, return_tensors="pt",
+                    [c[1] for c in chunk],
+                    padding=True,
+                    truncation=True,
+                    max_length=32,
+                    return_tensors="pt",
                 ).input_ids.to(self.config.device)
                 labels[labels == self._tokenizer.pad_token_id] = -100
                 loss = self._model(**inputs, labels=labels).loss
@@ -219,7 +221,9 @@ class Seq2SeqStepwiseModel(ScriptModel):
         for _ in range(max_steps):
             text = self._state_text(source_tokens, target_tokens, prefix)
             encoded = self._tokenizer(
-                text, return_tensors="pt", truncation=True,
+                text,
+                return_tensors="pt",
+                truncation=True,
                 max_length=self.config.max_length,
             ).to(self.config.device)
             with torch.no_grad():
@@ -253,11 +257,9 @@ class Seq2SeqStepwiseModel(ScriptModel):
             return True
         written = {i for op in prefix for i in op.target_indices}
         consumed = {i for op in prefix for i in op.source_indices}
-        if any(i in written or i >= target_length for i in operation.target_indices):
-            return False
-        if any(i in consumed or i >= source_length for i in operation.source_indices):
-            return False
-        return True
+        return not any(
+            i in written or i >= target_length for i in operation.target_indices
+        ) and not any(i in consumed or i >= source_length for i in operation.source_indices)
 
     # ---------- Dynamic teacher ----------
 
@@ -290,12 +292,12 @@ class Seq2SeqStepwiseModel(ScriptModel):
     # ---------- Persistence ----------
 
     @classmethod
-    def load(cls, path: "Path") -> "Seq2SeqStepwiseModel":
+    def load(cls, path: Path) -> Seq2SeqStepwiseModel:
         """Reconstruct a saved step-wise model for inference."""
+        from pathlib import Path as _Path
+
         import torch  # noqa: F401
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-
-        from pathlib import Path as _Path
 
         path = _Path(path)
         model = cls(Seq2SeqStepwiseConfig(base_model=str(path), device="cpu"))

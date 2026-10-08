@@ -45,21 +45,26 @@ class State:
     source: List[int]
 
     @classmethod
-    def undecided(cls, n_reuse: int, n_source: int) -> "State":
+    def undecided(cls, n_reuse: int, n_source: int) -> State:
         """Pass one: nothing decided yet."""
         return cls([UNDECIDED] * n_reuse, [-1] * n_reuse, [S_UNDECIDED] * n_source)
 
     @classmethod
-    def from_script(cls, links: Sequence[int], frames: Optional[Sequence[int]], n_source: int) -> "State":
+    def from_script(
+        cls, links: Sequence[int], frames: Optional[Sequence[int]], n_source: int
+    ) -> State:
         """A decided state from links (and frame flags) -- a model's script or the gold."""
         reuse, link = [], []
         for t, s in enumerate(links):
             if s is not None and s >= 0:
-                reuse.append(LINKED); link.append(int(s))
+                reuse.append(LINKED)
+                link.append(int(s))
             elif frames is not None and t < len(frames) and frames[t]:
-                reuse.append(FRAME); link.append(-1)
+                reuse.append(FRAME)
+                link.append(-1)
             else:
-                reuse.append(DECLINED); link.append(-1)
+                reuse.append(DECLINED)
+                link.append(-1)
         used = {s for s in link if s >= 0}
         source = [S_CONSUMED if s in used else S_FREE for s in range(n_source)]
         return cls(reuse, link, source)
@@ -68,9 +73,15 @@ class State:
 
     @classmethod
     def corrupted(
-        cls, gold_links: Sequence[int], gold_frames: Optional[Sequence[int]], n_source: int,
-        rng: random.Random, *, flip: float = 0.2, add: float = 0.2,
-    ) -> "State":
+        cls,
+        gold_links: Sequence[int],
+        gold_frames: Optional[Sequence[int]],
+        n_source: int,
+        rng: random.Random,
+        *,
+        flip: float = 0.2,
+        add: float = 0.2,
+    ) -> State:
         """The gold script with a share of its links declined and as many false links
         added among the unlinked words (to a free source word), frames kept."""
         links = list(gold_links)
@@ -80,7 +91,9 @@ class State:
                 links[t] = -1
         n_add = int(round(add * len(linked)))
         free = [s for s in range(n_source) if s not in set(links)]
-        open_words = [t for t, s in enumerate(links) if s < 0 and not (gold_frames and gold_frames[t])]
+        open_words = [
+            t for t, s in enumerate(links) if s < 0 and not (gold_frames and gold_frames[t])
+        ]
         rng.shuffle(open_words)
         for t in open_words[:n_add]:
             if not free:
@@ -90,9 +103,13 @@ class State:
 
     @classmethod
     def chain(
-        cls, gold_links: Sequence[int], gold_frames: Optional[Sequence[int]], n_source: int,
-        tiers, stage: int,
-    ) -> "State":
+        cls,
+        gold_links: Sequence[int],
+        gold_frames: Optional[Sequence[int]],
+        n_source: int,
+        tiers,
+        stage: int,
+    ) -> State:
         """Easy-to-hard: stage 1 keeps only same-form links with a unique candidate
         (the verbatim skeleton), stage 2 adds every link the resources attest (form or
         lemma), stage 3 is the full gold. ``tiers`` is the [n_reuse, n_source] tier
@@ -115,13 +132,14 @@ class State:
                 continue
             keep = (best[t] == 4 and count[t] == 1) if stage == 1 else (best[t] >= 3)
             if keep:
-                reuse[t] = LINKED; link[t] = int(s)
+                reuse[t] = LINKED
+                link[t] = int(s)
         used = {s for s in link if s >= 0}
         source = [S_CONSUMED if s in used else S_UNDECIDED for s in range(n_source)]
         return cls(reuse, link, source)
 
     @classmethod
-    def sample_for_training(cls, example, mode: str, rng: random.Random, tiers=None) -> "State":
+    def sample_for_training(cls, example, mode: str, rng: random.Random, tiers=None) -> State:
         """One state for one training example: ``random`` corruption of the gold, or a
         stage of the ``chain`` drawn uniformly (0 = undecided, 1, 2, 3 = gold)."""
         n_t, n_s = len(example.target_tokens), len(example.source_tokens)

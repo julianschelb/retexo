@@ -2,6 +2,7 @@
 """The core object model: the replayable script, the oracle that derives one, the builder
 that constructs one, the checker that replays one, and the orthographic normalizer every
 comparison in the package goes through."""
+
 from __future__ import annotations
 
 from retexo.core.builder import VariantBuilder

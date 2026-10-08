@@ -8,23 +8,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from retexo.aligners.decode import ScriptDecoder  # noqa: E402
-from retexo.edit_typing.link_features import (FEATURE_NAMES, N_FEATURES,  # noqa: E402
-                                      LinkFeaturizer, SymbolicTyper)
 from retexo.core.scriba import Scriba  # noqa: E402
+from retexo.edit_typing.link_features import (  # noqa: E402
+    FEATURE_NAMES,
+    N_FEATURES,
+    LinkFeaturizer,
+    SymbolicTyper,
+)
 
 
 def test_reorder_is_the_lis_rule():
     # reuse order 0,1,2 -> sources 5,3,4: the first link crosses the other two
     assert ScriptDecoder.reordered_targets([5, 3, 4]) == {0}
     assert ScriptDecoder.reordered_targets([0, 1, 2]) == set()
-    assert ScriptDecoder.reordered_targets([-1, 2, -1, 1]) == {1} or ScriptDecoder.reordered_targets([-1, 2, -1, 1]) == {3}
+    assert ScriptDecoder.reordered_targets([-1, 2, -1, 1]) == {
+        1
+    } or ScriptDecoder.reordered_targets([-1, 2, -1, 1]) == {3}
     assert ScriptDecoder.reordered_targets([]) == set()
 
 
 def test_quote_needs_four_in_order_copies():
     tags = ["NOP"] * 6
     assert ScriptDecoder.quote_spans([0, 1, 2, 3, 4, 5], tags) == [(0, 5)]
-    assert ScriptDecoder.quote_spans([0, 1, 2, 4, 5, 6], tags) == []          # gap breaks it
+    assert ScriptDecoder.quote_spans([0, 1, 2, 4, 5, 6], tags) == []  # gap breaks it
     assert ScriptDecoder.quote_spans([0, 1, 2, 3, -1, 5], tags) == [(0, 3)]
     tags[2] = "MORPH"
     assert ScriptDecoder.quote_spans([0, 1, 2, 3, 4, 5], tags) == []
@@ -48,7 +54,7 @@ def test_decode_replays_and_prices():
     script = ScriptDecoder.decode_script(source, reuse, alignment, fine, frame)
     tags = [op.tag for op in script.operations]
     assert tags.count("FRAME") == 1 and tags.count("INS") == 1
-    assert "REORDER" in tags                      # haesit came out first
+    assert "REORDER" in tags  # haesit came out first
     assert script.cost() > 0
     assert Scriba().execute(script, source) == reuse
     view = ScriptDecoder.per_token_view(script)
@@ -72,7 +78,7 @@ def test_quote_stands_in_for_its_copies_and_replays():
     fine = ["INS", "INS"] + ["NOP"] * 6
     script = ScriptDecoder.decode_script(source, reuse, alignment, fine, [1, 1, 0, 0, 0, 0, 0, 0])
     tags = [op.tag for op in script.operations]
-    assert tags.count("QUOTE") == 1 and "NOP" not in tags   # one act, not six
+    assert tags.count("QUOTE") == 1 and "NOP" not in tags  # one act, not six
     assert Scriba().verify(script, source, reuse)
     view = ScriptDecoder.per_token_view(script)
     assert view["quote"] == [0, 0, 1, 1, 1, 1, 1, 1]
@@ -87,13 +93,16 @@ def test_frame_mask_cleaning():
 
 def test_evidence_veto_settles_definitions():
     import torch
+
     from retexo.formulations.change_detector import ChangeDetector
+
     index = {"NOP": 0, "MORPH": 1, "SYN": 2, "NE-SUB": 3, "SPLIT": 4, "MERGE": 5}
     logits = torch.zeros((3, 6))
     phi = torch.zeros((3, 23))
-    phi[0, 0] = 1                      # identical forms -> must be NOP
-    phi[1, 12] = 1                     # two names -> NE-SUB allowed
-    phi[2, 14] = 1; phi[2, 16] = 1     # enclitic on the source, stem matches -> SPLIT/MERGE allowed
+    phi[0, 0] = 1  # identical forms -> must be NOP
+    phi[1, 12] = 1  # two names -> NE-SUB allowed
+    phi[2, 14] = 1
+    phi[2, 16] = 1  # enclitic on the source, stem matches -> SPLIT/MERGE allowed
     out = ChangeDetector.evidence_veto(logits, phi, index)
     assert out[0].argmax().item() == 0 and torch.isinf(out[0, 1:]).all()
     assert torch.isinf(out[1, 0]) and not torch.isinf(out[1, 3]) and torch.isinf(out[1, 4])

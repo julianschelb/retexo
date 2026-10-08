@@ -31,7 +31,8 @@ def toy_corpus(n=200, monotone=False, seed=0):
         for i in range(len(t)):
             if rng.random() < 0.1:
                 t.insert(i, "ins")
-        src.append(s); tgt.append(t)
+        src.append(s)
+        tgt.append(t)
     return src, tgt
 
 
@@ -76,7 +77,10 @@ def test_empty_state_bookkeeping():
     corpus = em.Corpus(src, tgt)
     table = em.LexicalTable(corpus)
     em.IBM1(3).fit(corpus, table)
-    for p0, check in ((0.0, lambda null: null.max() < 1e-9), (1.0, lambda null: null.min() > 1 - 1e-9)):
+    for p0, check in (
+        (0.0, lambda null: null.max() < 1e-9),
+        (1.0, lambda null: null.min() > 1 - 1e-9),
+    ):
         hmm = em.HMMAligner(1, p0=p0)
         shape, pair_ids = next(iter(corpus.group_ids.items()))
         post, _ = hmm.posteriors(table, pair_ids)
@@ -89,16 +93,16 @@ def test_diagonal_prior():
     table = em.LexicalTable(corpus)
     em.IBM1(3).fit(corpus, table)
     shape, pair_ids = next(iter(corpus.group_ids.items()))
-    I = shape[0]
+    n_src = shape[0]
     # lambda = 0 with p0 = 1 / (I + 1) is exactly IBM1's uniform prior over the I + 1 positions
-    flat = em.DiagonalIBM2(1, p0=1.0 / (I + 1), tension=0.0, optimise_tension=False)
+    flat = em.DiagonalIBM2(1, p0=1.0 / (n_src + 1), tension=0.0, optimise_tension=False)
     ibm1 = em.IBM1(1)
     a, _ = flat.posteriors(table, pair_ids)
     b, _ = ibm1.posteriors(table, pair_ids)
     assert np.allclose(a, b, atol=1e-9)
     sharp = em.DiagonalIBM2(1, p0=0.0, tension=8.0, optimise_tension=False)
     prior = sharp.prior(10, 10)[1:]
-    j = 4                                   # target position 5 of 10, relative position 0.5
+    j = 4  # target position 5 of 10, relative position 0.5
     near = prior[3:6, j].sum()
     # lambda = 8 on a 10 x 10 pair: 1 + 2 exp(-0.8) over the sum of exp(-0.8 |d|), 0.73 within one position
     # (the note's 0.9 needs lambda about 16); the check is that the prior is sharp, not its exact value
@@ -106,7 +110,12 @@ def test_diagonal_prior():
     for m in range(1, 11):
         for n in range(1, 11):
             weights = np.exp(4.0 * em.DiagonalIBM2.h(m, n))
-            brute = np.array([sum(np.exp(4.0 * -abs((j + 1) / n - (i + 1) / m)) for i in range(m)) for j in range(n)])
+            brute = np.array(
+                [
+                    sum(np.exp(4.0 * -abs((j + 1) / n - (i + 1) / m)) for i in range(m))
+                    for j in range(n)
+                ]
+            )
             assert np.allclose(weights.sum(axis=0), brute, atol=1e-9)
 
 
@@ -123,16 +132,34 @@ def test_rows_and_hungarian():
 
 
 def test_lemma_stream():
-    rec = Record(id="t/1", level="gold", fold=4, source_work="", source_tokens=["Arma", "uirumque"], reuse_work="",
-                 reuse_tokens=["arma", "virum"], pair_label="cit", annotation={"lemma": ["arma", "uir"]})
-    assert em.lemma_stream(rec, "source") == ["arma", "uirumque"]      # no cached lemmas: normalised forms
+    rec = Record(
+        id="t/1",
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=["Arma", "uirumque"],
+        reuse_work="",
+        reuse_tokens=["arma", "virum"],
+        pair_label="cit",
+        annotation={"lemma": ["arma", "uir"]},
+    )
+    assert em.lemma_stream(rec, "source") == [
+        "arma",
+        "uirumque",
+    ]  # no cached lemmas: normalised forms
     assert em.lemma_stream(rec, "reuse") == ["arma", "uir"]
     assert em.lemma_stream(rec, "reuse", unit="form") == ["arma", "uirum"]
     # without cached lemmas the lemmatiser is asked; a silent lemmatiser falls back to the form; unit=form never asks
     lemmas = {"Arma": "arma", "uirumque": ""}.get
     assert em.lemma_stream(rec, "source", lemmatise=lemmas) == ["arma", "uirumque"]
-    assert em.lemma_stream(rec, "source", lemmatise=lambda w: "uir" if w == "uirumque" else "") == ["arma", "uir"]
-    assert em.lemma_stream(rec, "source", unit="form", lemmatise=lambda w: "x") == ["arma", "uirumque"]
+    assert em.lemma_stream(rec, "source", lemmatise=lambda w: "uir" if w == "uirumque" else "") == [
+        "arma",
+        "uir",
+    ]
+    assert em.lemma_stream(rec, "source", unit="form", lemmatise=lambda w: "x") == [
+        "arma",
+        "uirumque",
+    ]
 
 
 class _Lemmas:
@@ -143,10 +170,21 @@ class _Lemmas:
 
 
 def test_baseline_reads_featurizer_lemmas():
-    rec = Record(id="t/2", level="gold", fold=4, source_work="", source_tokens=["armis", "viro"], reuse_work="",
-                 reuse_tokens=["arma", "virum"], pair_label="cit")
+    rec = Record(
+        id="t/2",
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=["armis", "viro"],
+        reuse_work="",
+        reuse_tokens=["arma", "virum"],
+        pair_label="cit",
+    )
     method = em.EMAligner(BaselineConfig(device="cpu", extra={"model": "ibm1"}))
-    assert method.corpus_from([rec]) == ([["armis", "uiro"]], [["arma", "uirum"]])       # no featurizer: forms
+    assert method.corpus_from([rec]) == (
+        [["armis", "uiro"]],
+        [["arma", "uirum"]],
+    )  # no featurizer: forms
     method.featurizer = _Lemmas()
     assert method.corpus_from([rec]) == ([["arma", "uir"]], [["arma", "uir"]])
 
@@ -160,16 +198,31 @@ def test_identity_dictionary():
     corpus_s = [["rare1", "rare2", "et"], ["et", "x"], ["et", "y"]]
     corpus_t = [["rare2", "z", "et"], ["et", "x"], ["et", "y"]]
     plain = em.Direction("ibm1", {}).fit(corpus_s, corpus_t).predict(corpus_s[0], corpus_t[0])
-    assert abs(plain[1, 0] - plain[2, 0]) < 1e-9, plain[:, 0]          # without it: rare1 and rare2 tie
+    assert abs(plain[1, 0] - plain[2, 0]) < 1e-9, plain[:, 0]  # without it: rare1 and rare2 tie
     dict_s, dict_t = em.EMAligner.identity_dictionary(corpus_s, corpus_t, 1)
-    post = em.Direction("ibm1", {}).fit(corpus_s + dict_s, corpus_t + dict_t).predict(corpus_s[0], corpus_t[0])
-    assert post[2, 0] > 0.6 and post[2, 0] > 4 * post[1, 0], post[:, 0]   # with it: rare2 -> rare2
+    post = (
+        em.Direction("ibm1", {})
+        .fit(corpus_s + dict_s, corpus_t + dict_t)
+        .predict(corpus_s[0], corpus_t[0])
+    )
+    assert post[2, 0] > 0.6 and post[2, 0] > 4 * post[1, 0], post[:, 0]  # with it: rare2 -> rare2
 
 
 def test_baseline_both_directions_and_determinism():
     src, tgt = toy_corpus(n=120, monotone=True)
-    records = [Record(id=f"t/{i}", level="external", fold=-1, source_work="", source_tokens=s, reuse_work="",
-                      reuse_tokens=t, pair_label="unknown") for i, (s, t) in enumerate(zip(src, tgt))]
+    records = [
+        Record(
+            id=f"t/{i}",
+            level="external",
+            fold=-1,
+            source_work="",
+            source_tokens=s,
+            reuse_work="",
+            reuse_tokens=t,
+            pair_label="unknown",
+        )
+        for i, (s, t) in enumerate(zip(src, tgt))
+    ]
     cfg = BaselineConfig(device="cpu", extra={"model": "hmm", "unit": "form"})
     method = em.EMAligner(cfg).fit(records[:100], records[100:110], unlabeled=records[110:])
     pred = method.predict(records[110:111])[0]
@@ -178,7 +231,9 @@ def test_baseline_both_directions_and_determinism():
     for t, s in enumerate(fwd):
         if s >= 0 and records[110].reuse_tokens[t] != "ins":
             assert rev[s] == t, (t, s, rev)
-    again = em.EMAligner(BaselineConfig(device="cpu", extra={"model": "hmm", "unit": "form"})).fit(records[:100], records[100:110], unlabeled=records[110:])
+    again = em.EMAligner(BaselineConfig(device="cpu", extra={"model": "hmm", "unit": "form"})).fit(
+        records[:100], records[100:110], unlabeled=records[110:]
+    )
     assert np.allclose(method.forward.theta, again.forward.theta)
 
 

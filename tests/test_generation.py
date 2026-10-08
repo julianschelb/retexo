@@ -34,10 +34,14 @@ def contextual():
 def test_mock_realises_everything():
     generator = SyntheticGenerator(MockSubstitutionSource(), GenerationConfig())
     check("mock drops nothing", generator.dropped_tags() == [])
-    check("mock weights unchanged",
-          generator._usable_weights() == {
-              k: v / sum(generator.config.weights.values())
-              for k, v in generator.config.weights.items()})
+    check(
+        "mock weights unchanged",
+        generator._usable_weights()
+        == {
+            k: v / sum(generator.config.weights.values())
+            for k, v in generator.config.weights.items()
+        },
+    )
 
 
 def test_contextual_drops_wordnet_relations():
@@ -71,8 +75,7 @@ def test_sampled_tags_are_realisable():
     structural = {"INS", "DEL", "REORDER"}
     sampled = {generator._sample_tag(rng) for _ in range(400)}
     unrealisable = {
-        t for t in sampled
-        if t not in structural and not generator.substitutions.realises(t)
+        t for t in sampled if t not in structural and not generator.substitutions.realises(t)
     }
     check("never samples an unrealisable tag", not unrealisable)
 

@@ -45,13 +45,13 @@ def normalize(token: str, *, lowercase: bool = True, fold_ij_uv: bool = True) ->
 #: (gemination is left alone — *anus* is not *annus* — and archaic superlative
 #: *-umus* is not folded, since a general u/i fold would wreck the lexicon).
 _VARIANT_FOLDS = (
-    ("th", "t"),   # aspiration in Greek loans: Thure / ture
-    ("ph", "p"),   # Phoebus / Poebus
-    ("ch", "c"),   # Chalybes / Calybes
-    ("rh", "r"),   # Rhenus / Renus
-    ("y", "i"),    # Greek upsilon: Calybes / calibes
+    ("th", "t"),  # aspiration in Greek loans: Thure / ture
+    ("ph", "p"),  # Phoebus / Poebus
+    ("ch", "c"),  # Chalybes / Calybes
+    ("rh", "r"),  # Rhenus / Renus
+    ("y", "i"),  # Greek upsilon: Calybes / calibes
     ("ngue", "nge"),  # variant verb stems: tinguere / tingere -- kept this
-                      # narrow so *anguis* (snake) is not merged with *angis*
+    # narrow so *anguis* (snake) is not merged with *angis*
     ("np", "mp"),  # unassimilated nasals: inpare / impare
     ("nb", "mb"),  # inbellis / imbellis
 )

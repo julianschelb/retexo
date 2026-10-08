@@ -36,8 +36,8 @@ import re
 from typing import ClassVar, Dict, List, Optional, Sequence, Set, Tuple
 
 from retexo.core.normalize import normalize
-from retexo.operations import EditOperation, OperationRegistry
 from retexo.core.script import EditScript
+from retexo.operations import EditOperation, OperationRegistry
 
 
 class ScriptDecoder:
@@ -54,9 +54,21 @@ class ScriptDecoder:
 
     #: Fine tags the typer may emit for a link. Anything else is treated as a
     #: plain substitution.
-    LINK_TAGS: ClassVar[Tuple[str, ...]] = ("NOP", "MORPH", "SYN", "HYPER", "HYPO", "ANT", "SYN-DIST",
-                                            "NE-SUB", "POS", "SPLIT", "MERGE",
-                                            "FORM", "SENSE")        # E31 group-level back-offs
+    LINK_TAGS: ClassVar[Tuple[str, ...]] = (
+        "NOP",
+        "MORPH",
+        "SYN",
+        "HYPER",
+        "HYPO",
+        "ANT",
+        "SYN-DIST",
+        "NE-SUB",
+        "POS",
+        "SPLIT",
+        "MERGE",
+        "FORM",
+        "SENSE",
+    )  # E31 group-level back-offs
 
     #: Tags that count as "the word was reworked" when looking for ADAPT regions.
     SUBSTITUTION_TAGS: ClassVar[frozenset] = frozenset(t for t in LINK_TAGS if t not in ("NOP",))
@@ -79,9 +91,11 @@ class ScriptDecoder:
         for position, value in enumerate(values):
             slot = bisect.bisect_left(tails, value)
             if slot == len(tails):
-                tails.append(value); tail_positions.append(position)
+                tails.append(value)
+                tail_positions.append(position)
             else:
-                tails[slot] = value; tail_positions[slot] = position
+                tails[slot] = value
+                tail_positions[slot] = position
             previous[position] = tail_positions[slot - 1] if slot > 0 else -1
         keep: Set[int] = set()
         position = tail_positions[-1]
@@ -104,25 +118,32 @@ class ScriptDecoder:
         return {t for k, (t, _) in enumerate(linked) if k not in keep}
 
     @classmethod
-    def quote_spans(cls, alignment: Sequence[int], tags: Sequence[str],
-                    minimum: int = QUOTE_MIN) -> List[Tuple[int, int]]:
+    def quote_spans(
+        cls, alignment: Sequence[int], tags: Sequence[str], minimum: int = QUOTE_MIN
+    ) -> List[Tuple[int, int]]:
         """Maximal runs of >= ``minimum`` in-order verbatim links, as (start, end)."""
         spans, start = [], None
         for t in range(len(alignment) + 1):
-            ok = (t < len(alignment) and alignment[t] >= 0 and tags[t] == "NOP"
-                  and (start is None or alignment[t] == alignment[t - 1] + 1))
+            ok = (
+                t < len(alignment)
+                and alignment[t] >= 0
+                and tags[t] == "NOP"
+                and (start is None or alignment[t] == alignment[t - 1] + 1)
+            )
             if ok and start is None:
                 start = t
             elif not ok:
                 if start is not None and t - start >= minimum:
                     spans.append((start, t - 1))
-                start = t if (t < len(alignment) and alignment[t] >= 0
-                              and tags[t] == "NOP") else None
+                start = (
+                    t if (t < len(alignment) and alignment[t] >= 0 and tags[t] == "NOP") else None
+                )
         return spans
 
     @classmethod
-    def adapt_spans(cls, alignment: Sequence[int], tags: Sequence[str],
-                    max_gap: int = 1, min_subst: int = 2) -> List[Tuple[int, int]]:
+    def adapt_spans(
+        cls, alignment: Sequence[int], tags: Sequence[str], max_gap: int = 1, min_subst: int = 2
+    ) -> List[Tuple[int, int]]:
         """Regions of reuse where substitutions concentrate."""
         spans, start, last = [], None, None
         for t, s in enumerate(alignment):
@@ -135,9 +156,14 @@ class ScriptDecoder:
             last = t
         if start is not None:
             spans.append((start, last))
-        return [(a, b) for a, b in spans
-                if sum(1 for t in range(a, b + 1)
-                       if alignment[t] >= 0 and tags[t] in cls.SUBSTITUTION_TAGS) >= min_subst]
+        return [
+            (a, b)
+            for a, b in spans
+            if sum(
+                1 for t in range(a, b + 1) if alignment[t] >= 0 and tags[t] in cls.SUBSTITUTION_TAGS
+            )
+            >= min_subst
+        ]
 
     @classmethod
     def dispersed(cls, target_tokens: Sequence[str], alignment: Sequence[int]) -> bool:
@@ -149,8 +175,9 @@ class ScriptDecoder:
         return any(cls.CLAUSE_END.search(target_tokens[t]) for t in range(first, last))
 
     @classmethod
-    def clean_frame_mask(cls, frame_mask: Sequence[int], min_run: int = 2,
-                         fill_gap: int = 1) -> List[int]:
+    def clean_frame_mask(
+        cls, frame_mask: Sequence[int], min_run: int = 2, fill_gap: int = 1
+    ) -> List[int]:
         """A frame is a formula, not a word: close one-word gaps, drop one-word runs.
 
         The hand-labelled frames average six words and none is a single word, so
@@ -162,7 +189,7 @@ class ScriptDecoder:
         # fill short gaps between flagged words
         t = 0
         while t < n:
-            if mask[t] == 0 and 0 < t and t + fill_gap < n and mask[t - 1]:
+            if mask[t] == 0 and t > 0 and t + fill_gap < n and mask[t - 1]:
                 run_end = t
                 while run_end < n and mask[run_end] == 0 and run_end - t < fill_gap:
                     run_end += 1
@@ -187,17 +214,23 @@ class ScriptDecoder:
             if on and start is None:
                 start = t
             elif not on and start is not None:
-                spans.append((start, t - 1)); start = None
+                spans.append((start, t - 1))
+                start = None
         return spans
 
     # ---------- decoding ----------
 
     @classmethod
-    def decode_script(cls, source_tokens: Sequence[str], target_tokens: Sequence[str],
-                      alignment: Sequence[int], fine_tags: Optional[Sequence[str]] = None,
-                      frame_mask: Optional[Sequence[int]] = None,
-                      source_deleted: Optional[Sequence[int]] = None,
-                      registry: Optional[OperationRegistry] = None) -> EditScript:
+    def decode_script(
+        cls,
+        source_tokens: Sequence[str],
+        target_tokens: Sequence[str],
+        alignment: Sequence[int],
+        fine_tags: Optional[Sequence[str]] = None,
+        frame_mask: Optional[Sequence[int]] = None,
+        source_deleted: Optional[Sequence[int]] = None,
+        registry: Optional[OperationRegistry] = None,
+    ) -> EditScript:
         """Assemble the full typed script from the model's per-word outputs.
 
         ``fine_tags`` may be missing for a link, in which case the tag is read off
@@ -217,8 +250,13 @@ class ScriptDecoder:
         for t in range(n_t):
             s = alignment[t]
             if s < 0:
-                tags.append("INS"); continue
-            tag = fine_tags[t] if fine_tags is not None and t < len(fine_tags) and fine_tags[t] else None
+                tags.append("INS")
+                continue
+            tag = (
+                fine_tags[t]
+                if fine_tags is not None and t < len(fine_tags) and fine_tags[t]
+                else None
+            )
             if normalize(source[s]) == normalize(target[t]):
                 tag = "NOP"
             elif tag not in cls.LINK_TAGS:
@@ -226,8 +264,10 @@ class ScriptDecoder:
             tags.append(tag)
         # A frame is the citing author's own words by definition, so a predicted
         # frame never covers a word that has a source: the link wins.
-        frame_mask = [int(bool(frame_mask[t])) if frame_mask is not None and t < len(frame_mask)
-                      else 0 for t in range(n_t)]
+        frame_mask = [
+            int(bool(frame_mask[t])) if frame_mask is not None and t < len(frame_mask) else 0
+            for t in range(n_t)
+        ]
         frame_mask = [f if alignment[t] < 0 else 0 for t, f in enumerate(frame_mask)]
         frame_mask = cls.clean_frame_mask(frame_mask)
         frames = cls.frame_spans(frame_mask)
@@ -245,31 +285,44 @@ class ScriptDecoder:
         while t < n_t:
             if t in frame_at:
                 a, b = frame_at[t]
-                operations.append(EditOperation(
-                    "FRAME", (), tuple(range(a, b + 1)), (), tuple(target[a:b + 1]),
-                    "attribution"))
+                operations.append(
+                    EditOperation(
+                        "FRAME",
+                        (),
+                        tuple(range(a, b + 1)),
+                        (),
+                        tuple(target[a : b + 1]),
+                        "attribution",
+                    )
+                )
                 t = b + 1
                 continue
             if t in quote_at:
                 a, b = quote_at[t]
-                operations.append(EditOperation(
-                    "QUOTE", tuple(alignment[k] for k in range(a, b + 1)),
-                    tuple(range(a, b + 1)),
-                    tuple(source[alignment[k]] for k in range(a, b + 1)),
-                    tuple(target[a:b + 1]), "verbatim run"))
+                operations.append(
+                    EditOperation(
+                        "QUOTE",
+                        tuple(alignment[k] for k in range(a, b + 1)),
+                        tuple(range(a, b + 1)),
+                        tuple(source[alignment[k]] for k in range(a, b + 1)),
+                        tuple(target[a : b + 1]),
+                        "verbatim run",
+                    )
+                )
                 t = b + 1
                 continue
             s = alignment[t]
             if s < 0:
                 operations.append(EditOperation("INS", (), (t,), (), (target[t],)))
             else:
-                operations.append(EditOperation(tags[t], (s,), (t,), (source[s],),
-                                                (target[t],)))
+                operations.append(EditOperation(tags[t], (s,), (t,), (source[s],), (target[t],)))
             t += 1
         # ---- source side: what no link consumed
         used = {s for s in alignment if s >= 0}
         for s, token in enumerate(source):
-            deleted = source_deleted[s] if source_deleted is not None and s < len(source_deleted) else 1
+            deleted = (
+                source_deleted[s] if source_deleted is not None and s < len(source_deleted) else 1
+            )
             if s not in used and deleted:
                 operations.append(EditOperation("DEL", (s,), (), (token,), ()))
         # ---- structure: markers derived from the alignment
@@ -277,18 +330,31 @@ class ScriptDecoder:
         # source indices only, as the builder emits them.
         for t in sorted(cls.reordered_targets(alignment)):
             s = alignment[t]
-            operations.append(EditOperation("REORDER", (s,), (), (source[s],), (),
-                                            "crossing"))
+            operations.append(EditOperation("REORDER", (s,), (), (source[s],), (), "crossing"))
         for a, b in cls.adapt_spans(alignment, tags):
             idx = tuple(alignment[t] for t in range(a, b + 1) if alignment[t] >= 0)
-            operations.append(EditOperation(
-                "ADAPT", idx, (), tuple(source[s] for s in idx), (),
-                f"substitutions cluster in reuse {a}-{b}"))
+            operations.append(
+                EditOperation(
+                    "ADAPT",
+                    idx,
+                    (),
+                    tuple(source[s] for s in idx),
+                    (),
+                    f"substitutions cluster in reuse {a}-{b}",
+                )
+            )
         if cls.dispersed(target, alignment):
             idx = tuple(alignment[t] for t in range(n_t) if alignment[t] >= 0)
-            operations.append(EditOperation(
-                "DISPERSE", idx, (), tuple(source[s] for s in idx), (),
-                "across a clause boundary"))
+            operations.append(
+                EditOperation(
+                    "DISPERSE",
+                    idx,
+                    (),
+                    tuple(source[s] for s in idx),
+                    (),
+                    "across a clause boundary",
+                )
+            )
         return EditScript(source, target, operations, registry)
 
     # ---------- views used by the scorer ----------
@@ -309,7 +375,9 @@ class ScriptDecoder:
             elif op.tag == "QUOTE":
                 # one act standing in for its copies: expand it back to per-word
                 for t, s in zip(op.target_indices, op.source_indices):
-                    quote[t] = 1; tags[t] = "NOP"; link[t] = s
+                    quote[t] = 1
+                    tags[t] = "NOP"
+                    link[t] = s
             elif op.tag in ("REORDER", "ADAPT", "DISPERSE", "DEL"):
                 continue
             elif op.target_indices:
@@ -319,8 +387,7 @@ class ScriptDecoder:
                     link[t] = op.source_indices[0]
         for t in cls.reordered_targets(link):
             reorder[t] = 1
-        return {"tags": tags, "frame": frame, "reorder": reorder, "quote": quote,
-                "link": link}
+        return {"tags": tags, "frame": frame, "reorder": reorder, "quote": quote, "link": link}
 
 
 #: Kept for callers that want the constant without naming the class.

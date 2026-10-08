@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from retexo.baselines import labels
-from retexo.baselines.record import Edge, Record, RecordCodec, RecordInterface, Span
+from retexo.baselines.record import Edge, Record, RecordCodec, Span
 from retexo.core.normalize import normalize
 
 #: Provenance written on records that come from a blind annotation file.
@@ -86,15 +86,29 @@ class AnnotationReader:
                 op = "SYN"
             if op is None:
                 continue
-            links.append(Edge(int(e["r"]), int(e["s"]), op, bool(e.get("sure", True)), given or detail))
-        spans = [Span(int(sp["start"]), int(sp["end"]), str(sp.get("label", "FRAME")).upper())
-                 for sp in obj.get("spans", [])]
+            links.append(
+                Edge(int(e["r"]), int(e["s"]), op, bool(e.get("sure", True)), given or detail)
+            )
+        spans = [
+            Span(int(sp["start"]), int(sp["end"]), str(sp.get("label", "FRAME")).upper())
+            for sp in obj.get("spans", [])
+        ]
         return Record(
-            id=gold.id, level=gold.level, fold=gold.fold,
-            source_work=gold.source_work, source_tokens=list(gold.source_tokens),
-            reuse_work=gold.reuse_work, reuse_tokens=list(gold.reuse_tokens),
-            pair_label=gold.pair_label, links=links, spans=spans,
-            provenance={"links": self._provenance, "fine_ops": f"{self._provenance}-V3", "file": source},
+            id=gold.id,
+            level=gold.level,
+            fold=gold.fold,
+            source_work=gold.source_work,
+            source_tokens=list(gold.source_tokens),
+            reuse_work=gold.reuse_work,
+            reuse_tokens=list(gold.reuse_tokens),
+            pair_label=gold.pair_label,
+            links=links,
+            spans=spans,
+            provenance={
+                "links": self._provenance,
+                "fine_ops": f"{self._provenance}-V3",
+                "file": source,
+            },
             annotation={"note": str(obj.get("note", "") or "")},
         )
 
@@ -108,7 +122,15 @@ class AnnotationReader:
             if op == "FRAME":
                 frame.append(t)
             elif src >= 0 and op != "INS":
-                links.append({"r": t, "s": src, "op": op, "sure": bool(w.get("sure", True)), "detail": w.get("detail", "")})
+                links.append(
+                    {
+                        "r": t,
+                        "s": src,
+                        "op": op,
+                        "sure": bool(w.get("sure", True)),
+                        "detail": w.get("detail", ""),
+                    }
+                )
         spans = []
         for t in sorted(frame):
             if spans and spans[-1]["end"] == t:
@@ -156,9 +178,11 @@ class AnnotationChecker:
         by_s: Dict[int, List[Edge]] = defaultdict(list)
         for e in record.links:
             if not (0 <= e.r < n_r):
-                err(f"r={e.r} outside the reuse ({n_r} words)"); continue
+                err(f"r={e.r} outside the reuse ({n_r} words)")
+                continue
             if not (0 <= e.s < n_s):
-                err(f"s={e.s} outside the source ({n_s} words)"); continue
+                err(f"s={e.s} outside the source ({n_s} words)")
+                continue
             if e.op not in labels.EDGE_OPS:
                 err(f"r={e.r}: op {e.op!r} is not an edge operation")
                 continue
@@ -167,10 +191,9 @@ class AnnotationChecker:
             seen_r[e.r] = e
             by_s[e.s].append(e)
             try:
-                lexical, morph = labels.parse_detail(e.op, e.detail)
+                labels.parse_detail(e.op, e.detail)
             except ValueError as exc:
                 err(f"r={e.r}: {exc}")
-                lexical, morph = "", ()
             if e.op == "MERGE":
                 if not e.detail:
                     err(f"r={e.r}: MERGE without the second source word in detail")
@@ -179,11 +202,15 @@ class AnnotationChecker:
             self._form_checks(record, e, warn)
         for s, edges in by_s.items():
             if len(edges) > 1 and not all(e.op == "SPLIT" for e in edges):
-                err(f"s={s} linked by {len(edges)} reuse words ({', '.join(e.op for e in edges)}); only SPLIT may share")
+                err(
+                    f"s={s} linked by {len(edges)} reuse words ({', '.join(e.op for e in edges)}); only SPLIT may share"
+                )
         split_groups = Counter(e.s for e in record.links if e.op == "SPLIT")
         for s, count in split_groups.items():
             if count == 1:
-                warn(f"s={s}: SPLIT with a single reuse word (allowed for a dropped enclitic; check)")
+                warn(
+                    f"s={s}: SPLIT with a single reuse word (allowed for a dropped enclitic; check)"
+                )
         for sp in record.spans:
             if sp.label != "FRAME":
                 err(f"span label {sp.label!r}; FRAME is the only span label")
@@ -235,12 +262,16 @@ class Agreement:
     confusion: Dict[Tuple[str, str], int] = field(default_factory=dict)
 
     def table(self) -> str:
-        lines = [f"pairs {self.pairs}   links P {self.link_precision:.3f} R {self.link_recall:.3f} F1 {self.link_f1:.3f}   "
-                 f"op given a shared link ({self.shared_links}): V3 acc {self.op_accuracy_v3:.3f} kappa {self.op_kappa_v3:.3f}, "
-                 f"V1 acc {self.op_accuracy_v1:.3f}   frame tokens P {self.frame_precision:.3f} R {self.frame_recall:.3f} F1 {self.frame_f1:.3f}",
-                 f"{'op':8s} {'n_ref':>6s} {'n_sys':>6s} {'P':>6s} {'R':>6s} {'F1':>6s}"]
+        lines = [
+            f"pairs {self.pairs}   links P {self.link_precision:.3f} R {self.link_recall:.3f} F1 {self.link_f1:.3f}   "
+            f"op given a shared link ({self.shared_links}): V3 acc {self.op_accuracy_v3:.3f} kappa {self.op_kappa_v3:.3f}, "
+            f"V1 acc {self.op_accuracy_v1:.3f}   frame tokens P {self.frame_precision:.3f} R {self.frame_recall:.3f} F1 {self.frame_f1:.3f}",
+            f"{'op':8s} {'n_ref':>6s} {'n_sys':>6s} {'P':>6s} {'R':>6s} {'F1':>6s}",
+        ]
         for op, row in self.per_op.items():
-            lines.append(f"{op:8s} {int(row['n_ref']):6d} {int(row['n_sys']):6d} {row['P']:6.3f} {row['R']:6.3f} {row['F1']:6.3f}")
+            lines.append(
+                f"{op:8s} {int(row['n_ref']):6d} {int(row['n_sys']):6d} {row['P']:6.3f} {row['R']:6.3f} {row['F1']:6.3f}"
+            )
         return "\n".join(lines)
 
 
@@ -272,7 +303,9 @@ class AnnotationAgreement:
             s_links = {(e.r, e.s): e.op for e in sys_rec.links}
             r_links = {(e.r, e.s): e.op for e in ref_rec.links}
             shared = s_links.keys() & r_links.keys()
-            tp += len(shared); fp += len(s_links.keys() - shared); fn += len(r_links.keys() - shared)
+            tp += len(shared)
+            fp += len(s_links.keys() - shared)
+            fn += len(r_links.keys() - shared)
             for key in shared:
                 pairs_v3.append((s_links[key], r_links[key]))
             for key, op in s_links.items():
@@ -281,14 +314,19 @@ class AnnotationAgreement:
                     per_op_counts[op]["tp"] += 1
             for op in r_links.values():
                 per_op_counts[op]["n_ref"] += 1
-            s_frame = set(self._frame_tokens(sys_rec)); r_frame = set(self._frame_tokens(ref_rec))
-            ftp += len(s_frame & r_frame); ffp += len(s_frame - r_frame); ffn += len(r_frame - s_frame)
+            s_frame = set(self._frame_tokens(sys_rec))
+            r_frame = set(self._frame_tokens(ref_rec))
+            ftp += len(s_frame & r_frame)
+            ffp += len(s_frame - r_frame)
+            ffn += len(r_frame - s_frame)
         out.link_precision, out.link_recall, out.link_f1 = self._prf(tp, fp, fn)
         out.frame_precision, out.frame_recall, out.frame_f1 = self._prf(ftp, ffp, ffn)
         out.shared_links = len(pairs_v3)
         if pairs_v3:
             out.op_accuracy_v3 = sum(a == b for a, b in pairs_v3) / len(pairs_v3)
-            out.op_accuracy_v1 = sum(labels.to_v1(a) == labels.to_v1(b) for a, b in pairs_v3) / len(pairs_v3)
+            out.op_accuracy_v1 = sum(labels.to_v1(a) == labels.to_v1(b) for a, b in pairs_v3) / len(
+                pairs_v3
+            )
             out.op_kappa_v3 = self._kappa(pairs_v3)
         out.confusion = dict(Counter(pairs_v3))
         for op in labels.EDGE_OPS:
@@ -339,16 +377,19 @@ class AnnotationReport:
         silver = [self._gold[r.id] for r in records]
         agreement = AnnotationAgreement().score(records, silver)
         ops = Counter(e.op for r in records for e in r.links)
-        details = Counter((e.op, e.detail) for r in records for e in r.links if e.detail and e.op != "MERGE")
-        print(f"{path}: {len(records)} records ({len(unknown)} unknown ids), "
-              f"{sum(len(r.links) for r in records)} links, {sum(1 for r in records for e in r.links if not e.sure)} possible, "
-              f"{sum(len(r.spans) for r in records)} frame spans, {sum(1 for r in records if not r.links)} without links")
+        details = Counter(
+            (e.op, e.detail) for r in records for e in r.links if e.detail and e.op != "MERGE"
+        )
+        print(
+            f"{path}: {len(records)} records ({len(unknown)} unknown ids), "
+            f"{sum(len(r.links) for r in records)} links, {sum(1 for r in records for e in r.links if not e.sure)} possible, "
+            f"{sum(len(r.spans) for r in records)} frame spans, {sum(1 for r in records if not r.links)} without links"
+        )
         print("ops:", dict(ops.most_common()))
         print("details:", dict(details.most_common(20)))
         print(f"errors {len(errors)}, warnings {len(warns)}")
         for p in errors[:show]:
             print(f"  ERROR {p.record_id}: {p.message}")
-        kinds = Counter(p.message.split(":")[1].split("'")[0].strip() if ":" in p.message else p.message for p in warns)
         for p in warns[:show]:
             print(f"  warn  {p.record_id}: {p.message}")
         print("against the silver labels:")

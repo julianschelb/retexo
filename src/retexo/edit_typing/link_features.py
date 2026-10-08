@@ -35,29 +35,29 @@ from retexo.core.normalize import normalize
 # =============================================================================
 
 FEATURE_NAMES: Tuple[str, ...] = (
-    "same_form",          # identical after normalization
-    "same_lemma",         # same lemma, different surface
-    "lemma_missing",      # the lemmatizer returned nothing usable
-    "wn_syn",             # target lemma in source lemma's synonyms (either way)
-    "wn_hyper",           # target is a hypernym of source
-    "wn_hypo",            # target is a hyponym of source
-    "wn_ant",             # antonyms
-    "wn_deriv",           # derivational family (POS shift)
-    "wn_any",             # any of the above
-    "wn_missing",         # no wordnet record for the source lemma at all
-    "cos",                # lemma-vector cosine, clipped to [0, 1]
-    "cos_missing",        # either lemma has no vector
-    "both_names",         # both tokens on the proper-name list
+    "same_form",  # identical after normalization
+    "same_lemma",  # same lemma, different surface
+    "lemma_missing",  # the lemmatizer returned nothing usable
+    "wn_syn",  # target lemma in source lemma's synonyms (either way)
+    "wn_hyper",  # target is a hypernym of source
+    "wn_hypo",  # target is a hyponym of source
+    "wn_ant",  # antonyms
+    "wn_deriv",  # derivational family (POS shift)
+    "wn_any",  # any of the above
+    "wn_missing",  # no wordnet record for the source lemma at all
+    "cos",  # lemma-vector cosine, clipped to [0, 1]
+    "cos_missing",  # either lemma has no vector
+    "both_names",  # both tokens on the proper-name list
     "either_name",
-    "enclitic_src",       # source ends in -que / -ue / -ne (a real enclitic)
+    "enclitic_src",  # source ends in -que / -ue / -ne (a real enclitic)
     "enclitic_tgt",
     "enclitic_stem_match",  # stem of one side matches the other side
-    "prefix_ratio",       # shared prefix / longer length
-    "edit_ratio",         # 1 - levenshtein / longer length
-    "len_ratio",          # shorter / longer
-    "same_case",          # both capitalized or both not
-    "same_pos",           # first part-of-speech guess agrees
-    "rel_position",       # 0.5 + (t/n_t - s/n_s) / 2, so 0.5 = same slot
+    "prefix_ratio",  # shared prefix / longer length
+    "edit_ratio",  # 1 - levenshtein / longer length
+    "len_ratio",  # shorter / longer
+    "same_case",  # both capitalized or both not
+    "same_pos",  # first part-of-speech guess agrees
+    "rel_position",  # 0.5 + (t/n_t - s/n_s) / 2, so 0.5 = same slot
 )
 
 N_FEATURES = len(FEATURE_NAMES)
@@ -74,8 +74,7 @@ def _levenshtein(a: str, b: str) -> int:
     for i, ca in enumerate(a, start=1):
         current = [i]
         for j, cb in enumerate(b, start=1):
-            current.append(min(previous[j] + 1, current[j - 1] + 1,
-                               previous[j - 1] + (ca != cb)))
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (ca != cb)))
         previous = current
     return previous[-1]
 
@@ -157,17 +156,21 @@ class LinkFeaturizer:
         lemma = self.lemma(token)
         if lemma in self._wordnet:
             return self._wordnet[lemma]
-        record: Dict[str, set] = {"synonyms": set(), "hypernyms": set(),
-                                  "hyponyms": set(), "antonyms": set(),
-                                  "derivatives": set(), "_present": set()}
+        record: Dict[str, set] = {
+            "synonyms": set(),
+            "hypernyms": set(),
+            "hyponyms": set(),
+            "antonyms": set(),
+            "derivatives": set(),
+            "_present": set(),
+        }
         if lemma and self.resources is not None and self.resources.has("wordnet"):
             try:
-                for pos in (self.resources.pos_candidates(token) or ("n", "v", "a")):
+                for pos in self.resources.pos_candidates(token) or ("n", "v", "a"):
                     found = self.resources.wordnet.lookup(lemma, pos) or {}
                     if found:
                         record["_present"].add(pos)
-                    for key in ("synonyms", "hypernyms", "hyponyms", "antonyms",
-                                "derivatives"):
+                    for key in ("synonyms", "hypernyms", "hyponyms", "antonyms", "derivatives"):
                         record[key].update(normalize(w) for w in found.get(key, ()))
             except Exception:
                 pass
@@ -185,8 +188,15 @@ class LinkFeaturizer:
 
     # ---------- the vector ----------
 
-    def __call__(self, source: str, target: str, s_index: int = 0, t_index: int = 0,
-                 n_source: int = 1, n_target: int = 1) -> List[float]:
+    def __call__(
+        self,
+        source: str,
+        target: str,
+        s_index: int = 0,
+        t_index: int = 0,
+        n_source: int = 1,
+        n_target: int = 1,
+    ) -> List[float]:
         key = (source, target)
         if key in self._pair:
             base = list(self._pair[key])
@@ -236,22 +246,43 @@ class LinkFeaturizer:
         edit_ratio = 1.0 - _levenshtein(ns, nt) / longer
         len_ratio = min(len(ns), len(nt)) / longer
 
-        cap = lambda w: bool(re.match(r"^[A-Z]", re.sub(r"^[^A-Za-z]+", "", w) or ""))
+        def cap(word):
+            return bool(re.match(r"^[A-Z]", re.sub(r"^[^A-Za-z]+", "", word) or ""))
+
         same_case = float(cap(source) == cap(target))
         ps, pt = self.pos(source), self.pos(target)
         same_pos = float(bool(ps) and ps == pt)
 
-        return [same_form, same_lemma, lemma_missing,
-                wn_syn, wn_hyper, wn_hypo, wn_ant, wn_deriv, wn_any, wn_missing,
-                cos_value, cos_missing,
-                float(name_s and name_t), float(name_s or name_t),
-                float(enc_s is not None), float(enc_t is not None), stem_match,
-                prefix_ratio, edit_ratio, len_ratio, same_case, same_pos]
+        return [
+            same_form,
+            same_lemma,
+            lemma_missing,
+            wn_syn,
+            wn_hyper,
+            wn_hypo,
+            wn_ant,
+            wn_deriv,
+            wn_any,
+            wn_missing,
+            cos_value,
+            cos_missing,
+            float(name_s and name_t),
+            float(name_s or name_t),
+            float(enc_s is not None),
+            float(enc_t is not None),
+            stem_match,
+            prefix_ratio,
+            edit_ratio,
+            len_ratio,
+            same_case,
+            same_pos,
+        ]
 
 
 # =============================================================================
 # Symbolic typing, for the lookup-only baseline
 # =============================================================================
+
 
 class SymbolicTyper:
     """Names a link from its evidence vector alone, with no learned parameter.
@@ -276,8 +307,19 @@ class SymbolicTyper:
     #: that a resource attests, then the distributional fallbacks. This is what the
     #: EditPlan oracle does by other means, expressed over the same evidence the
     #: typer sees, so that "hybrid minus symbolic" is a like-for-like number.
-    ORDER = ("NOP", "MERGE", "SPLIT", "MORPH", "SYN", "ANT", "HYPER",
-             "HYPO", "POS", "NE-SUB", "SYN-DIST")
+    ORDER = (
+        "NOP",
+        "MERGE",
+        "SPLIT",
+        "MORPH",
+        "SYN",
+        "ANT",
+        "HYPER",
+        "HYPO",
+        "POS",
+        "NE-SUB",
+        "SYN-DIST",
+    )
 
     DEFAULT_SYN_DIST = 0.65
     DEFAULT_NE_FLOOR = 0.50

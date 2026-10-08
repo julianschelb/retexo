@@ -34,7 +34,7 @@ import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Set, Tuple
 
 DEFAULT_CACHE = Path("resources_cache/lwn")
 DEFAULT_OUT = Path("data/pretrain")
@@ -48,16 +48,28 @@ _LEMMA_OK = re.compile(r"^[a-z]{3,}$")
 class ResourcePair:
     lemma_a: str
     lemma_b: str
-    relation: str          # SYN, POS, VECTOR
-    pos: str               # NOUN / VERB / ADJ / ADV (the part of speech both members share)
+    relation: str  # SYN, POS, VECTOR
+    pos: str  # NOUN / VERB / ADJ / ADV (the part of speech both members share)
     weight: float
 
     def as_json(self) -> Dict[str, object]:
-        return {"lemma_a": self.lemma_a, "lemma_b": self.lemma_b, "relation": self.relation, "pos": self.pos, "weight": self.weight}
+        return {
+            "lemma_a": self.lemma_a,
+            "lemma_b": self.lemma_b,
+            "relation": self.relation,
+            "pos": self.pos,
+            "weight": self.weight,
+        }
 
     @classmethod
-    def from_json(cls, obj: Dict[str, object]) -> "ResourcePair":
-        return cls(str(obj["lemma_a"]), str(obj["lemma_b"]), str(obj["relation"]), str(obj["pos"]), float(obj["weight"]))
+    def from_json(cls, obj: Dict[str, object]) -> ResourcePair:
+        return cls(
+            str(obj["lemma_a"]),
+            str(obj["lemma_b"]),
+            str(obj["relation"]),
+            str(obj["pos"]),
+            float(obj["weight"]),
+        )
 
 
 # =============================================================================
@@ -78,7 +90,14 @@ class ResourcePairBuilder:
     #: The demoted relations (paper definition section 3.1): never a contrastive positive.
     EXCLUDED = ("hypernyms", "hyponyms", "antonyms")
 
-    def __init__(self, cache: Path = DEFAULT_CACHE, *, vectors=None, vector_threshold: float = 0.6, vector_top: int = 5):
+    def __init__(
+        self,
+        cache: Path = DEFAULT_CACHE,
+        *,
+        vectors=None,
+        vector_threshold: float = 0.6,
+        vector_top: int = 5,
+    ):
         self.cache = Path(cache)
         self.vectors = vectors
         self.vector_threshold = vector_threshold
@@ -122,7 +141,7 @@ class ResourcePairBuilder:
         if self.vectors is None or not getattr(self.vectors, "available", False):
             return
         for pos, lemmas in lemmas_by_pos.items():
-            present = [l for l in lemmas if self.vectors.contains(l)]
+            present = [lemma for lemma in lemmas if self.vectors.contains(lemma)]
             for a in present:
                 scored = []
                 for b in present:
@@ -154,7 +173,8 @@ class ResourcePairBuilder:
 
     @staticmethod
     def save(pairs: Sequence[ResourcePair], path: Path) -> Path:
-        path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             for p in pairs:
                 handle.write(json.dumps(p.as_json(), ensure_ascii=False) + "\n")
@@ -162,7 +182,11 @@ class ResourcePairBuilder:
 
     @staticmethod
     def load(path: Path) -> List[ResourcePair]:
-        return [ResourcePair.from_json(json.loads(l)) for l in Path(path).read_text(encoding="utf-8").splitlines() if l.strip()]
+        return [
+            ResourcePair.from_json(json.loads(line))
+            for line in Path(path).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
 
 
 # =============================================================================
@@ -188,7 +212,11 @@ class LemmaSentences:
         """Every distinct passage of the pool with its lemmas, cached as JSONL (``{"tokens", "lemmas"}``)."""
         cache = Path(cache)
         if cache.exists():
-            return [json.loads(l) for l in cache.read_text(encoding="utf-8").splitlines() if l.strip()]
+            return [
+                json.loads(line)
+                for line in cache.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
         from retexo.pretraining.pool import PairPool
         from retexo.resources import Resources
 
@@ -198,7 +226,7 @@ class LemmaSentences:
             for side in (pair.source_tokens, pair.reuse_tokens):
                 passages.setdefault(" ".join(side), list(side))
         out = []
-        for i, (key, tokens) in enumerate(passages.items()):
+        for i, (_key, tokens) in enumerate(passages.items()):
             out.append({"tokens": tokens, "lemmas": morphology.lemmas(tokens)})
             if log and i % 2000 == 0:
                 log(f"[lemma_sentences] {i}/{len(passages)} passages lemmatised")
@@ -209,8 +237,17 @@ class LemmaSentences:
         return out
 
     @classmethod
-    def build(cls, pool_path: Path, *, cache: Path, min_words: int = 8, max_words: int = 40,
-              max_per_lemma: int = 40, seed: int = 1, log=None) -> "LemmaSentences":
+    def build(
+        cls,
+        pool_path: Path,
+        *,
+        cache: Path,
+        min_words: int = 8,
+        max_words: int = 40,
+        max_per_lemma: int = 40,
+        seed: int = 1,
+        log=None,
+    ) -> LemmaSentences:
         rows = cls.lemmatise_pool(pool_path, cache, log=log)
         rng = random.Random(seed)
         index: Dict[str, List[Dict[str, object]]] = defaultdict(list)
@@ -233,14 +270,17 @@ class LemmaSentences:
         return self.sentences.get(lemma, [])
 
     def save(self, path: Path) -> Path:
-        path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             for lemma, items in self.sentences.items():
-                handle.write(json.dumps({"lemma": lemma, "sentences": items}, ensure_ascii=False) + "\n")
+                handle.write(
+                    json.dumps({"lemma": lemma, "sentences": items}, ensure_ascii=False) + "\n"
+                )
         return path
 
     @classmethod
-    def load(cls, path: Path) -> "LemmaSentences":
+    def load(cls, path: Path) -> LemmaSentences:
         out = {}
         for line in Path(path).read_text(encoding="utf-8").splitlines():
             if line.strip():
@@ -250,7 +290,12 @@ class LemmaSentences:
 
     def keep(self, pairs: Sequence[ResourcePair], *, min_sentences: int = 4) -> List[ResourcePair]:
         """The pairs whose both lemmas have enough sentences."""
-        return [p for p in pairs if len(self.contexts(p.lemma_a)) >= min_sentences and len(self.contexts(p.lemma_b)) >= min_sentences]
+        return [
+            p
+            for p in pairs
+            if len(self.contexts(p.lemma_a)) >= min_sentences
+            and len(self.contexts(p.lemma_b)) >= min_sentences
+        ]
 
 
 # =============================================================================
@@ -279,14 +324,26 @@ class HardNegatives:
         data = BenchmarkData.load()
         builder = NegativeBuilder(data, held_out=held_out)
         examples = builder.build(n, seed=seed)
-        out = Path(out); out.parent.mkdir(parents=True, exist_ok=True)
+        out = Path(out)
+        out.parent.mkdir(parents=True, exist_ok=True)
         kinds: Counter = Counter()
         with open(out, "w", encoding="utf-8") as handle:
             for i, ex in enumerate(examples):
                 kind = getattr(ex, "negative_kind", "") or ""
                 kinds[kind] += 1
-                handle.write(json.dumps({"id": f"neg_{i:06d}", "label": 0, "kind": kind, "source_tokens": list(ex.source_tokens),
-                                         "reuse_tokens": list(ex.target_tokens)}, ensure_ascii=False) + "\n")
+                handle.write(
+                    json.dumps(
+                        {
+                            "id": f"neg_{i:06d}",
+                            "label": 0,
+                            "kind": kind,
+                            "source_tokens": list(ex.source_tokens),
+                            "reuse_tokens": list(ex.target_tokens),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
         if log:
             log(f"[negatives] {len(examples)} negatives -> {out} {dict(kinds)}")
         return out
@@ -309,22 +366,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             from retexo.resources import Resources
 
             vectors = Resources(offline=True).vectors
-        builder = ResourcePairBuilder(Path(args.cache), vectors=vectors, vector_threshold=args.vector_threshold)
+        builder = ResourcePairBuilder(
+            Path(args.cache), vectors=vectors, vector_threshold=args.vector_threshold
+        )
         pairs = builder.build(with_vectors=not args.no_vectors)
-        out = ResourcePairBuilder.save(pairs, Path(args.out or DEFAULT_OUT / "resource_pairs.jsonl"))
+        out = ResourcePairBuilder.save(
+            pairs, Path(args.out or DEFAULT_OUT / "resource_pairs.jsonl")
+        )
         print(f"{len(pairs)} resource pairs -> {out}; {dict(builder.report)}")
     elif args.what == "sentences":
-        index = LemmaSentences.build(Path(args.pool), cache=DEFAULT_OUT / "corpus_lemmas.jsonl", log=print)
+        index = LemmaSentences.build(
+            Path(args.pool), cache=DEFAULT_OUT / "corpus_lemmas.jsonl", log=print
+        )
         out = index.save(Path(args.out or DEFAULT_OUT / "lemma_sentences.jsonl"))
         n_pairs = 0
         rp = DEFAULT_OUT / "resource_pairs.jsonl"
         if rp.exists():
-            pairs = ResourcePairBuilder.load(rp); kept = index.keep(pairs)
+            pairs = ResourcePairBuilder.load(rp)
+            kept = index.keep(pairs)
             n_pairs = len(kept)
             print(f"resource pairs with >= 4 sentences on both sides: {n_pairs} of {len(pairs)}")
         print(f"{len(index.sentences)} lemmas with sentences -> {out}")
     else:
-        HardNegatives.build(n=args.n, held_out=args.held_out, out=Path(args.out or DEFAULT_OUT / "negatives.jsonl"), log=print)
+        HardNegatives.build(
+            n=args.n,
+            held_out=args.held_out,
+            out=Path(args.out or DEFAULT_OUT / "negatives.jsonl"),
+            log=print,
+        )
     return 0
 
 

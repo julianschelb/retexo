@@ -1,18 +1,17 @@
 """Tests for embedding a variant in framed context."""
 
-import random
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retexo.formulations.encoding import NULL_SOURCE, ScriptEncoder  # noqa: E402
+from retexo.core.scriba import Scriba  # noqa: E402
 from retexo.datasets.generation import (  # noqa: E402
     GenerationConfig,
     MockSubstitutionSource,
     SyntheticGenerator,
 )
-from retexo.core.scriba import Scriba  # noqa: E402
+from retexo.formulations.encoding import NULL_SOURCE, ScriptEncoder  # noqa: E402
 
 PASSED = FAILED = 0
 
@@ -27,19 +26,17 @@ def check(name, condition):
 
 
 SEED = "arma uirumque cano Troiae qui primus ab oris".split()
-CONTEXT = ["sic ait et dicto citius tumida aequora placat "
-           "collectasque fugat nubes solemque reducit"]
+CONTEXT = [
+    "sic ait et dicto citius tumida aequora placat collectasque fugat nubes solemque reducit"
+]
 
 
 def generate(frame_probability=1.0):
     generator = SyntheticGenerator(
         MockSubstitutionSource(),
-        GenerationConfig(variants_per_seed=4, seed=7,
-                         frame_probability=frame_probability),
+        GenerationConfig(variants_per_seed=4, seed=7, frame_probability=frame_probability),
     )
-    records, report = generator.generate(
-        [" ".join(SEED)], context_pool=CONTEXT
-    )
+    records, report = generator.generate([" ".join(SEED)], context_pool=CONTEXT)
     return records, report
 
 
@@ -50,8 +47,7 @@ def test_framed_scripts_verify_and_replay():
     scriba = Scriba()
     for record in records:
         script = record["script"]
-        check("verifies", scriba.verify(
-            script, record["source_tokens"], record["target_tokens"]))
+        check("verifies", scriba.verify(script, record["source_tokens"], record["target_tokens"]))
         replay = scriba.execute(script, record["source_tokens"])
         check("replay length", len(replay) == len(record["target_tokens"]))
 
@@ -64,12 +60,13 @@ def test_frame_is_priced_per_act():
         counts = record["script"].op_counts()
         check("at most two FRAME ops", 0 < counts.get("FRAME", 0) <= 2)
         frame_tokens = sum(
-            len(op.target_indices) for op in record["script"].operations
-            if op.tag == "FRAME"
+            len(op.target_indices) for op in record["script"].operations if op.tag == "FRAME"
         )
         a, b = record["fragment_span"]
-        check("frame covers exactly the context",
-              frame_tokens == len(record["target_tokens"]) - (b - a))
+        check(
+            "frame covers exactly the context",
+            frame_tokens == len(record["target_tokens"]) - (b - a),
+        )
 
 
 def test_fragment_span_is_recorded():
@@ -79,16 +76,16 @@ def test_fragment_span_is_recorded():
         check("span inside target", 0 <= a <= b <= len(record["target_tokens"]))
         if record["framed"]:
             inside = record["target_tokens"][a:b]
-            check("span holds the fragment",
-                  any(tok.startswith("arma") or "uirumque" in tok
-                      for tok in inside))
+            check(
+                "span holds the fragment",
+                any(tok.startswith("arma") or "uirumque" in tok for tok in inside),
+            )
 
 
 def test_unframed_when_disabled():
     records, report = generate(frame_probability=0.0)
     check("no framing at probability zero", report.framed == 0)
-    check("no FRAME ops", all(
-        "FRAME" not in r["script"].op_counts() for r in records))
+    check("no FRAME ops", all("FRAME" not in r["script"].op_counts() for r in records))
 
 
 def test_encoding_labels_frames():
@@ -96,12 +93,11 @@ def test_encoding_labels_frames():
     framed = next(r for r in records if r["framed"])
     encoded = ScriptEncoder.to_token_labels(framed["script"])
     a, b = framed["fragment_span"]
-    outside = [i for i in range(len(framed["target_tokens"]))
-               if i < a or i >= b]
-    check("context labelled FRAME", all(
-        encoded["op_labels"][i] == "FRAME" for i in outside))
-    check("context points nowhere", all(
-        encoded["source_indices"][i] == NULL_SOURCE for i in outside))
+    outside = [i for i in range(len(framed["target_tokens"])) if i < a or i >= b]
+    check("context labelled FRAME", all(encoded["op_labels"][i] == "FRAME" for i in outside))
+    check(
+        "context points nowhere", all(encoded["source_indices"][i] == NULL_SOURCE for i in outside)
+    )
 
 
 def test_decode_merges_frame_runs():
@@ -110,8 +106,7 @@ def test_decode_merges_frame_runs():
         TokenClassifierModel,
     )
 
-    model = TokenClassifierModel(
-        TokenClassifierConfig(base_model="unused", device="cpu"))
+    model = TokenClassifierModel(TokenClassifierConfig(base_model="unused", device="cpu"))
     source = ["alpha", "beta"]
     target = ["x", "y", "alpha", "z"]
     tags = ["FRAME", "FRAME", "NOP", "FRAME"]

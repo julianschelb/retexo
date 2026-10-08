@@ -22,7 +22,7 @@ inverse yields a script that turns the reuse back into the source.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional
 
 from retexo.operations import EditOperation, OperationRegistry, Role
 
@@ -50,7 +50,7 @@ class CostModel:
             registry = self.registry or OperationRegistry.default()
             self.costs = registry.costs()
 
-    def score(self, script: "EditScript") -> float:
+    def score(self, script: EditScript) -> float:
         """Total cost, linear in the operation counts."""
         return sum(self.costs.get(tag, 0.0) * n for tag, n in script.op_counts().items())
 
@@ -103,7 +103,7 @@ class EditScript:
 
     # ---------- Inversion ----------
 
-    def invert(self) -> "EditScript":
+    def invert(self) -> EditScript:
         """The script that turns the reuse back into the source."""
         registry = self._registry()
         inverted = [registry[op.tag].invert(op) for op in self.operations]

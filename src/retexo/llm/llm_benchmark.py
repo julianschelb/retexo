@@ -82,7 +82,7 @@ class TagParser:
     @classmethod
     def last_tag(cls, text: str) -> Optional[str]:
         """The tag on the last non-empty line, falling back to :meth:`tag` on the whole text."""
-        for line in reversed([l.strip() for l in text.strip().splitlines() if l.strip()]):
+        for line in reversed([ln.strip() for ln in text.strip().splitlines() if ln.strip()]):
             found = cls.tag(line)
             if found:
                 return found
@@ -110,7 +110,7 @@ class TagParser:
                 if isinstance(w, str):
                     words.append(w.strip())
                 elif isinstance(w, (list, tuple)) and w and isinstance(w[0], str):
-                    words.append(w[0].strip())          # ["ensis", "sword"]
+                    words.append(w[0].strip())  # ["ensis", "sword"]
             out[rel] = [w for w in words if w]
         return out
 
@@ -182,7 +182,7 @@ class TypeJob:
     @classmethod
     def from_dump(
         cls, dump: Path, verdicts: Path, *, limit: int = 0, seed: int = 1, coarse: bool = False
-    ) -> "TypeJob":
+    ) -> TypeJob:
         """The links with a label and their passages, plus the typers' answers.
 
         Default: the reader's adjudicated fine relations (a few dozen, the honest
@@ -190,7 +190,7 @@ class TypeJob:
         hand labels' three classes -- eight times the sample, and the question a
         label *source* has to get right before anything else.
         """
-        rows = [json.loads(l) for l in Path(dump).read_text().splitlines() if l.strip()]
+        rows = [json.loads(line) for line in Path(dump).read_text().splitlines() if line.strip()]
         truth = json.loads(Path(verdicts).read_text())
         items = []
         for r in rows:
@@ -205,12 +205,19 @@ class TypeJob:
                 gold = truth.get(key) or truth.get(f"{r['pair']}:{r['t']}")
                 if gold in (None, "?"):
                     continue
-            items.append({"key": key, "pair": r["pair"], "ref_type": r.get("ref_type"),
-                          "source": r["source"], "target": r["target"],
-                          "context_source": r.get("context_source", ""),
-                          "context_target": r.get("context_target", ""),
-                          "gold": gold,
-                          **{b: (cls.to_coarse(r.get(b)) if coarse else r.get(b)) for b in BASELINES}})
+            items.append(
+                {
+                    "key": key,
+                    "pair": r["pair"],
+                    "ref_type": r.get("ref_type"),
+                    "source": r["source"],
+                    "target": r["target"],
+                    "context_source": r.get("context_source", ""),
+                    "context_target": r.get("context_target", ""),
+                    "gold": gold,
+                    **{b: (cls.to_coarse(r.get(b)) if coarse else r.get(b)) for b in BASELINES},
+                }
+            )
         items.sort(key=lambda d: d["key"])
         if limit and len(items) > limit:
             items = random.Random(seed).sample(items, limit)
@@ -221,55 +228,100 @@ class TypeJob:
         """Accuracy of ``answers`` and of every baseline on the same items, strict
         and lenient (SYN-DIST folded into SYN), with the confusion of the answers."""
         items = self.items
-        out = {"n": len(items), "parsed": sum(1 for a in answers if a in TAGS), "coarse": self.coarse}
+        out = {
+            "n": len(items),
+            "parsed": sum(1 for a in answers if a in TAGS),
+            "coarse": self.coarse,
+        }
         if self.coarse:
             answers = [self.to_coarse(a) for a in answers]
         for lenient in (False, True):
             key = "lenient" if lenient else "strict"
-            right = sum(1 for it, a in zip(items, answers)
-                        if a is not None and self.fold_tag(a, lenient) == self.fold_tag(it["gold"], lenient))
+            right = sum(
+                1
+                for it, a in zip(items, answers)
+                if a is not None and self.fold_tag(a, lenient) == self.fold_tag(it["gold"], lenient)
+            )
             out[f"llm_{key}"] = right / max(len(items), 1)
             for b in BASELINES:
-                hit = sum(1 for it in items
-                          if it.get(b) and self.fold_tag(it[b], lenient) == self.fold_tag(it["gold"], lenient))
+                hit = sum(
+                    1
+                    for it in items
+                    if it.get(b)
+                    and self.fold_tag(it[b], lenient) == self.fold_tag(it["gold"], lenient)
+                )
                 out[f"{b}_{key}"] = hit / max(len(items), 1)
         conf = Counter()
         per_gold = defaultdict(Counter)
         for it, a in zip(items, answers):
             conf[(it["gold"], a or "UNPARSED")] += 1
             per_gold[it["gold"]][a or "UNPARSED"] += 1
-        out["confusion"] = {f"{g}->{p}": n for (g, p), n in sorted(conf.items(), key=lambda kv: -kv[1])}
+        out["confusion"] = {
+            f"{g}->{p}": n for (g, p), n in sorted(conf.items(), key=lambda kv: -kv[1])
+        }
         out["by_gold"] = {g: dict(c) for g, c in sorted(per_gold.items())}
         return out
 
-    def per_operation(self, answers: Sequence[Optional[str]], *, lenient: bool = False) -> Dict[str, tuple]:
+    def per_operation(
+        self, answers: Sequence[Optional[str]], *, lenient: bool = False
+    ) -> Dict[str, tuple]:
         """Per gold operation: (right, total) for ``answers``."""
         per = defaultdict(lambda: [0, 0])
         for it, a in zip(self.items, answers):
             per[it["gold"]][1] += 1
-            per[it["gold"]][0] += int(a is not None and self.fold_tag(a, lenient) == self.fold_tag(it["gold"], lenient))
+            per[it["gold"]][0] += int(
+                a is not None and self.fold_tag(a, lenient) == self.fold_tag(it["gold"], lenient)
+            )
         return {k: tuple(v) for k, v in per.items()}
 
-    def print_table(self, answers: Sequence[Optional[str]], scores: dict, *, label: str, model: str = "") -> None:
+    def print_table(
+        self, answers: Sequence[Optional[str]], scores: dict, *, label: str, model: str = ""
+    ) -> None:
         """One table for this run: the row for ``label`` and the rows for the
         typers we already have, with accuracy per operation beside the totals."""
         items = self.items
-        ops = [op for op, _ in sorted(Counter(it["gold"] for it in items).items(), key=lambda kv: -kv[1])]
+        ops = [
+            op
+            for op, _ in sorted(Counter(it["gold"] for it in items).items(), key=lambda kv: -kv[1])
+        ]
         rows = [(label, self.per_operation(answers), scores["llm_strict"], scores["llm_lenient"])]
-        for who, name in (("gated", "Our typer (gated)"), ("symbolic", "Lemma rule (symbolic)"),
-                          ("hybrid", "Our typer (ungated)")):
-            rows.append((name, self.per_operation([it.get(who) for it in items]),
-                         scores[who + "_strict"], scores[who + "_lenient"]))
+        for who, name in (
+            ("gated", "Our typer (gated)"),
+            ("symbolic", "Lemma rule (symbolic)"),
+            ("hybrid", "Our typer (ungated)"),
+        ):
+            rows.append(
+                (
+                    name,
+                    self.per_operation([it.get(who) for it in items]),
+                    scores[who + "_strict"],
+                    scores[who + "_lenient"],
+                )
+            )
         width = max(len(r[0]) for r in rows) + 2
-        head = (f"\n  {'':<{width}}{'Accuracy (strict)':>19}{'Accuracy (lenient)':>20}   "
-                + "  ".join(f"{op:>9}" for op in ops))
-        print(f"  parsed {scores['parsed']}/{scores['n']} replies" + (f"   model: {model}" if model else ""))
+        head = (
+            f"\n  {'':<{width}}{'Accuracy (strict)':>19}{'Accuracy (lenient)':>20}   "
+            + "  ".join(f"{op:>9}" for op in ops)
+        )
+        print(
+            f"  parsed {scores['parsed']}/{scores['n']} replies"
+            + (f"   model: {model}" if model else "")
+        )
         print(head)
         for name, per, strict, lenient in rows:
-            cells = "  ".join(f"{(f'{per[op][0]}/{per[op][1]}' if op in per else '-'):>9}" for op in ops)
+            cells = "  ".join(
+                f"{(f'{per[op][0]}/{per[op][1]}' if op in per else '-'):>9}" for op in ops
+            )
             print(f"  {name:<{width}}{strict:>19.3f}{lenient:>20.3f}   {cells}")
-        print("  gold counts: " + ", ".join(f"{op} {sum(1 for it in items if it['gold'] == op)}" for op in ops))
-        worst = [f"{k} {v}" for k, v in list(scores["confusion"].items())[:6] if not k.split("->")[0] == k.split("->")[1]]
+        print(
+            "  gold counts: "
+            + ", ".join(f"{op} {sum(1 for it in items if it['gold'] == op)}" for op in ops)
+        )
+        worst = [
+            f"{k} {v}"
+            for k, v in list(scores["confusion"].items())[:6]
+            if k.split("->")[0] != k.split("->")[1]
+        ]
         print("  commonest errors (gold -> said): " + ", ".join(worst[:5]))
 
 
@@ -308,7 +360,7 @@ class ProposeJob:
     @classmethod
     def from_resources(
         cls, resources, lemmas: Sequence[str], *, limit: int = 32, seed: int = 1, pos: str = "n"
-    ) -> "ProposeJob":
+    ) -> ProposeJob:
         """Sample lemmas from ``lemmas`` that Latin WordNet has a record for."""
         rng = random.Random(seed)
         pool = list(dict.fromkeys(lemmas))
@@ -320,15 +372,20 @@ class ProposeJob:
                 record = resources.wordnet.lookup(lemma, pos)
             except Exception:
                 continue
-            known = {rel: sorted({w.lower() for w in record.get(field, []) if w})
-                     for rel, field in fields.items() if record.get(field)}
+            known = {
+                rel: sorted({w.lower() for w in record.get(field, []) if w})
+                for rel, field in fields.items()
+                if record.get(field)
+            }
             if known:
                 items.append({"lemma": lemma, "pos": pos, "known": known})
             if len(items) >= limit:
                 break
         return cls(items)
 
-    def score(self, answers: Sequence[Dict[str, List[str]]], *, attested: Optional[set] = None) -> dict:
+    def score(
+        self, answers: Sequence[Dict[str, List[str]]], *, attested: Optional[set] = None
+    ) -> dict:
         """Agreement with WordNet where WordNet answers, and the share of proposals
         that are attested in the corpus at all (the first mechanical filter)."""
         proposed = confirmed = in_corpus = 0
@@ -343,15 +400,21 @@ class ProposeJob:
                     if attested is not None and w.lower() in attested:
                         in_corpus += 1
                     if w.lower() in known:
-                        confirmed += 1; per_rel[rel]["confirmed"] += 1
+                        confirmed += 1
+                        per_rel[rel]["confirmed"] += 1
             if any((ans or {}).get(rel) for rel in it["known"]):
                 covered += 1
-        return {"items": len(self.items), "proposals": proposed,
-                "wordnet_confirmed": confirmed / max(proposed, 1),
-                "attested_in_corpus": (in_corpus / max(proposed, 1)) if attested is not None else None,
-                "items_with_an_answer": covered / max(len(self.items), 1),
-                "per_relation": {r: {**v, "rate": v["confirmed"] / max(v["proposed"], 1)}
-                                 for r, v in sorted(per_rel.items())}}
+        return {
+            "items": len(self.items),
+            "proposals": proposed,
+            "wordnet_confirmed": confirmed / max(proposed, 1),
+            "attested_in_corpus": (in_corpus / max(proposed, 1)) if attested is not None else None,
+            "items_with_an_answer": covered / max(len(self.items), 1),
+            "per_relation": {
+                r: {**v, "rate": v["confirmed"] / max(v["proposed"], 1)}
+                for r, v in sorted(per_rel.items())
+            },
+        }
 
 
 # =============================================================================
@@ -374,33 +437,64 @@ class EvidenceAnnotator:
         self.featurizer = featurizer
 
     def sentences(
-        self, source_word: str, target_word: str, *,
-        s_index: int = 0, t_index: int = 0, n_source: int = 1, n_target: int = 1,
+        self,
+        source_word: str,
+        target_word: str,
+        *,
+        s_index: int = 0,
+        t_index: int = 0,
+        n_source: int = 1,
+        n_target: int = 1,
     ) -> str:
         """The typer's own evidence for this cell, in words. Same 23 features the
         model reads as a vector, so an LLM given this block sees what the typer sees."""
         from retexo.edit_typing.link_features import FEATURE_NAMES
 
         featurizer = self.featurizer
-        f = dict(zip(FEATURE_NAMES, featurizer(source_word, target_word, s_index, t_index,
-                                                n_source, n_target)))
+        f = dict(
+            zip(
+                FEATURE_NAMES,
+                featurizer(source_word, target_word, s_index, t_index, n_source, n_target),
+            )
+        )
         ls, lt = featurizer.lemma(source_word), featurizer.lemma(target_word)
-        rels = [name for name, key in (("synonym", "wn_syn"), ("more general", "wn_hyper"),
-                                       ("more specific", "wn_hypo"), ("opposite", "wn_ant"),
-                                       ("same derivational family", "wn_deriv")) if f.get(key, 0) > 0]
+        rels = [
+            name
+            for name, key in (
+                ("synonym", "wn_syn"),
+                ("more general", "wn_hyper"),
+                ("more specific", "wn_hypo"),
+                ("opposite", "wn_ant"),
+                ("same derivational family", "wn_deriv"),
+            )
+            if f.get(key, 0) > 0
+        ]
         lines = [
             f"- lemma of the source word: {ls or 'not found'}",
             f"- lemma of the reuse word: {lt or 'not found'}",
             "- same word form: " + ("yes" if f["same_form"] else "no"),
             "- same lemma, different form: " + ("yes" if f["same_lemma"] else "no"),
-            "- Latin WordNet: " + (", ".join(rels) if rels else
-                                   ("no record for these lemmas" if f.get("wn_missing", 0) else "no relation recorded")),
-            "- similarity of the lemma vectors: " + ("not available" if f.get("cos_missing", 0)
-                                                     else f"{f['cos']:.2f} (0 = unrelated, 1 = identical)"),
+            "- Latin WordNet: "
+            + (
+                ", ".join(rels)
+                if rels
+                else (
+                    "no record for these lemmas"
+                    if f.get("wn_missing", 0)
+                    else "no relation recorded"
+                )
+            ),
+            "- similarity of the lemma vectors: "
+            + (
+                "not available"
+                if f.get("cos_missing", 0)
+                else f"{f['cos']:.2f} (0 = unrelated, 1 = identical)"
+            ),
             f"- spelling: shared prefix {f['prefix_ratio']:.2f}, edit similarity {f['edit_ratio']:.2f},"
             f" length ratio {f['len_ratio']:.2f}",
             "- part of speech agrees: " + ("yes" if f["same_pos"] else "no"),
-            "- proper names: " + ("both" if f["both_names"] else "one" if f["either_name"] else "neither"),
+            "- proper names: "
+            + ("both" if f["both_names"] else "one" if f["either_name"] else "neither"),
             f"- position in the passage: {f['rel_position']:.2f} (0.5 = the same slot)",
         ]
         return "\n".join(lines)
@@ -412,13 +506,18 @@ class EvidenceAnnotator:
             g = gold_pairs.get(it["pair"])
             n_s = len(g.source_tokens) if g is not None else 1
             n_t = len(g.target_tokens) if g is not None else 1
-            it["flags"] = self.sentences(it["source"], it["target"],
-                                         s_index=it.get("s", 0), t_index=it.get("t", 0),
-                                         n_source=n_s, n_target=n_t)
+            it["flags"] = self.sentences(
+                it["source"],
+                it["target"],
+                s_index=it.get("s", 0),
+                t_index=it.get("t", 0),
+                n_source=n_s,
+                n_target=n_t,
+            )
 
     @staticmethod
     def parse_gloss(text: str) -> str:
         """The model's word-by-word rendering, cleaned of any preamble."""
-        lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
-        keep = [l for l in lines if "=" in l or "-" in l or ":" in l]
+        lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+        keep = [ln for ln in lines if "=" in ln or "-" in ln or ":" in ln]
         return "\n".join(keep[:40]) if keep else text.strip()[:1200]

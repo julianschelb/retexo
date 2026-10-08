@@ -90,15 +90,17 @@ def test_ne_sub_needs_both_names_and_similarity():
     entities = Entities()
     if not entities.available:
         return
-    resources = StubResources({
-        frozenset(("italia", "hesperia")): 0.71,
-        frozenset(("italia", "caesar")): 0.12,
-    })
+    resources = StubResources(
+        {
+            frozenset(("italia", "hesperia")): 0.71,
+            frozenset(("italia", "caesar")): 0.12,
+        }
+    )
     detect = REGISTRY["NE-SUB"].detect
-    assert detect("Italiam", "Hesperiam", resources)          # both names, similar
-    assert detect("Italiam", "Caesar", resources) is None     # names, unrelated
-    assert detect("Arma", "Italiam", resources) is None       # not a name
-    assert detect("Italiam", "Italia", resources) is None     # same name is NOP
+    assert detect("Italiam", "Hesperiam", resources)  # both names, similar
+    assert detect("Italiam", "Caesar", resources) is None  # names, unrelated
+    assert detect("Arma", "Italiam", resources) is None  # not a name
+    assert detect("Italiam", "Italia", resources) is None  # same name is NOP
 
 
 def test_ne_sub_declines_without_vectors():
@@ -189,8 +191,7 @@ def test_enclitic_splitting_is_not_wired_into_detection():
 # =============================================================================
 
 if __name__ == "__main__":
-    tests = [(n, f) for n, f in sorted(globals().items())
-             if n.startswith("test_") and callable(f)]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = []
     for name, fn in tests:
         try:

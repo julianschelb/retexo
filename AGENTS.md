@@ -4,11 +4,23 @@ Formatting conventions for retexo. The template is the **locisimiles** package
 (sibling repo, `../locisimiles`): its source and its `pyproject.toml` are the
 authoritative reference for how code in this repo should be formatted.
 
-The standing task is **formatting-only clean-up**: change how the code reads,
-never what it computes. No renames of public APIs, no refactoring, no
-behaviour changes unless explicitly asked. Every module in `src/` carries a
-prose docstring explaining its design; that prose is content — reflow it to
-the format below, do not shorten it.
+The standing task is a **readability clean-up**: make the code read like
+locisimiles. Two levels, both in scope:
+
+1. **Formatting** — banners, spacing, import order, line length. Never
+   changes behaviour.
+2. **Structural refactoring** — splitting mega-files and mega-classes into
+   small modules, breaking up very long methods into helpers. Behaviour
+   must not change; public imports are preserved through `__init__.py`
+   re-exports, so `from retexo.core.oracle import EditPlan` keeps working
+   after the oracle moves. Prefer *module-level* splits (new file per
+   concern) over helper-extraction when both are possible.
+
+Never rename a public API. Every module in `src/` carries a prose docstring
+explaining its design; that prose is content — move it with the code it
+describes, do not shorten it. After any split, the old module path must
+either still import (re-export) or the change must be coordinated with all
+call sites. Run the tests after each structural change.
 
 ## Tooling (mirror the locisimiles configuration)
 
@@ -35,6 +47,15 @@ the format below, do not shorten it.
 - Major classes and file sections are separated by full-width `#` banners
   with a title; smaller groups inside a file use
   `# ---------- Name ----------` lines.
+- **A class with many methods is grouped, not flat.** Group the methods of a
+  large class into banner-labelled sections inside the class (e.g.
+  encoding, losses, prediction, evaluation) and separate the groups with a
+  blank line above the `# ----------` header. A class with 30+ methods and
+  no section breaks reads as one block of code — that is the failure mode
+  to avoid. Better still, if the sections are independent concerns, split
+  them into mixins or modules per rule 2 above.
+- One concern per file: when a file passes ~400 lines or holds more than
+  one major class plus its helpers, split it.
 - `__init__.py` files re-export the public API and document it in the module
   docstring (bullet lists of the exported names).
 

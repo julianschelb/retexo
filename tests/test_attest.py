@@ -7,8 +7,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retexo.edit_typing.attest import (FORM, LEMMA, NONE, RELATION, Attestation,  # noqa: E402
-                               Attester, FrameLexicon)
+from retexo.edit_typing.attest import (  # noqa: E402
+    FORM,
+    LEMMA,
+    NONE,
+    RELATION,
+    Attestation,
+    Attester,
+    FrameLexicon,
+)
 from retexo.edit_typing.link_features import FEATURE_NAMES  # noqa: E402
 
 _F = {n: i for i, n in enumerate(FEATURE_NAMES)}
@@ -33,9 +40,9 @@ def test_tiers_follow_the_strongest_evidence():
 def test_combine_keeps_the_model_null_by_default():
     att = [Attestation(tier=FORM, candidates=[3]), Attestation()]
     rows = [[(3, 0.2), (5, 0.5), (-1, 0.3)], [(1, 0.6), (-1, 0.4)]]
-    out = Attester.combine_scores(att, rows)               # mode "whether"
-    assert dict(out[0]) == {3: 0.4, -1: 0.6}              # 5 is closed; null kept
-    assert out[1] == rows[1]                              # open word untouched
+    out = Attester.combine_scores(att, rows)  # mode "whether"
+    assert dict(out[0]) == {3: 0.4, -1: 0.6}  # 5 is closed; null kept
+    assert out[1] == rows[1]  # open word untouched
     fixed = Attester.combine_scores(att, rows, mode="fix")
     assert fixed[0][0] == (3, 1.0)
 
@@ -67,15 +74,17 @@ class _Ex:
 
 def test_training_restriction_adds_the_gold_when_the_resources_missed_it():
     ex = _Ex(["arma", "uirumque", "cano"], ["arma", "uirum", "canit"], [0, 1, -1])
-    att = [Attestation(tier=FORM, candidates=[0], phi={0: phi(same_form=1)}),
-           Attestation(tier=LEMMA, candidates=[2], phi={2: phi(same_lemma=1)}),
-           Attestation()]
+    att = [
+        Attestation(tier=FORM, candidates=[0], phi={0: phi(same_form=1)}),
+        Attestation(tier=LEMMA, candidates=[2], phi={2: phi(same_lemma=1)}),
+        Attestation(),
+    ]
     allowed, type_open = attester.training_restriction(ex, att)
     assert allowed == [[0], [2, 1], None]
-    assert type_open == [False, True, True]     # NOP named; gold 1 not in phi -> open
+    assert type_open == [False, True, True]  # NOP named; gold 1 not in phi -> open
 
 
 def test_lexicon_frames_match_whole_templates():
     ex = _Ex([], ["quod", "et", "Vergilius", "ait", "arma", "uirumque"], None)
     flags = FrameLexicon([["quod", "et"], ["ait"], ["nihil"]]).frames(ex)
-    assert flags == [1, 1, 0, 0, 0, 0]          # one-word templates are below min_len
+    assert flags == [1, 1, 0, 0, 0, 0]  # one-word templates are below min_len

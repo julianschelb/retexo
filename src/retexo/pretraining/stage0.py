@@ -28,7 +28,7 @@ import shutil
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from retexo.baselines.record import Record
 from retexo.core.normalize import normalize
@@ -122,13 +122,18 @@ class Counterparts:
             n, k = cls.keys(w)
             if len(n) < 2:
                 continue
-            other_forms.add(n); other_keys.add(k)
+            other_forms.add(n)
+            other_keys.add(k)
             if len(n) >= cls.STEM:
                 other_stems.add(n[: cls.STEM])
         out = []
         for w in words:
             n, k = cls.keys(w)
-            hit = len(n) >= 2 and (n in other_forms or (k and k in other_keys) or (len(n) >= cls.STEM and n[: cls.STEM] in other_stems))
+            hit = len(n) >= 2 and (
+                n in other_forms
+                or (k and k in other_keys)
+                or (len(n) >= cls.STEM and n[: cls.STEM] in other_stems)
+            )
             out.append(bool(hit))
         return out
 
@@ -154,15 +159,29 @@ class MaskedPairLM:
         ```
     """
 
-    def __init__(self, config: Stage0Config, pair_encoder, vocab_size: int, mask_id: int, special_ids: Sequence[int]):
+    def __init__(
+        self,
+        config: Stage0Config,
+        pair_encoder,
+        vocab_size: int,
+        mask_id: int,
+        special_ids: Sequence[int],
+    ):
         self.config = config
         self.encoder = pair_encoder
         self.vocab_size = vocab_size
         self.mask_id = mask_id
         self.special_ids = set(int(i) for i in special_ids)
 
-    def positions(self, ids: Sequence[int], source_spans, reuse_spans, source_hit: Sequence[bool],
-                  reuse_hit: Sequence[bool], rng: random.Random) -> List[int]:
+    def positions(
+        self,
+        ids: Sequence[int],
+        source_spans,
+        reuse_spans,
+        source_hit: Sequence[bool],
+        reuse_hit: Sequence[bool],
+        rng: random.Random,
+    ) -> List[int]:
         """The subword positions to mask for one sequence."""
         candidates = [i for i, t in enumerate(ids) if int(t) not in self.special_ids]
         if not candidates:
@@ -185,7 +204,9 @@ class MaskedPairLM:
         """Model inputs with ``labels`` (-100 off the mask) for a list of (source, reuse) word lists."""
         import torch
 
-        encoded, reuse_spans = self.encoder.encode([(list(s), list(r)) for s, r in pairs], self.config.max_length)
+        encoded, reuse_spans = self.encoder.encode(
+            [(list(s), list(r)) for s, r in pairs], self.config.max_length
+        )
         source_spans = self.encoder.last_source_spans
         input_ids = encoded["input_ids"].clone()
         labels = torch.full_like(input_ids, -100)
@@ -204,8 +225,12 @@ class MaskedPairLM:
                 elif draw < 0.9:
                     input_ids[row, i] = rng.randrange(5, self.vocab_size)
                 n_masked += 1
-            n_biased_total += sum(1 for i in chosen if any(a <= i < b for (a, b), h in zip(source_spans[row], s_hit) if h)
-                                  or any(a <= i < b for (a, b), h in zip(reuse_spans[row], r_hit) if h))
+            n_biased_total += sum(
+                1
+                for i in chosen
+                if any(a <= i < b for (a, b), h in zip(source_spans[row], s_hit) if h)
+                or any(a <= i < b for (a, b), h in zip(reuse_spans[row], r_hit) if h)
+            )
         out = {k: v for k, v in encoded.items()}
         out["input_ids"] = input_ids
         out["labels"] = labels
@@ -217,7 +242,11 @@ class MaskedPairLM:
     def loss(model, batch, device: str):
         import torch
 
-        inputs = {k: v.to(device) for k, v in batch.items() if not k.startswith("_") and isinstance(v, torch.Tensor)}
+        inputs = {
+            k: v.to(device)
+            for k, v in batch.items()
+            if not k.startswith("_") and isinstance(v, torch.Tensor)
+        }
         out = model(**inputs)
         return out.loss
 
@@ -245,7 +274,9 @@ class ContrastiveLemmaPairs:
         ```
     """
 
-    def __init__(self, config: Stage0Config, pair_encoder, pairs, sentences, *, batch_pairs: int = 32):
+    def __init__(
+        self, config: Stage0Config, pair_encoder, pairs, sentences, *, batch_pairs: int = 32
+    ):
         self.config = config
         self.encoder = pair_encoder
         self.pairs = list(pairs)
@@ -255,18 +286,22 @@ class ContrastiveLemmaPairs:
     def batch(self, rng: random.Random):
         """``batch_pairs`` resource pairs, one sentence per member; encoded as single passages."""
         chosen = rng.sample(self.pairs, min(self.batch_pairs, len(self.pairs)))
-        items = []                      # (tokens, word index) for side A of pair 0, side B of pair 0, side A of pair 1, ...
+        items = []  # (tokens, word index) for side A of pair 0, side B of pair 0, side A of pair 1, ...
         pos, weights = [], []
         for pair in chosen:
             a = rng.choice(self.sentences.contexts(pair.lemma_a))
             b = rng.choice(self.sentences.contexts(pair.lemma_b))
-            items.append((list(a["tokens"]), int(a["index"]))); items.append((list(b["tokens"]), int(b["index"])))
-            pos.append(pair.pos); weights.append(float(pair.weight))
+            items.append((list(a["tokens"]), int(a["index"])))
+            items.append((list(b["tokens"]), int(b["index"])))
+            pos.append(pair.pos)
+            weights.append(float(pair.weight))
         # a single passage through the pair encoder: the passage as the source side, an empty reuse side
-        encoded, _ = self.encoder.encode([(tokens, []) for tokens, _ in items], self.config.max_length)
+        encoded, _ = self.encoder.encode(
+            [(tokens, []) for tokens, _ in items], self.config.max_length
+        )
         spans = self.encoder.last_source_spans
         word_spans = []
-        for (tokens, index), row_spans in zip(items, spans):
+        for (_tokens, index), row_spans in zip(items, spans):
             word_spans.append(row_spans[index] if index < len(row_spans) else None)
         return {"encoded": encoded, "spans": word_spans, "pos": pos, "weights": weights}
 
@@ -274,27 +309,40 @@ class ContrastiveLemmaPairs:
         import torch
 
         base = model.base_model if hasattr(model, "base_model") else model
-        inputs = {k: v.to(device) for k, v in batch["encoded"].items() if isinstance(v, torch.Tensor)}
+        inputs = {
+            k: v.to(device) for k, v in batch["encoded"].items() if isinstance(v, torch.Tensor)
+        }
         states = base(**inputs, output_hidden_states=True).hidden_states
-        hidden = states[min(self.config.layer, len(states) - 1)]        # a tiny test encoder has fewer layers
+        hidden = states[
+            min(self.config.layer, len(states) - 1)
+        ]  # a tiny test encoder has fewer layers
         vectors, keep = [], []
         for row, span in enumerate(batch["spans"]):
             if span is None:
-                keep.append(False); vectors.append(hidden[row, 0]); continue
+                keep.append(False)
+                vectors.append(hidden[row, 0])
+                continue
             a, b = span
-            keep.append(True); vectors.append(hidden[row, a:b].mean(0))
+            keep.append(True)
+            vectors.append(hidden[row, a:b].mean(0))
         vectors = torch.nn.functional.normalize(torch.stack(vectors), dim=-1)
         n = len(batch["pos"])
-        side_a, side_b = vectors[0::2], vectors[1::2]                          # [n, H] each
+        side_a, side_b = vectors[0::2], vectors[1::2]  # [n, H] each
         ok = torch.tensor([keep[2 * i] and keep[2 * i + 1] for i in range(n)], device=device)
         pos = batch["pos"]
-        same_pos = torch.tensor([[pos[i] == pos[j] for j in range(n)] for i in range(n)], device=device)
+        same_pos = torch.tensor(
+            [[pos[i] == pos[j] for j in range(n)] for i in range(n)], device=device
+        )
         weights = torch.tensor(batch["weights"], device=device)
-        logits = side_a @ side_b.T / self.config.contrastive_temperature     # [n, n]: A_i against every B_j
-        logits = logits.masked_fill(~same_pos, float("-inf"))                 # negatives: same-POS lemmas only
+        logits = (
+            side_a @ side_b.T / self.config.contrastive_temperature
+        )  # [n, n]: A_i against every B_j
+        logits = logits.masked_fill(~same_pos, float("-inf"))  # negatives: same-POS lemmas only
         targets = torch.arange(n, device=device)
         loss_ab = torch.nn.functional.cross_entropy(logits, targets, reduction="none")
-        loss_ba = torch.nn.functional.cross_entropy(logits.T.masked_fill(~same_pos.T, float("-inf")), targets, reduction="none")
+        loss_ba = torch.nn.functional.cross_entropy(
+            logits.T.masked_fill(~same_pos.T, float("-inf")), targets, reduction="none"
+        )
         per_pair = 0.5 * (loss_ab + loss_ba) * weights
         per_pair = torch.where(ok, per_pair, torch.zeros_like(per_pair))
         return per_pair.sum() / max(int(ok.sum().item()), 1)
@@ -313,7 +361,13 @@ class PairIdentification:
         ```
     """
 
-    def __init__(self, config: Stage0Config, pair_encoder, hidden_size: int, negatives: Sequence[Tuple[List[str], List[str]]]):
+    def __init__(
+        self,
+        config: Stage0Config,
+        pair_encoder,
+        hidden_size: int,
+        negatives: Sequence[Tuple[List[str], List[str]]],
+    ):
         import torch
 
         self.config = config
@@ -325,7 +379,11 @@ class PairIdentification:
         return self.head.parameters()
 
     def batch(self, real: Sequence[Tuple[Sequence[str], Sequence[str]]], rng: random.Random):
-        negs = rng.sample(self.negatives, min(len(real), len(self.negatives))) if self.negatives else []
+        negs = (
+            rng.sample(self.negatives, min(len(real), len(self.negatives)))
+            if self.negatives
+            else []
+        )
         pairs = [(list(s), list(r)) for s, r in real] + [(list(s), list(r)) for s, r in negs]
         labels = [1] * len(real) + [0] * len(negs)
         encoded, _ = self.encoder.encode(pairs, self.config.max_length)
@@ -335,10 +393,14 @@ class PairIdentification:
         import torch
 
         base = model.base_model if hasattr(model, "base_model") else model
-        inputs = {k: v.to(device) for k, v in batch["encoded"].items() if isinstance(v, torch.Tensor)}
+        inputs = {
+            k: v.to(device) for k, v in batch["encoded"].items() if isinstance(v, torch.Tensor)
+        }
         cls = base(**inputs).last_hidden_state[:, 0]
         logits = self.head(cls)
-        return torch.nn.functional.cross_entropy(logits, torch.tensor(batch["labels"], device=device))
+        return torch.nn.functional.cross_entropy(
+            logits, torch.tensor(batch["labels"], device=device)
+        )
 
 
 # =============================================================================
@@ -375,12 +437,20 @@ class Stage0Trainer:
         from retexo.formulations.pair_encoding import PairEncoder
 
         torch.manual_seed(self.config.seed)
-        self.model = AutoModelForMaskedLM.from_pretrained(self.config.base_model).to(self.config.device)
+        self.model = AutoModelForMaskedLM.from_pretrained(self.config.base_model).to(
+            self.config.device
+        )
         self.pair_encoder = PairEncoder.build(self.config.base_model)
-        specials = [getattr(self.pair_encoder, name) for name in ("PAD", "CLS", "SEP") if hasattr(self.pair_encoder, name)]
+        specials = [
+            getattr(self.pair_encoder, name)
+            for name in ("PAD", "CLS", "SEP")
+            if hasattr(self.pair_encoder, name)
+        ]
         mask_id = self._mask_id()
         vocab = int(self.model.config.vocab_size)
-        self.mlm = MaskedPairLM(self.config, self.pair_encoder, vocab, mask_id, specials + [mask_id])
+        self.mlm = MaskedPairLM(
+            self.config, self.pair_encoder, vocab, mask_id, specials + [mask_id]
+        )
 
     def _mask_id(self) -> int:
         enc = getattr(self.pair_encoder, "encoder", None)
@@ -393,8 +463,16 @@ class Stage0Trainer:
 
     # ---------- training ----------
 
-    def fit(self, pool: PairPool, resource_pairs=None, *, sentences=None, negatives=None, psi_pool: Optional[PairPool] = None,
-            log=None) -> "Stage0Trainer":
+    def fit(
+        self,
+        pool: PairPool,
+        resource_pairs=None,
+        *,
+        sentences=None,
+        negatives=None,
+        psi_pool: Optional[PairPool] = None,
+        log=None,
+    ) -> Stage0Trainer:
         """One epoch: per step one MLM batch (if ``mlm`` is on), one contrastive batch (if ``contrastive``),
         one PSI batch (if ``psi``); ``L = L_MLM + lambda_c L_c + lambda_p L_p``; every loss logged on its own.
         ``psi_pool`` gives the PSI objective its own real pairs (Data Scale: the masked LM reads the all-overlap
@@ -408,9 +486,20 @@ class Stage0Trainer:
         use_mlm = "mlm" in cfg.objectives
         use_c = "contrastive" in cfg.objectives
         use_p = "psi" in cfg.objectives
-        self.contrastive = ContrastiveLemmaPairs(cfg, self.pair_encoder, resource_pairs, sentences,
-                                                 batch_pairs=cfg.batch_size) if use_c else None
-        self.psi = PairIdentification(cfg, self.pair_encoder, int(self.model.config.hidden_size), negatives or []) if use_p else None
+        self.contrastive = (
+            ContrastiveLemmaPairs(
+                cfg, self.pair_encoder, resource_pairs, sentences, batch_pairs=cfg.batch_size
+            )
+            if use_c
+            else None
+        )
+        self.psi = (
+            PairIdentification(
+                cfg, self.pair_encoder, int(self.model.config.hidden_size), negatives or []
+            )
+            if use_p
+            else None
+        )
         items = list(pool.both_orientations())
         if cfg.smoke:
             items = items[: cfg.smoke]
@@ -420,7 +509,7 @@ class Stage0Trainer:
             psi_items = list(psi_pool.both_orientations())[: cfg.smoke or None]
             rng.shuffle(psi_items)
         steps_per_epoch = max(1, math.ceil(len(items) / cfg.batch_size))
-        if not use_mlm and use_c:                      # contrastive alone: one epoch over the resource pairs
+        if not use_mlm and use_c:  # contrastive alone: one epoch over the resource pairs
             steps_per_epoch = max(1, math.ceil(len(self.contrastive.pairs) / cfg.batch_size))
             if cfg.smoke:
                 steps_per_epoch = min(steps_per_epoch, max(1, cfg.smoke // cfg.batch_size))
@@ -436,34 +525,55 @@ class Stage0Trainer:
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lr_at)
         if log:
-            log(f"[stage0] objectives {list(cfg.objectives)}; {len(items)} sequences ({len(pool)} pairs, both orientations)"
+            log(
+                f"[stage0] objectives {list(cfg.objectives)}; {len(items)} sequences ({len(pool)} pairs, both orientations)"
                 f"{f', {len(self.contrastive.pairs)} resource pairs' if use_c else ''}{f', {len(self.psi.negatives)} negatives' if use_p else ''}; "
                 f"{total_steps} steps of {cfg.batch_size}, lr {cfg.learning_rate}, warm-up {warmup}, rho {cfg.reuse_mask_share}, "
-                f"lambda_c {cfg.contrastive_weight}, lambda_p {cfg.psi_weight}")
+                f"lambda_c {cfg.contrastive_weight}, lambda_p {cfg.psi_weight}"
+            )
         self.model.train()
         step = 0
         started = time.time()
         quarter = max(1, total_steps // 4)
-        for epoch in range(cfg.epochs):
+        for _epoch in range(cfg.epochs):
             rng.shuffle(items)
             running = {"mlm": 0.0, "contrastive": 0.0, "psi": 0.0}
             running_n, masked, biased = 0, 0, 0
             for k in range(steps_per_epoch):
-                chunk = items[(k * cfg.batch_size) % max(len(items), 1):][: cfg.batch_size] if items else []
+                chunk = (
+                    items[(k * cfg.batch_size) % max(len(items), 1) :][: cfg.batch_size]
+                    if items
+                    else []
+                )
                 loss = None
                 if use_mlm and chunk:
                     batch = self.mlm.batch([(s, r) for s, r, _ in chunk], rng)
                     part = self.mlm.loss(self.model, batch, cfg.device)
-                    running["mlm"] += float(part.item()); masked += batch["_n_masked"]; biased += batch["_n_biased"]
+                    running["mlm"] += float(part.item())
+                    masked += batch["_n_masked"]
+                    biased += batch["_n_biased"]
                     loss = part
                 if use_c:
-                    part = cfg.contrastive_weight * self.contrastive.loss(self.model, self.contrastive.batch(rng), cfg.device)
+                    part = cfg.contrastive_weight * self.contrastive.loss(
+                        self.model, self.contrastive.batch(rng), cfg.device
+                    )
                     running["contrastive"] += float(part.item()) / cfg.contrastive_weight
                     loss = part if loss is None else loss + part
-                psi_chunk = chunk if psi_items is items else (
-                    psi_items[(k * cfg.batch_size) % max(len(psi_items), 1):][: cfg.batch_size] if psi_items else [])
+                psi_chunk = (
+                    chunk
+                    if psi_items is items
+                    else (
+                        psi_items[(k * cfg.batch_size) % max(len(psi_items), 1) :][: cfg.batch_size]
+                        if psi_items
+                        else []
+                    )
+                )
                 if use_p and psi_chunk:
-                    part = cfg.psi_weight * self.psi.loss(self.model, self.psi.batch([(s, r) for s, r, _ in psi_chunk], rng), cfg.device)
+                    part = cfg.psi_weight * self.psi.loss(
+                        self.model,
+                        self.psi.batch([(s, r) for s, r, _ in psi_chunk], rng),
+                        cfg.device,
+                    )
                     running["psi"] += float(part.item()) / cfg.psi_weight
                     loss = part if loss is None else loss + part
                 if loss is None:
@@ -471,7 +581,8 @@ class Stage0Trainer:
                 optimiser.zero_grad(set_to_none=True)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(params, 1.0)
-                optimiser.step(); scheduler.step()
+                optimiser.step()
+                scheduler.step()
                 step += 1
                 running_n += 1
                 if log and (step % cfg.log_every == 0 or step == total_steps):
@@ -479,16 +590,21 @@ class Stage0Trainer:
                     entry = {"step": step}
                     if use_mlm:
                         entry["mlm"] = means["mlm"]
-                        log(f"[stage0] mlm step {step}/{total_steps}: loss {means['mlm']:.4f} (masked {masked}, biased share "
-                            f"{biased / max(masked, 1):.2f}, {(time.time() - started) / 60:.1f} min)")
+                        log(
+                            f"[stage0] mlm step {step}/{total_steps}: loss {means['mlm']:.4f} (masked {masked}, biased share "
+                            f"{biased / max(masked, 1):.2f}, {(time.time() - started) / 60:.1f} min)"
+                        )
                     if use_c:
                         entry["contrastive"] = means["contrastive"]
-                        log(f"[stage0] contrastive step {step}/{total_steps}: loss {means['contrastive']:.4f} (InfoNCE, log(batch) = {math.log(cfg.batch_size):.2f})")
+                        log(
+                            f"[stage0] contrastive step {step}/{total_steps}: loss {means['contrastive']:.4f} (InfoNCE, log(batch) = {math.log(cfg.batch_size):.2f})"
+                        )
                     if use_p:
                         entry["psi"] = means["psi"]
                         log(f"[stage0] psi step {step}/{total_steps}: loss {means['psi']:.4f}")
                     self.history.append(entry)
-                    running = {"mlm": 0.0, "contrastive": 0.0, "psi": 0.0}; running_n, masked, biased = 0, 0, 0
+                    running = {"mlm": 0.0, "contrastive": 0.0, "psi": 0.0}
+                    running_n, masked, biased = 0, 0, 0
                 if step % quarter == 0 and step < total_steps:
                     self.save(self.config.out / f"checkpoint-{step}")
         return self
@@ -502,7 +618,9 @@ class Stage0Trainer:
         path.mkdir(parents=True, exist_ok=True)
         encoder = self.model.base_model if hasattr(self.model, "base_model") else self.model
         encoder.save_pretrained(path)
-        self.model.save_pretrained(path / "with_mlm_head") if path.name == self.CHECKPOINT_NAME else None
+        self.model.save_pretrained(
+            path / "with_mlm_head"
+        ) if path.name == self.CHECKPOINT_NAME else None
         from retexo.formulations.pair_encoding import is_latin_bert, latin_bert_vocab
 
         if is_latin_bert(self.config.base_model):
@@ -512,7 +630,9 @@ class Stage0Trainer:
             from transformers import AutoTokenizer
 
             AutoTokenizer.from_pretrained(self.config.base_model).save_pretrained(path)
-        (path / "stage0.json").write_text(json.dumps({"config": self.config.as_dict(), "history": self.history}, indent=1))
+        (path / "stage0.json").write_text(
+            json.dumps({"config": self.config.as_dict(), "history": self.history}, indent=1)
+        )
         return path
 
 
@@ -567,8 +687,16 @@ class GeometryProbe:
 
     LEXICAL = ("SYN", "POS", "NE-SUB", "SUBST")
 
-    def __init__(self, *, layer: int = 8, device: str = "cpu", max_length: int = 256, nonlinks_per_record: int = 20,
-                 bootstrap: int = 1000, seed: int = 1):
+    def __init__(
+        self,
+        *,
+        layer: int = 8,
+        device: str = "cpu",
+        max_length: int = 256,
+        nonlinks_per_record: int = 20,
+        bootstrap: int = 1000,
+        seed: int = 1,
+    ):
         self.layer = layer
         self.device = device
         self.max_length = max_length
@@ -588,10 +716,14 @@ class GeometryProbe:
         out = []
         with torch.no_grad():
             for i in range(0, len(records), 16):
-                chunk = records[i:i + 16]
-                batch, reuse_spans = encoder.encode([(list(r.source_tokens), list(r.reuse_tokens)) for r in chunk], self.max_length)
+                chunk = records[i : i + 16]
+                batch, reuse_spans = encoder.encode(
+                    [(list(r.source_tokens), list(r.reuse_tokens)) for r in chunk], self.max_length
+                )
                 source_spans = encoder.last_source_spans
-                hidden = model(**{k: v.to(self.device) for k, v in batch.items()}, output_hidden_states=True).hidden_states[self.layer]
+                hidden = model(
+                    **{k: v.to(self.device) for k, v in batch.items()}, output_hidden_states=True
+                ).hidden_states[self.layer]
                 for row in range(len(chunk)):
                     h = hidden[row].float().cpu()
                     s_vec = {j: h[a:b].mean(0) for j, (a, b) in enumerate(source_spans[row])}
@@ -616,7 +748,7 @@ class GeometryProbe:
         from scipy.stats import rankdata
 
         p, n = np.asarray(pos, dtype=float), np.asarray(neg, dtype=float)
-        ranks = rankdata(np.concatenate([p, n]))              # ties share their average rank
+        ranks = rankdata(np.concatenate([p, n]))  # ties share their average rank
         r_pos = ranks[: len(p)].sum()
         return float((r_pos - len(p) * (len(p) + 1) / 2) / (len(p) * len(n)))
 
@@ -625,7 +757,14 @@ class GeometryProbe:
 
         rng = random.Random(self.seed)
         vectors = self._vectors(model_name, records, log=log)
-        cos: Dict[str, List[float]] = {"COPY": [], "MORPH": [], "LEXICAL": [], "SUBST": [], "NONLINK": [], "COMPETITOR": []}
+        cos: Dict[str, List[float]] = {
+            "COPY": [],
+            "MORPH": [],
+            "LEXICAL": [],
+            "SUBST": [],
+            "NONLINK": [],
+            "COMPETITOR": [],
+        }
         alpha = lambda w: any(c.isalpha() for c in w)  # noqa: E731
         for record, (s_vec, r_vec) in zip(records, vectors):
             linked = {(e.r, e.s) for e in record.links}
@@ -646,8 +785,14 @@ class GeometryProbe:
                     for s in rng.sample(others, min(len(others), 10)):
                         cos["COMPETITOR"].append(self._cos(r_vec[e.r], s_vec[s]))
             # random non-link cells between alphabetic words
-            cells = [(t, s) for t in r_vec for s in s_vec
-                     if (t, s) not in linked and alpha(record.reuse_tokens[t]) and alpha(record.source_tokens[s])]
+            cells = [
+                (t, s)
+                for t in r_vec
+                for s in s_vec
+                if (t, s) not in linked
+                and alpha(record.reuse_tokens[t])
+                and alpha(record.source_tokens[s])
+            ]
             for t, s in rng.sample(cells, min(len(cells), self.nonlinks_per_record)):
                 cos["NONLINK"].append(self._cos(r_vec[t], s_vec[s]))
         auc = self._auc(cos["LEXICAL"], cos["NONLINK"])
@@ -656,13 +801,21 @@ class GeometryProbe:
         pos, neg = np.asarray(cos["LEXICAL"]), np.asarray(cos["NONLINK"])
         for _ in range(self.bootstrap):
             if len(pos) and len(neg):
-                boots.append(self._auc(list(np_rng.choice(pos, len(pos))), list(np_rng.choice(neg, len(neg)))))
+                boots.append(
+                    self._auc(
+                        list(np_rng.choice(pos, len(pos))), list(np_rng.choice(neg, len(neg)))
+                    )
+                )
         mean = lambda xs: float(np.mean(xs)) if xs else float("nan")  # noqa: E731
         return ProbeResult(
-            model=model_name, auc_lexical_vs_nonlink=auc,
+            model=model_name,
+            auc_lexical_vs_nonlink=auc,
             auc_lexical_vs_competitors=self._auc(cos["LEXICAL"], cos["COMPETITOR"]),
             auc_subst_vs_nonlink=self._auc(cos["SUBST"], cos["NONLINK"]),
             spread=float(np.std(boots)) if boots else float("nan"),
-            cos_copy=mean(cos["COPY"]), cos_morph=mean(cos["MORPH"]), cos_lexical=mean(cos["LEXICAL"]), cos_nonlink=mean(cos["NONLINK"]),
+            cos_copy=mean(cos["COPY"]),
+            cos_morph=mean(cos["MORPH"]),
+            cos_lexical=mean(cos["LEXICAL"]),
+            cos_nonlink=mean(cos["NONLINK"]),
             n={k: len(v) for k, v in cos.items()},
         )

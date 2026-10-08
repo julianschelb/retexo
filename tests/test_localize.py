@@ -50,8 +50,9 @@ def test_window_respects_slack():
 
 def test_longer_source_is_trimmed():
     target = "decem tulerunt fastidia".split()
-    source = ("incipe parue puer risu cognoscere matrem matri longa "
-              "decem tulerunt fastidia menses").split()
+    source = (
+        "incipe parue puer risu cognoscere matrem matri longa decem tulerunt fastidia menses"
+    ).split()
     span = Localized.find(source, target)
     check("source trimmed", len(span.source) < len(source))
     check("target kept whole", span.target == target)

@@ -15,6 +15,7 @@ from retexo.datasets.negatives import KINDS, NegativeBuilder  # noqa: E402
 @pytest.fixture(scope="module")
 def data():
     from retexo.datasets.dataset import BenchmarkData
+
     try:
         return BenchmarkData.load()
     except FileNotFoundError:
@@ -46,6 +47,7 @@ def test_held_out_negatives_use_held_out_queries(data):
 
 def test_adjacent_is_a_neighbour_of_the_cited_passage(data):
     import random
+
     b = NegativeBuilder(data, held_out=4)
     rng = random.Random(3)
     hits = 0
@@ -54,8 +56,13 @@ def test_adjacent_is_a_neighbour_of_the_cited_passage(data):
         if src is None:
             continue
         i = b.by_position[str(row.position_corpus)]
-        j = b.by_position[str(b.rows.position.iloc[[k for k in (i - 1, i + 1)
-                                                    if 0 <= k < len(b.rows) and b._text(k) == src][0]])]
+        j = b.by_position[
+            str(
+                b.rows.position.iloc[
+                    [k for k in (i - 1, i + 1) if 0 <= k < len(b.rows) and b._text(k) == src][0]
+                ]
+            )
+        ]
         assert abs(i - j) == 1
         hits += 1
     assert hits > 50
@@ -65,11 +72,17 @@ def test_training_negatives_avoid_every_held_fold_and_excluded_passage(data):
     from retexo.core.normalize import normalize
 
     labels = data.labels
-    extra = str(labels[labels.fold_id == 1].text_query_cleaned.iloc[0])      # a "validation" passage in a training fold
+    extra = str(
+        labels[labels.fold_id == 1].text_query_cleaned.iloc[0]
+    )  # a "validation" passage in a training fold
     b = NegativeBuilder(data, held_out=(4, 0), exclude_texts=[extra])
-    held = {normalize(t) for col in ("text_query_cleaned", "text_corpus_cleaned")
-            for t in labels[labels.fold_id.isin((4, 0))][col].astype(str)} | {normalize(extra)}
+    held = {
+        normalize(t)
+        for col in ("text_query_cleaned", "text_corpus_cleaned")
+        for t in labels[labels.fold_id.isin((4, 0))][col].astype(str)
+    } | {normalize(extra)}
     negs = b.build(60, seed=2, for_training=True)
-    used = {normalize(" ".join(e.source_tokens)) for e in negs} | {normalize(" ".join(e.target_tokens)) for e in negs}
+    used = {normalize(" ".join(e.source_tokens)) for e in negs} | {
+        normalize(" ".join(e.target_tokens)) for e in negs
+    }
     assert negs and not used & held
-

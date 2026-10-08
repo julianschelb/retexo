@@ -68,14 +68,18 @@ class CurveRecorder:
         if loss is None:
             return None
         tag = _TAG.match(line)
-        body = line[tag.end():] if tag else line
+        body = line[tag.end() :] if tag else line
         step = _STEP.search(body)
         if step is None:
             return None
         stage = step.group("stage").strip().lower().strip(":")
-        return CurvePoint(tag=tag.group("tag") if tag else "", stage=stage or "epoch",
-                          step=int(step.group("step")), total=int(step.group("total")),
-                          loss=float(loss.group("loss")))
+        return CurvePoint(
+            tag=tag.group("tag") if tag else "",
+            stage=stage or "epoch",
+            step=int(step.group("step")),
+            total=int(step.group("total")),
+            loss=float(loss.group("loss")),
+        )
 
     def points_as_dicts(self) -> List[Dict[str, object]]:
         return [asdict(p) for p in self.points]
@@ -88,7 +92,10 @@ class CurvePlot:
     def series(points: Sequence[Dict[str, object]]) -> Dict[str, List[tuple]]:
         out: Dict[str, List[tuple]] = {}
         for p in points:
-            key = " ".join(str(x) for x in (p.get("tag", ""), p.get("stage", "")) if x).strip() or "loss"
+            key = (
+                " ".join(str(x) for x in (p.get("tag", ""), p.get("stage", "")) if x).strip()
+                or "loss"
+            )
             out.setdefault(key, []).append((int(p["step"]), float(p["loss"])))
         return out
 
@@ -102,8 +109,12 @@ class CurvePlot:
         series = cls.series(points)
         fig, ax = plt.subplots(figsize=(6.4, 3.6))
         for name, values in series.items():
-            xs = list(range(1, len(values) + 1)) if len({s for s, _ in values}) < len(values) else [s for s, _ in values]
-            ax.plot(xs, [l for _, l in values], marker="o", markersize=3, label=name)
+            xs = (
+                list(range(1, len(values) + 1))
+                if len({s for s, _ in values}) < len(values)
+                else [s for s, _ in values]
+            )
+            ax.plot(xs, [loss for _, loss in values], marker="o", markersize=3, label=name)
         ax.set_xlabel("step (epoch / pass / update, in log order)")
         ax.set_ylabel("loss")
         if title:
@@ -111,7 +122,9 @@ class CurvePlot:
         if series:
             ax.legend(fontsize=8)
         else:
-            ax.text(0.5, 0.5, "no loss lines logged", ha="center", va="center", transform=ax.transAxes)
+            ax.text(
+                0.5, 0.5, "no loss lines logged", ha="center", va="center", transform=ax.transAxes
+            )
         fig.tight_layout()
         png = Path(png)
         png.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +139,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(__doc__)
         return 1
     run_json = Path(args[0])
-    png = Path(args[args.index("--png") + 1]) if "--png" in args else run_json.with_suffix(".curve.png")
+    png = (
+        Path(args[args.index("--png") + 1])
+        if "--png" in args
+        else run_json.with_suffix(".curve.png")
+    )
     result = json.loads(run_json.read_text())
     points = result.get("curve", [])
     title = f"{result.get('method', run_json.stem)} ({result.get('where', '')}; fit {result.get('fit_seconds', '?')} s)"

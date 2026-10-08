@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
-from retexo.formulations.encoding import ScriptEncoder
-from retexo.formulations.base import FormulationConfig, ScriptExample, ScriptModel
-from retexo.operations import OperationRegistry
-from retexo.datasets.parsing import ScriptParser
 from retexo.core.script import EditScript
+from retexo.datasets.parsing import ScriptParser
+from retexo.formulations.base import FormulationConfig, ScriptExample, ScriptModel
+from retexo.formulations.encoding import ScriptEncoder
+from retexo.operations import OperationRegistry
 
 # =============================================================================
 # Config
@@ -81,7 +81,7 @@ class Seq2SeqFullModel(ScriptModel):
 
     # ---------- Training ----------
 
-    def fit(self, train: Sequence[ScriptExample]) -> "Seq2SeqFullModel":
+    def fit(self, train: Sequence[ScriptExample]) -> Seq2SeqFullModel:
         """Train on whole serialized scripts, one target string per pair."""
         import torch
 
@@ -109,12 +109,18 @@ class Seq2SeqFullModel(ScriptModel):
     def _step(self, chunk):
         """Loss for one batch of (input, target) string pairs."""
         inputs = self._tokenizer(
-            [c[0] for c in chunk], padding=True, truncation=True,
-            max_length=self.config.max_length, return_tensors="pt",
+            [c[0] for c in chunk],
+            padding=True,
+            truncation=True,
+            max_length=self.config.max_length,
+            return_tensors="pt",
         ).to(self.config.device)
         labels = self._tokenizer(
-            [c[1] for c in chunk], padding=True, truncation=True,
-            max_length=self.config.max_length, return_tensors="pt",
+            [c[1] for c in chunk],
+            padding=True,
+            truncation=True,
+            max_length=self.config.max_length,
+            return_tensors="pt",
         ).input_ids.to(self.config.device)
         labels[labels == self._tokenizer.pad_token_id] = -100
         return self._model(**inputs, labels=labels).loss
@@ -130,9 +136,13 @@ class Seq2SeqFullModel(ScriptModel):
         self._build()
         self._model.eval()
         stub = EditScript(list(source_tokens), list(target_tokens), [], self.registry)
-        model_input, _ = ScriptEncoder.to_seq2seq(stub, atomic_tags=self.config.atomic_operation_tokens)
+        model_input, _ = ScriptEncoder.to_seq2seq(
+            stub, atomic_tags=self.config.atomic_operation_tokens
+        )
         encoded = self._tokenizer(
-            model_input, return_tensors="pt", truncation=True,
+            model_input,
+            return_tensors="pt",
+            truncation=True,
             max_length=self.config.max_length,
         ).to(self.config.device)
 

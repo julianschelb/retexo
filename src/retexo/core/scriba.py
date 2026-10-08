@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
 from retexo.core.normalize import normalize
-from retexo.operations import OperationRegistry, Role
 from retexo.core.script import EditScript
+from retexo.operations import OperationRegistry, Role
 
 # =============================================================================
 # Validity

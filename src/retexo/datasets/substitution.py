@@ -27,31 +27,157 @@ avoids both problems and keeps the pool under our control.
 
 from __future__ import annotations
 
-from retexo.formulations.pair_encoding import latin_bert_pieces
-
 import random
-import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from retexo.core.normalize import normalize
+from retexo.formulations.pair_encoding import latin_bert_pieces
 
 #: Latin function words, excluded from substitution candidates.
-STOPWORDS = frozenset("""
-et ac atque que nec neque aut vel ve sed at nam enim autem vero quidem tamen
-in ad ex de ab a e cum sine per pro sub super ante post inter ob prae propter
-non ne haud nihil nemo
-qui quae quod quis quid is ea id hic haec ille illa illud iste ipse idem
-sum es est sunt eram erat erit esse fuit
-ut si cum dum donec quia quod quoniam ubi unde quo
-ne an num utrum
-iam nunc tunc tum deinde mox semper saepe nondum iamque quoque etiam adhuc
-ita sic tam quam magis minus valde admodum satis nimis prorsus omnino
-igitur ergo itaque nempe scilicet videlicet forte fortasse
-ego tu nos vos me te se mihi tibi sibi meus tuus suus noster vester
-omnis omnes totus alius alter ceterus quisque quisquam ullus nullus
-""".split())
+STOPWORDS = frozenset(
+    [
+        "et",
+        "ac",
+        "atque",
+        "que",
+        "nec",
+        "neque",
+        "aut",
+        "vel",
+        "ve",
+        "sed",
+        "at",
+        "nam",
+        "enim",
+        "autem",
+        "vero",
+        "quidem",
+        "tamen",
+        "in",
+        "ad",
+        "ex",
+        "de",
+        "ab",
+        "a",
+        "e",
+        "cum",
+        "sine",
+        "per",
+        "pro",
+        "sub",
+        "super",
+        "ante",
+        "post",
+        "inter",
+        "ob",
+        "prae",
+        "propter",
+        "non",
+        "ne",
+        "haud",
+        "nihil",
+        "nemo",
+        "qui",
+        "quae",
+        "quod",
+        "quis",
+        "quid",
+        "is",
+        "ea",
+        "id",
+        "hic",
+        "haec",
+        "ille",
+        "illa",
+        "illud",
+        "iste",
+        "ipse",
+        "idem",
+        "sum",
+        "es",
+        "est",
+        "sunt",
+        "eram",
+        "erat",
+        "erit",
+        "esse",
+        "fuit",
+        "ut",
+        "si",
+        "cum",
+        "dum",
+        "donec",
+        "quia",
+        "quod",
+        "quoniam",
+        "ubi",
+        "unde",
+        "quo",
+        "ne",
+        "an",
+        "num",
+        "utrum",
+        "iam",
+        "nunc",
+        "tunc",
+        "tum",
+        "deinde",
+        "mox",
+        "semper",
+        "saepe",
+        "nondum",
+        "iamque",
+        "quoque",
+        "etiam",
+        "adhuc",
+        "ita",
+        "sic",
+        "tam",
+        "quam",
+        "magis",
+        "minus",
+        "valde",
+        "admodum",
+        "satis",
+        "nimis",
+        "prorsus",
+        "omnino",
+        "igitur",
+        "ergo",
+        "itaque",
+        "nempe",
+        "scilicet",
+        "videlicet",
+        "forte",
+        "fortasse",
+        "ego",
+        "tu",
+        "nos",
+        "vos",
+        "me",
+        "te",
+        "se",
+        "mihi",
+        "tibi",
+        "sibi",
+        "meus",
+        "tuus",
+        "suus",
+        "noster",
+        "vester",
+        "omnis",
+        "omnes",
+        "totus",
+        "alius",
+        "alter",
+        "ceterus",
+        "quisque",
+        "quisquam",
+        "ullus",
+        "nullus",
+    ]
+)
 
 # =============================================================================
 # Candidate pool
@@ -84,7 +210,7 @@ class CandidatePool:
         *,
         max_words: Optional[int] = None,
         frequent_cutoff: int = 250,
-    ) -> "CandidatePool":
+    ) -> CandidatePool:
         """Assemble the pool from a corpus vocabulary.
 
         Function words are excluded by *frequency* rather than by a hand-written
@@ -97,9 +223,7 @@ class CandidatePool:
         """
         import collections
 
-        counts = collections.Counter(
-            resources.lemma_or_surface(w) for w in corpus_words
-        )
+        counts = collections.Counter(resources.lemma_or_surface(w) for w in corpus_words)
         frequent = {lemma for lemma, _ in counts.most_common(frequent_cutoff)}
 
         pool = cls(excluded_frequent=len(frequent))
@@ -215,9 +339,7 @@ class ContextualScorer:
             pieces = latin_bert_pieces(self._encoder, candidate)
             if not pieces:
                 continue
-            scored.append(
-                (candidate, float(sum(log_probs[p] for p in pieces) / len(pieces)))
-            )
+            scored.append((candidate, float(sum(log_probs[p] for p in pieces) / len(pieces))))
         scored.sort(key=lambda x: -x[1])
         return scored[:top_k]
 
@@ -283,8 +405,7 @@ class ContextualSubstitutionSource:
     @classmethod
     def build(cls, resources, corpus_words: Sequence[str], **kwargs):
         """Construct with a pool built from a corpus vocabulary."""
-        return cls(resources=resources,
-                   pool=CandidatePool.build(resources, corpus_words), **kwargs)
+        return cls(resources=resources, pool=CandidatePool.build(resources, corpus_words), **kwargs)
 
     def realises(self, tag: str) -> bool:
         """Whether a substitution under ``tag`` would mean what it says."""
@@ -315,7 +436,8 @@ class ContextualSubstitutionSource:
         lemma = self.resources.lemma_or_surface(token)
         pos = self.resources.pos_of(token) if self.use_pos_filter else None
         candidates = (
-            self.pool.candidates(pos, lemma, 0) if pos
+            self.pool.candidates(pos, lemma, 0)
+            if pos
             else [w for words_ in self.pool.by_pos.values() for w in words_]
         )
         plausible = self._semantically_plausible(lemma, candidates)
@@ -332,9 +454,13 @@ class ContextualSubstitutionSource:
             return None
         best, best_similarity = None, -1.0
         for candidate, _ in shortlist:
-            similarity = self.resources.vectors.similarity(
-                lemma, self.pool.lemma_of.get(candidate, candidate)
-            ) if self.resources.has("vectors") else 0.0
+            similarity = (
+                self.resources.vectors.similarity(
+                    lemma, self.pool.lemma_of.get(candidate, candidate)
+                )
+                if self.resources.has("vectors")
+                else 0.0
+            )
             if similarity is not None and similarity > best_similarity:
                 best, best_similarity = candidate, similarity
         if best is None:
@@ -352,9 +478,7 @@ class ContextualSubstitutionSource:
 
     # ---------- Internals ----------
 
-    def _semantically_plausible(
-        self, source_lemma: str, candidates: Sequence[str]
-    ) -> List[str]:
+    def _semantically_plausible(self, source_lemma: str, candidates: Sequence[str]) -> List[str]:
         """Keep candidates distributionally close enough to be a substitution.
 
         This runs *before* the contextual model rather than after it. A masked

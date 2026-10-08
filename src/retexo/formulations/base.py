@@ -45,7 +45,7 @@ class ScriptExample:
     fragment_span: Optional[Any] = None
 
     @classmethod
-    def from_record(cls, record: Dict[str, Any]) -> "ScriptExample":
+    def from_record(cls, record: Dict[str, Any]) -> ScriptExample:
         """Build from a generator record."""
         return cls(
             source_tokens=record["source_tokens"],
@@ -111,7 +111,7 @@ class ScriptModel(ABC):
     # ---------- Training ----------
 
     @abstractmethod
-    def fit(self, train: Sequence[ScriptExample]) -> "ScriptModel":
+    def fit(self, train: Sequence[ScriptExample]) -> ScriptModel:
         """Train on gold scripts. Returns self so calls can be chained."""
 
     # ---------- Inference ----------

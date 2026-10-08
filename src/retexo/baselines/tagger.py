@@ -83,7 +83,7 @@ class LabelSet:
     def token_labels(self, record: Record, *, train_on: str = "all") -> List[str]:
         if self.name == "ists":
             fixed = list(record.annotation.get("ists_type") or [])
-            return (fixed + ["NOALI"] * record.n_reuse)[:record.n_reuse]
+            return (fixed + ["NOALI"] * record.n_reuse)[: record.n_reuse]
         links, tags, frame, sure = RecordInterface.links_of(record)
         if train_on == "sure":
             links = [s if sure[t] else -1 for t, s in enumerate(links)]
@@ -104,8 +104,9 @@ LABEL_SETS: Dict[str, LabelSet] = {
 # =============================================================================
 
 
-def examples_from_records(records: Sequence[Record], label_set: LabelSet, *, train_on: str = "all"
-                          ) -> List[ChangeExample]:
+def examples_from_records(
+    records: Sequence[Record], label_set: LabelSet, *, train_on: str = "all"
+) -> List[ChangeExample]:
     """One `ChangeExample` per record, labelled at `label_set`'s level.
 
     A possible-only edge (``train_on="sure"``) is dropped to a null link before
@@ -118,17 +119,23 @@ def examples_from_records(records: Sequence[Record], label_set: LabelSet, *, tra
         links, _, _, _ = RecordInterface.links_of(record)
         reuse_labels = label_set.token_labels(record, train_on=train_on)
         source_labels_str = Labels.source_labels(links, record.n_source)
-        out.append(ChangeExample(
-            source_tokens=list(record.source_tokens), target_tokens=list(record.reuse_tokens),
-            labels=[0 if op == label_set.keep else 1 for op in reuse_labels],
-            operations=reuse_labels, n_operations=sum(1 for op in reuse_labels if op != label_set.keep),
-            source_labels=[0 if op == "KEEP" else 1 for op in source_labels_str],
-            source_operations=source_labels_str))
+        out.append(
+            ChangeExample(
+                source_tokens=list(record.source_tokens),
+                target_tokens=list(record.reuse_tokens),
+                labels=[0 if op == label_set.keep else 1 for op in reuse_labels],
+                operations=reuse_labels,
+                n_operations=sum(1 for op in reuse_labels if op != label_set.keep),
+                source_labels=[0 if op == "KEEP" else 1 for op in source_labels_str],
+                source_operations=source_labels_str,
+            )
+        )
     return out
 
 
-def _class_weights(examples: Sequence[ChangeExample], classes: Sequence[str], *, cap: float = 20.0
-                   ) -> Tuple[Tuple[str, float], ...]:
+def _class_weights(
+    examples: Sequence[ChangeExample], classes: Sequence[str], *, cap: float = 20.0
+) -> Tuple[Tuple[str, float], ...]:
     """Inverse class frequency over `examples`, capped at `cap`, normalised so the
     most frequent class has weight 1."""
     counts = {c: 0 for c in classes}
@@ -184,12 +191,23 @@ class Tagger(Baseline):
         self.model: Optional[ChangeDetector] = None
 
     def _build_model(self, class_weights: Tuple[Tuple[str, float], ...]) -> ChangeDetector:
-        return ChangeDetector(ChangeDetectorConfig(
-            base_model=self.cfg.base_model, pooling=self.pooling, max_length=self.cfg.max_length,
-            epochs=1, batch_size=int(self.cfg.extra.get("batch_size", self.cfg.batch_size)),
-            learning_rate=self.cfg.learning_rate, device=self.cfg.device, seed=self.cfg.seed,
-            source_head=self.label_set.source_head, operations=self.label_set.classes,
-            class_weights=class_weights, logit_bias=(), focal_gamma=self.focal_gamma))
+        return ChangeDetector(
+            ChangeDetectorConfig(
+                base_model=self.cfg.base_model,
+                pooling=self.pooling,
+                max_length=self.cfg.max_length,
+                epochs=1,
+                batch_size=int(self.cfg.extra.get("batch_size", self.cfg.batch_size)),
+                learning_rate=self.cfg.learning_rate,
+                device=self.cfg.device,
+                seed=self.cfg.seed,
+                source_head=self.label_set.source_head,
+                operations=self.label_set.classes,
+                class_weights=class_weights,
+                logit_bias=(),
+                focal_gamma=self.focal_gamma,
+            )
+        )
 
     # ---------- training ----------
 
@@ -203,19 +221,26 @@ class Tagger(Baseline):
             data = BenchmarkData.load()
         except (FileNotFoundError, ImportError):
             return []
-        held_texts = [" ".join(tokens) for r in self.validation for tokens in (r.source_tokens, r.reuse_tokens)]
-        return NegativeBuilder(data, held_out=held_folds, exclude_texts=held_texts).build(n, for_training=True)
+        held_texts = [
+            " ".join(tokens)
+            for r in self.validation
+            for tokens in (r.source_tokens, r.reuse_tokens)
+        ]
+        return NegativeBuilder(data, held_out=held_folds, exclude_texts=held_texts).build(
+            n, for_training=True
+        )
 
     def validation_loss(self, records: Sequence[Record]) -> Optional[float]:
         """The tagger's training loss on ``records`` (no gradient)."""
         if self.model is None:
             return None
-        return self.model.evaluation_loss(examples_from_records(records, self.label_set, train_on=self.train_on))
+        return self.model.evaluation_loss(
+            examples_from_records(records, self.label_set, train_on=self.train_on)
+        )
 
-    def fit(self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
-           ) -> "Tagger":
-        import torch
-
+    def fit(
+        self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
+    ) -> Tagger:
         gold = examples_from_records(train, self.label_set, train_on=self.train_on)
         if not gold:
             return self
@@ -235,7 +260,9 @@ class Tagger(Baseline):
             rng.shuffle(order)
             self.model.fit(order, log=log, on_batch=on_batch)
             if log:
-                log(f"[tagger] pass {label} ({'cold' if frozen else 'warm'}, {len(examples)} examples)")
+                log(
+                    f"[tagger] pass {label} ({'cold' if frozen else 'warm'}, {len(examples)} examples)"
+                )
 
         def stop_after(epoch: int) -> bool:
             return stopper is not None and not stopper.step(epoch, self.modules())
@@ -249,24 +276,46 @@ class Tagger(Baseline):
             cold = len(synthetic) // 10
             one_pass(synthetic[:cold], True, "synthetic, cold")
             monitor = stopper.monitor if stopper is not None else None
-            one_pass(synthetic[cold:], False, "synthetic", monitor.progress("synthetic", int(self.cfg.extra.get("synthetic_evals", 4))) if monitor else None)
+            one_pass(
+                synthetic[cold:],
+                False,
+                "synthetic",
+                monitor.progress("synthetic", int(self.cfg.extra.get("synthetic_evals", 4)))
+                if monitor
+                else None,
+            )
             if monitor is not None:
                 monitor.evaluate("synthetic", fraction=1.0)
             if log:
                 log(f"[tagger] shared schedule {schedule.summary()}")
             for i in range(gold_passes):
-                one_pass(examples_from_records(schedule.real_pass(), self.label_set, train_on=self.train_on),
-                         False, f"{i + 1}/{gold_passes}")
+                one_pass(
+                    examples_from_records(
+                        schedule.real_pass(), self.label_set, train_on=self.train_on
+                    ),
+                    False,
+                    f"{i + 1}/{gold_passes}",
+                )
                 if stop_after(i + 1):
                     break
         else:
             # the method's own recipe (external sets, runs without --shared-data)
-            held_folds = tuple(f for f in (self.cfg.fold, self.cfg.dev_fold) if f is not None and f >= 0)
+            held_folds = tuple(
+                f for f in (self.cfg.fold, self.cfg.dev_fold) if f is not None and f >= 0
+            )
             n_negatives = int(len(gold) * self.neg_ratio)
-            negatives = self._negatives(held_folds, n_negatives) if self.use_negatives and held_folds else []
+            negatives = (
+                self._negatives(held_folds, n_negatives)
+                if self.use_negatives and held_folds
+                else []
+            )
             if self.use_negatives and log:
-                log(f"[tagger] negatives: {len(negatives)} ({'BenchmarkData found' if negatives else 'not available, skipped'})")
-            cold = min(self.cold_passes, gold_passes)   # cold passes are a prefix of gold_passes, never more
+                log(
+                    f"[tagger] negatives: {len(negatives)} ({'BenchmarkData found' if negatives else 'not available, skipped'})"
+                )
+            cold = min(
+                self.cold_passes, gold_passes
+            )  # cold passes are a prefix of gold_passes, never more
             epoch = 0
             for i in range(gold_passes):
                 one_pass(gold, i < cold, f"{i + 1}/{gold_passes}")
@@ -291,7 +340,11 @@ class Tagger(Baseline):
         """The encoder and the two heads."""
         if self.model is None:
             return {}
-        return {"encoder": self.model._encoder, "head": self.model._head, "source_head": self.model._source_head}
+        return {
+            "encoder": self.model._encoder,
+            "head": self.model._head,
+            "source_head": self.model._source_head,
+        }
 
     # ---------- dev-fold dials ----------
 
@@ -300,9 +353,12 @@ class Tagger(Baseline):
         no level there (a converter-supplied field, not an edge collapse), so its
         dev criterion is a plain per-class F1 over `record.annotation["ists_type"]`."""
         if self.label_set.score_level is not None:
-            return BaselineScorer.op_scores(dev, preds, self.label_set.score_level,
-                                            require_source=False)["macro_f1"]
-        tp: Dict[str, int] = {}; fp: Dict[str, int] = {}; fn: Dict[str, int] = {}
+            return BaselineScorer.op_scores(
+                dev, preds, self.label_set.score_level, require_source=False
+            )["macro_f1"]
+        tp: Dict[str, int] = {}
+        fp: Dict[str, int] = {}
+        fn: Dict[str, int] = {}
         for record, pred in zip(dev, preds):
             gold = self.label_set.token_labels(record)
             for g, p in zip(gold, pred.tags):
@@ -318,7 +374,9 @@ class Tagger(Baseline):
                 continue
             precision = t / (t + fpc) if (t + fpc) else 0.0
             recall = t / (t + fnc) if (t + fnc) else 0.0
-            f1s.append(2 * precision * recall / (precision + recall) if (precision + recall) else 0.0)
+            f1s.append(
+                2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+            )
         return sum(f1s) / len(f1s) if f1s else 0.0
 
     def tune(self, dev: List[Record], *, log=None) -> Dict[str, float]:
@@ -334,7 +392,9 @@ class Tagger(Baseline):
                     best_bias, best_p, best_f1 = bias, min_p, f1
         self.keep_bias, self.min_change_p = best_bias, best_p
         if log:
-            log(f"[tagger] tuned keep_bias={best_bias} min_change_p={best_p} (dev macro F1 {best_f1:.3f})")
+            log(
+                f"[tagger] tuned keep_bias={best_bias} min_change_p={best_p} (dev macro F1 {best_f1:.3f})"
+            )
         return {"keep_bias": best_bias, "min_change_p": best_p}
 
     # ---------- inference ----------
@@ -365,23 +425,30 @@ class Tagger(Baseline):
         import torch
 
         model = self.model
-        model._encoder.eval(); model._head.eval()
+        model._encoder.eval()
+        model._head.eval()
         classes = model._classes
         keep_index = classes.index(self.label_set.keep)
         out: List[List[str]] = []
         batch_size = model.config.batch_size
         with torch.no_grad():
             for start in range(0, len(examples), batch_size):
-                chunk = list(examples[start:start + batch_size])
+                chunk = list(examples[start : start + batch_size])
                 if not chunk:
                     continue
                 batch, spans = model._pair_encoder.encode(
-                    [(list(e.source_tokens), list(e.target_tokens)) for e in chunk], model.config.max_length)
+                    [(list(e.source_tokens), list(e.target_tokens)) for e in chunk],
+                    model.config.max_length,
+                )
                 batch_on = {k: v.to(model.config.device) for k, v in batch.items()}
                 hidden = model._encoder(**batch_on).last_hidden_state
                 for row, example in enumerate(chunk):
                     tags = [self.label_set.keep] * len(example.target_tokens)
-                    usable = [(w, a, b) for w, (a, b) in enumerate(spans[row]) if w < len(example.target_tokens)]
+                    usable = [
+                        (w, a, b)
+                        for w, (a, b) in enumerate(spans[row])
+                        if w < len(example.target_tokens)
+                    ]
                     if usable:
                         st = torch.tensor([a for _, a, _ in usable])
                         en = torch.tensor([max(b, a + 1) for _, a, b in usable])
@@ -392,7 +459,8 @@ class Tagger(Baseline):
                         for (word, _, _), guess in zip(usable, chosen):
                             tags[word] = classes[guess]
                     out.append(tags)
-        model._encoder.train(); model._head.train()
+        model._encoder.train()
+        model._head.train()
         return out
 
     def predict(self, records: List[Record]) -> List[Prediction]:
@@ -401,7 +469,9 @@ class Tagger(Baseline):
             return [Prediction.empty(r.n_reuse) for r in records]
         examples = examples_from_records(records, self.label_set, train_on="all")
         tags_per_record = self._predict_one_pass(examples)
-        dels_per_record = self.model.predict_source(examples) if self.label_set.source_head else None
+        dels_per_record = (
+            self.model.predict_source(examples) if self.label_set.source_head else None
+        )
         for i, record in enumerate(records):
             pred = Prediction.empty(record.n_reuse)
             tags = tags_per_record[i]
@@ -425,12 +495,21 @@ class Tagger(Baseline):
         path.mkdir(parents=True, exist_ok=True)
         if self.model is None:
             return
-        torch.save({"encoder_state": self.model._encoder.state_dict(), "head_state": self.model._head.state_dict(),
-                   "source_head_state": self.model._source_head.state_dict() if self.model._source_head else None,
-                   "keep_bias": self.keep_bias, "min_change_p": self.min_change_p}, path / "tagger.pt")
+        torch.save(
+            {
+                "encoder_state": self.model._encoder.state_dict(),
+                "head_state": self.model._head.state_dict(),
+                "source_head_state": self.model._source_head.state_dict()
+                if self.model._source_head
+                else None,
+                "keep_bias": self.keep_bias,
+                "min_change_p": self.min_change_p,
+            },
+            path / "tagger.pt",
+        )
 
     @classmethod
-    def load(cls, path: Path, cfg: BaselineConfig) -> "Tagger":
+    def load(cls, path: Path, cfg: BaselineConfig) -> Tagger:
         import torch
 
         method = cls(cfg)

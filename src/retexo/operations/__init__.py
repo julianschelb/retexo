@@ -15,15 +15,15 @@ from retexo.operations.span import Adapt, Disperse, Frame, Quote
 from retexo.operations.structural import Del, Ins, Reorder
 from retexo.operations.token import (
     Ant,
+    Form,
     Hyper,
     Hypo,
     Morph,
     NeSub,
     Nop,
     Pos,
-    Subst,
-    Form,
     Sense,
+    Subst,
     Syn,
     SynDist,
 )

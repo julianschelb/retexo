@@ -33,15 +33,32 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 from retexo.baselines import BaselineRegistry, labels
 from retexo.baselines.base import Baseline, BaselineConfig, Prediction
 from retexo.baselines.record import Record, extra_edges, links_of
-from retexo.edit_typing.link_features import FEATURE_NAMES, SymbolicTyper
 from retexo.core.normalize import normalize
+from retexo.edit_typing.link_features import FEATURE_NAMES, SymbolicTyper
 from retexo.edit_typing.repair import Repairer
 
-DEFAULT_SYN_COS = SymbolicTyper.DEFAULT_SYN_DIST   # link_features.py: 0.65, calibrated in calibrate_threshold.py
+DEFAULT_SYN_COS = (
+    SymbolicTyper.DEFAULT_SYN_DIST
+)  # link_features.py: 0.65, calibrated in calibrate_threshold.py
 DEFAULT_NE_FLOOR = SymbolicTyper.DEFAULT_NE_FLOOR  # link_features.py: 0.50
 CLAUSE_END = (":", ".", ";", "?", "!")
-DEFAULT_FRAME_KEYWORDS = ("ait", "inquit", "dicit", "dixit", "scribit", "scripsit", "testatur",
-                          "loquitur", "canit", "cecinit", "legimus", "legitur", "dicens", "dicente")
+DEFAULT_FRAME_KEYWORDS = (
+    "ait",
+    "inquit",
+    "dicit",
+    "dixit",
+    "scribit",
+    "scripsit",
+    "testatur",
+    "loquitur",
+    "canit",
+    "cecinit",
+    "legimus",
+    "legitur",
+    "dicens",
+    "dicente",
+)
+
 
 class RuleTyper:
     """From links to operations, the same rule for every row.
@@ -58,9 +75,16 @@ class RuleTyper:
         return dict(zip(FEATURE_NAMES, phi))
 
     @classmethod
-    def rule_type(cls, record: Record, links: Sequence[int], featurizer, *, syn_cos: float = DEFAULT_SYN_COS,
-                  ne_floor: float = DEFAULT_NE_FLOOR, spelling_fold: bool = True
-                  ) -> Tuple[List[str], List[str], List[str]]:
+    def rule_type(
+        cls,
+        record: Record,
+        links: Sequence[int],
+        featurizer,
+        *,
+        syn_cos: float = DEFAULT_SYN_COS,
+        ne_floor: float = DEFAULT_NE_FLOOR,
+        spelling_fold: bool = True,
+    ) -> Tuple[List[str], List[str], List[str]]:
         """The ordered decision list per reuse word: ``(tags, outcomes, details)``.
 
         Order: unlinked gives ``""`` (INS or FRAME are read off the links and
@@ -81,25 +105,35 @@ class RuleTyper:
             if s is None or s < 0 or s >= n_s:
                 continue
             src, tgt = record.source_tokens[s], record.reuse_tokens[t]
-            if normalize(src) == normalize(tgt) or (spelling_fold and Repairer.spelling_key(src) == Repairer.spelling_key(tgt)):
+            if normalize(src) == normalize(tgt) or (
+                spelling_fold and Repairer.spelling_key(src) == Repairer.spelling_key(tgt)
+            ):
                 tags[t] = "COPY"
                 continue
             f = cls._feature_dict(featurizer(src, tgt, s, t, n_s, n_t))
             if f.get("enclitic_stem_match"):
-                tags[t] = "SPLIT" if f.get("enclitic_src") and not f.get("enclitic_tgt") else "MERGE"
+                tags[t] = (
+                    "SPLIT" if f.get("enclitic_src") and not f.get("enclitic_tgt") else "MERGE"
+                )
                 continue
             if f.get("same_lemma"):
                 tags[t] = "MORPH"
                 continue
             if f.get("lemma_missing"):
                 outcomes[t] = "lemma_missing"
-            if f.get("wn_syn") or (not f.get("cos_missing") and f.get("cos", 0.0) >= syn_cos and f.get("same_pos", 1)):
+            if f.get("wn_syn") or (
+                not f.get("cos_missing") and f.get("cos", 0.0) >= syn_cos and f.get("same_pos", 1)
+            ):
                 tags[t] = "SYN"
             elif f.get("wn_deriv"):
                 tags[t] = "POS"
-            elif f.get("both_names") and not f.get("cos_missing") and f.get("cos", 0.0) >= ne_floor:
-                tags[t] = "NE-SUB"
-            elif f.get("both_names") and f.get("cos_missing"):
+            elif (
+                f.get("both_names")
+                and not f.get("cos_missing")
+                and f.get("cos", 0.0) >= ne_floor
+                or f.get("both_names")
+                and f.get("cos_missing")
+            ):
                 tags[t] = "NE-SUB"
             else:
                 tags[t] = "SUBST"
@@ -120,13 +154,22 @@ class RuleTyper:
             if unlinked and start is None:
                 start = t
             elif not unlinked and start is not None:
-                runs.append((start, t - 1)); start = None
+                runs.append((start, t - 1))
+                start = None
         return runs
 
     @classmethod
-    def frame_rule(cls, record: Record, links: Sequence[int], templates: Sequence[Sequence[str]] = (),
-                   keywords: Optional[Set[str]] = None, *, min_len: int = 2, max_gap: int = 2,
-                   one_span: bool = True) -> List[int]:
+    def frame_rule(
+        cls,
+        record: Record,
+        links: Sequence[int],
+        templates: Sequence[Sequence[str]] = (),
+        keywords: Optional[Set[str]] = None,
+        *,
+        min_len: int = 2,
+        max_gap: int = 2,
+        one_span: bool = True,
+    ) -> List[int]:
         """FRAME flags on sourceless runs: templates, keywords, then adjacency.
 
         A run is a candidate if it matches a formula template word for word
@@ -137,14 +180,16 @@ class RuleTyper:
         """
         n_t = record.n_reuse
         words = [normalize(w) for w in record.reuse_tokens]
-        keywords = {normalize(k) for k in (keywords if keywords is not None else DEFAULT_FRAME_KEYWORDS)}
+        keywords = {
+            normalize(k) for k in (keywords if keywords is not None else DEFAULT_FRAME_KEYWORDS)
+        }
         flags = [0] * n_t
         keyed = {tuple(normalize(w) for w in tpl) for tpl in templates if len(tpl) >= min_len}
         for a, b in cls._sourceless_runs(links):
-            run = words[a:b + 1]
+            run = words[a : b + 1]
             for length in range(len(run), min_len - 1, -1):
                 for start in range(0, len(run) - length + 1):
-                    if tuple(run[start:start + length]) in keyed:
+                    if tuple(run[start : start + length]) in keyed:
                         for t in range(a + start, a + start + length):
                             flags[t] = 1
             hits = [a + i for i, w in enumerate(run) if w in keywords]
@@ -153,13 +198,18 @@ class RuleTyper:
                 # token after the keyword; without one, the keyword and a following
                 # capitalised token (the author's name: *ut ait Maro*)
                 k = hits[0]
-                end = next((u for u in range(k, b + 1) if record.reuse_tokens[u].endswith(CLAUSE_END)), None)
+                end = next(
+                    (u for u in range(k, b + 1) if record.reuse_tokens[u].endswith(CLAUSE_END)),
+                    None,
+                )
                 if end is None:
                     end = k + 1 if k + 1 <= b and record.reuse_tokens[k + 1][:1].isupper() else k
                 for t in range(a, end + 1):
                     flags[t] = 1
         if any(flags):
-            flags = Repairer.frame_extend(record.reuse_tokens, list(links), flags, colon_rule=False, extend_left=True)
+            flags = Repairer.frame_extend(
+                record.reuse_tokens, list(links), flags, colon_rule=False, extend_left=True
+            )
             flags = [f if (links[t] is None or links[t] < 0) else 0 for t, f in enumerate(flags)]
         return Repairer.frame_adjacency(list(links), flags, max_gap=max_gap, one_span=one_span)
 
@@ -189,8 +239,12 @@ class RuleTyper:
                 if details[t] and not edge.detail:
                     edge.detail = details[t]
         record.provenance["fine_ops"] = "resource-lookup"
-        record.provenance["lemma_missing"] = [t for t, o in enumerate(outcomes) if o == "lemma_missing"]
-        record.provenance["no_rel_found"] = [t for t, o in enumerate(outcomes) if o == "no_rel_found"]
+        record.provenance["lemma_missing"] = [
+            t for t, o in enumerate(outcomes) if o == "lemma_missing"
+        ]
+        record.provenance["no_rel_found"] = [
+            t for t, o in enumerate(outcomes) if o == "no_rel_found"
+        ]
         return record
 
     @classmethod
@@ -221,8 +275,12 @@ class RuleTyper:
                     regimes.append("relation")
             record.annotation["regime"] = regimes
             record.annotation["lookup_op"] = list(rule_tags)
-            record.provenance["lemma_missing"] = [t for t, o in enumerate(outcomes) if o == "lemma_missing"]
-            record.provenance["no_rel_found"] = [t for t, o in enumerate(outcomes) if o == "no_rel_found"]
+            record.provenance["lemma_missing"] = [
+                t for t, o in enumerate(outcomes) if o == "lemma_missing"
+            ]
+            record.provenance["no_rel_found"] = [
+                t for t, o in enumerate(outcomes) if o == "no_rel_found"
+            ]
 
     @staticmethod
     def coverage(records: Sequence[Record]) -> Dict[str, float]:
@@ -234,8 +292,12 @@ class RuleTyper:
         for r in records:
             for e in r.links:
                 per_op[e.op] = per_op.get(e.op, 0) + 1
-        out = {"links": float(n_links), "lemma_missing": missing / n_links, "no_rel_found": no_rel / n_links,
-               "V2_named": 1.0 - (missing + no_rel) / n_links}
+        out = {
+            "links": float(n_links),
+            "lemma_missing": missing / n_links,
+            "no_rel_found": no_rel / n_links,
+            "V2_named": 1.0 - (missing + no_rel) / n_links,
+        }
         out.update({f"share_{op}": n / n_links for op, n in sorted(per_op.items())})
         return out
 
@@ -247,22 +309,40 @@ class RuleTyper:
         out = []
         for t, s in enumerate(links):
             if s is None or s < 0:
-                out.append(True); continue
-            phi = featurizer(record.source_tokens[s], record.reuse_tokens[t], s, t, record.n_source, record.n_reuse)
+                out.append(True)
+                continue
+            phi = featurizer(
+                record.source_tokens[s],
+                record.reuse_tokens[t],
+                s,
+                t,
+                record.n_source,
+                record.n_reuse,
+            )
             _, ok = Attester.attest_type(phi)
             out.append(bool(ok))
         return out
 
     @staticmethod
-    def gate(rule_tags: Sequence[str], attested: Sequence[bool], model_tags: Sequence[str]) -> List[str]:
+    def gate(
+        rule_tags: Sequence[str], attested: Sequence[bool], model_tags: Sequence[str]
+    ) -> List[str]:
         """Lookup where it attests, the model on the residual (``run_e26.gate``)."""
         return [r if ok else m for r, ok, m in zip(rule_tags, attested, model_tags)]
 
     # ---------- the trained head (Table 2 ablation) ----------
 
     @staticmethod
-    def fit_typer_head(records: Sequence[Record], links_per_record: Sequence[Sequence[int]], featurizer,
-                       cfg: BaselineConfig, *, synthetic=None, use_evidence: bool = True, log=None):
+    def fit_typer_head(
+        records: Sequence[Record],
+        links_per_record: Sequence[Sequence[int]],
+        featurizer,
+        cfg: BaselineConfig,
+        *,
+        synthetic=None,
+        use_evidence: bool = True,
+        log=None,
+    ):
         """Fine-tune the encoder plus the typer MLP on the given links; returns the ``ChangeDetector``."""
         from dataclasses import replace
 
@@ -276,15 +356,25 @@ class RuleTyper:
         if synthetic:
             examples = list(synthetic) + examples
         config = ChangeDetectorConfig(
-            base_model=cfg.base_model, pooling="mean", device=cfg.device, seed=cfg.seed,
-            epochs=max(1, cfg.epochs if not cfg.smoke else 1), batch_size=cfg.batch_size,
-            learning_rate=cfg.learning_rate, max_length=cfg.max_length,
+            base_model=cfg.base_model,
+            pooling="mean",
+            device=cfg.device,
+            seed=cfg.seed,
+            epochs=max(1, cfg.epochs if not cfg.smoke else 1),
+            batch_size=cfg.batch_size,
+            learning_rate=cfg.learning_rate,
+            max_length=cfg.max_length,
             # the examples spell the copy ``NOP`` (``GoldPair`` / ``fine_from_gold``); a head whose classes said
             # ``COPY`` never saw a copy target (dry run 2026-09-16: every copy typed SUBST) -- ``type_with_head``
             # canonicalises NOP back to COPY on the way out
-            pointer=False, operations=(), fine_operations=("NOP",) + tuple(op for op in labels.EDGE_OPS if op != "COPY"),
-            feature_dim=len(FEATURE_NAMES), use_link_features=use_evidence, frame_head=False,
-            typer_hidden=int(cfg.extra.get("typer_hidden", 256)), typer_lr=float(cfg.extra.get("typer_lr", 1e-3)),
+            pointer=False,
+            operations=(),
+            fine_operations=("NOP",) + tuple(op for op in labels.EDGE_OPS if op != "COPY"),
+            feature_dim=len(FEATURE_NAMES),
+            use_link_features=use_evidence,
+            frame_head=False,
+            typer_hidden=int(cfg.extra.get("typer_hidden", 256)),
+            typer_lr=float(cfg.extra.get("typer_lr", 1e-3)),
             group_loss_weight=float(cfg.extra.get("group_loss_weight", 1.0)),
         )
         model = ChangeDetector(config)
@@ -334,7 +424,9 @@ class GoldLinks(Baseline):
         """The rule typer on the gold links; the gold frames stay, no frame rule."""
         from retexo.baselines.adapters import PredictionAdapter
 
-        return PredictionAdapter.type_prediction(pred, record, self.typer, self.featurizer, frame_rule="none")
+        return PredictionAdapter.type_prediction(
+            pred, record, self.typer, self.featurizer, frame_rule="none"
+        )
 
     def predict(self, records: List[Record]) -> List[Prediction]:
         out = []
@@ -356,7 +448,11 @@ class FrameKeywords:
         """A file with one keyword per line, else the built-in seeds."""
         path = Path(path) if path else Path("retexo/resources/frame_keywords.txt")
         if path.exists():
-            return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+            return {
+                line.strip()
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            }
         return set(DEFAULT_FRAME_KEYWORDS)
 
 

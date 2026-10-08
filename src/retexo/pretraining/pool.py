@@ -31,7 +31,7 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Set, Tuple
 
 DEFAULT_ALLUSION = Path("runs/e32_allusion/selected.jsonl")
 DEFAULT_RANKED = Path("runs/e32_mine/ranked.jsonl")
@@ -51,16 +51,28 @@ class PoolPair:
     reuse_tokens: Tuple[str, ...]
     stratum: str
     score: float
-    ref_type: str = ""          # cit. / cf. where a human label exists (never here), "" otherwise
+    ref_type: str = ""  # cit. / cf. where a human label exists (never here), "" otherwise
 
     def as_json(self) -> Dict[str, object]:
-        return {"id": self.id, "stratum": self.stratum, "score": self.score, "ref_type": self.ref_type,
-                "source_tokens": list(self.source_tokens), "reuse_tokens": list(self.reuse_tokens)}
+        return {
+            "id": self.id,
+            "stratum": self.stratum,
+            "score": self.score,
+            "ref_type": self.ref_type,
+            "source_tokens": list(self.source_tokens),
+            "reuse_tokens": list(self.reuse_tokens),
+        }
 
     @classmethod
-    def from_json(cls, obj: Dict[str, object]) -> "PoolPair":
-        return cls(str(obj["id"]), tuple(obj["source_tokens"]), tuple(obj["reuse_tokens"]), str(obj.get("stratum", "")),
-                   float(obj.get("score", 0.0)), str(obj.get("ref_type", "") or ""))
+    def from_json(cls, obj: Dict[str, object]) -> PoolPair:
+        return cls(
+            str(obj["id"]),
+            tuple(obj["source_tokens"]),
+            tuple(obj["reuse_tokens"]),
+            str(obj.get("stratum", "")),
+            float(obj.get("score", 0.0)),
+            str(obj.get("ref_type", "") or ""),
+        )
 
 
 class PoolBuilder:
@@ -74,8 +86,16 @@ class PoolBuilder:
         ```
     """
 
-    def __init__(self, gold_texts: Set[str], *, allusion: Path = DEFAULT_ALLUSION, ranked: Path = DEFAULT_RANKED,
-                 min_tokens: int = 6, max_tokens: int = 80, seed: int = 1):
+    def __init__(
+        self,
+        gold_texts: Set[str],
+        *,
+        allusion: Path = DEFAULT_ALLUSION,
+        ranked: Path = DEFAULT_RANKED,
+        min_tokens: int = 6,
+        max_tokens: int = 80,
+        seed: int = 1,
+    ):
         self.gold_texts = gold_texts
         self.allusion = Path(allusion)
         self.ranked = Path(ranked)
@@ -124,11 +144,22 @@ class PoolBuilder:
             stratum = str(obj.get("stratum", "allusion"))
             score = float(obj.get("score", 0) or 0)
             self.report[f"kept_{stratum}"] += 1
-            yield PoolPair(f"a_{obj.get('cand_id', self.report['allusion_seen'])}", tuple(_norm(source).split()),
-                           tuple(_norm(reuse).split()), stratum, score)
+            yield PoolPair(
+                f"a_{obj.get('cand_id', self.report['allusion_seen'])}",
+                tuple(_norm(source).split()),
+                tuple(_norm(reuse).split()),
+                stratum,
+                score,
+            )
 
-    def ranked_pairs(self, *, min_p_reuse: float = 0.9, cap: int = 20000, per_source: int = 3,
-                     one_per_reuse: bool = True) -> Iterator[PoolPair]:
+    def ranked_pairs(
+        self,
+        *,
+        min_p_reuse: float = 0.9,
+        cap: int = 20000,
+        per_source: int = 3,
+        one_per_reuse: bool = True,
+    ) -> Iterator[PoolPair]:
         """Classifier-ranked corpus pairs above ``min_p_reuse``: one per reuse passage (unless
         ``one_per_reuse`` is off), at most ``per_source`` per source passage, the most probable first,
         up to ``cap``; a cap or ``per_source`` of 0 is no limit (the Data Scale ladder's rungs)."""
@@ -154,17 +185,27 @@ class PoolBuilder:
                 continue
             if not self._ok(source, reuse):
                 continue
-            taken_reuse.add(r); per_src[s] += 1
+            taken_reuse.add(r)
+            per_src[s] += 1
             kept += 1
             self.report["kept_ranked"] += 1
             yield PoolPair(f"m_{kept:06d}", tuple(s.split()), tuple(r.split()), "ranked", p)
             if cap and kept >= cap:
                 break
 
-    def build(self, *, min_p_reuse: float = 0.9, cap: int = 20000, per_source: int = 3,
-              one_per_reuse: bool = True) -> List[PoolPair]:
-        pairs = list(self.allusion_pairs()) + list(self.ranked_pairs(min_p_reuse=min_p_reuse, cap=cap, per_source=per_source,
-                                                                     one_per_reuse=one_per_reuse))
+    def build(
+        self,
+        *,
+        min_p_reuse: float = 0.9,
+        cap: int = 20000,
+        per_source: int = 3,
+        one_per_reuse: bool = True,
+    ) -> List[PoolPair]:
+        pairs = list(self.allusion_pairs()) + list(
+            self.ranked_pairs(
+                min_p_reuse=min_p_reuse, cap=cap, per_source=per_source, one_per_reuse=one_per_reuse
+            )
+        )
         seen: Set[Tuple[str, str]] = set()
         out = []
         for pair in pairs:
@@ -178,7 +219,9 @@ class PoolBuilder:
         self.report["total"] = len(out)
         return out
 
-    def negative_pairs(self, n: int, *, max_p_reuse: float = 0.1) -> List[Tuple[List[str], List[str], str]]:
+    def negative_pairs(
+        self, n: int, *, max_p_reuse: float = 0.1
+    ) -> List[Tuple[List[str], List[str], str]]:
         """Stage-0 negatives with no gold passage on either side (the pair identification's label 0): half
         classifier-rejected candidates (two shared content words, ``p_reuse`` at most ``max_p_reuse``: the
         lexical near-misses), half random re-pairings of those candidates' passages."""
@@ -188,7 +231,9 @@ class PoolBuilder:
                 if not line.strip():
                     continue
                 obj = json.loads(line)
-                if float(obj.get("p_reuse", 1.0) or 0.0) <= max_p_reuse and self._ok(obj["earlier"], obj["later"]):
+                if float(obj.get("p_reuse", 1.0) or 0.0) <= max_p_reuse and self._ok(
+                    obj["earlier"], obj["later"]
+                ):
                     rows.append((_norm(obj["earlier"]).split(), _norm(obj["later"]).split()))
         self.rng.shuffle(rows)
         lexical = [(s, r, "lexical_low_p") for s, r in rows[: n - n // 2]]
@@ -206,8 +251,19 @@ class PoolBuilder:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             for i, (source, reuse, kind) in enumerate(negatives):
-                handle.write(json.dumps({"id": f"neg_{i:06d}", "label": 0, "kind": kind, "source_tokens": list(source),
-                                         "reuse_tokens": list(reuse)}, ensure_ascii=False) + "\n")
+                handle.write(
+                    json.dumps(
+                        {
+                            "id": f"neg_{i:06d}",
+                            "label": 0,
+                            "kind": kind,
+                            "source_tokens": list(source),
+                            "reuse_tokens": list(reuse),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
         return path
 
     @staticmethod
@@ -235,7 +291,7 @@ class PairPool:
         self.pairs = list(pairs)
 
     @classmethod
-    def load(cls, path: Path, *, limit: Optional[int] = None) -> "PairPool":
+    def load(cls, path: Path, *, limit: Optional[int] = None) -> PairPool:
         pairs = []
         for line in Path(path).read_text(encoding="utf-8").splitlines():
             if line.strip():
@@ -266,10 +322,24 @@ class PairPool:
 
         out = []
         for pair in self.pairs[: limit or None]:
-            out.append(Record(id=f"real/{pair.id}", level="real_pairs", fold=-1, source_work="",
-                              source_tokens=list(pair.source_tokens), reuse_work="", reuse_tokens=list(pair.reuse_tokens),
-                              pair_label="cf", provenance={"links": "none", "pair_label": "assumed",
-                                                           "stratum": pair.stratum, "pool_score": pair.score}))
+            out.append(
+                Record(
+                    id=f"real/{pair.id}",
+                    level="real_pairs",
+                    fold=-1,
+                    source_work="",
+                    source_tokens=list(pair.source_tokens),
+                    reuse_work="",
+                    reuse_tokens=list(pair.reuse_tokens),
+                    pair_label="cf",
+                    provenance={
+                        "links": "none",
+                        "pair_label": "assumed",
+                        "stratum": pair.stratum,
+                        "pool_score": pair.score,
+                    },
+                )
+            )
         return out
 
 
@@ -280,21 +350,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--ranked", default=str(DEFAULT_RANKED))
     ap.add_argument("--min-p-reuse", type=float, default=0.9)
     ap.add_argument("--cap", type=int, default=20000, help="pairs at most (0 = no limit)")
-    ap.add_argument("--per-source", type=int, default=3, help="pairs per source passage at most (0 = no limit)")
-    ap.add_argument("--many-per-reuse", action="store_true", help="drop the one-pair-per-reuse-passage rule")
+    ap.add_argument(
+        "--per-source", type=int, default=3, help="pairs per source passage at most (0 = no limit)"
+    )
+    ap.add_argument(
+        "--many-per-reuse", action="store_true", help="drop the one-pair-per-reuse-passage rule"
+    )
     ap.add_argument("--out", default="data/pretrain/pairs.jsonl")
-    ap.add_argument("--negatives", type=int, default=0,
-                    help="write N stage-0 negatives to --out instead of the pool (no gold passage on either side)")
+    ap.add_argument(
+        "--negatives",
+        type=int,
+        default=0,
+        help="write N stage-0 negatives to --out instead of the pool (no gold passage on either side)",
+    )
     args = ap.parse_args(argv)
-    builder = PoolBuilder(PoolBuilder.gold_texts(Path(args.gold_records)), allusion=Path(args.allusion), ranked=Path(args.ranked))
+    builder = PoolBuilder(
+        PoolBuilder.gold_texts(Path(args.gold_records)),
+        allusion=Path(args.allusion),
+        ranked=Path(args.ranked),
+    )
     if args.negatives:
         out = PoolBuilder.save_negatives(builder.negative_pairs(args.negatives), Path(args.out))
-        print(f"{builder.report['negatives_lexical_low_p'] + builder.report['negatives_random']} negatives -> {out}")
+        print(
+            f"{builder.report['negatives_lexical_low_p'] + builder.report['negatives_random']} negatives -> {out}"
+        )
         for key, value in sorted(builder.report.items()):
             print(f"  {key}: {value}")
         return 0
-    pairs = builder.build(min_p_reuse=args.min_p_reuse, cap=args.cap, per_source=args.per_source,
-                          one_per_reuse=not args.many_per_reuse)
+    pairs = builder.build(
+        min_p_reuse=args.min_p_reuse,
+        cap=args.cap,
+        per_source=args.per_source,
+        one_per_reuse=not args.many_per_reuse,
+    )
     out = PoolBuilder.save(pairs, Path(args.out))
     print(f"{len(pairs)} pairs -> {out}")
     for key, value in sorted(builder.report.items()):

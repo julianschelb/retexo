@@ -39,9 +39,22 @@ from retexo.baselines.record import Record
 
 #: The dials and the note's values.
 NMT_DEFAULTS: Dict[str, Any] = {
-    "backbone": "bowphs/PhilTa", "reading": "layer", "epochs": 3, "lr": 3e-4, "batch_size": 16,
-    "layer_updates": 10000, "layer_lr": 1e-3, "lam": 0.0, "full_context": 0, "null": "key",
-    "include_unlabeled": 1, "load_fwd": "", "load_bwd": "", "load_layer": "", "layer_fwd": -1, "layer_bwd": -1,
+    "backbone": "bowphs/PhilTa",
+    "reading": "layer",
+    "epochs": 3,
+    "lr": 3e-4,
+    "batch_size": 16,
+    "layer_updates": 10000,
+    "layer_lr": 1e-3,
+    "lam": 0.0,
+    "full_context": 0,
+    "null": "key",
+    "include_unlabeled": 1,
+    "load_fwd": "",
+    "load_bwd": "",
+    "load_layer": "",
+    "layer_fwd": -1,
+    "layer_bwd": -1,
     "dev_pairs": 1000,
 }
 
@@ -61,8 +74,15 @@ class AttentionReader:
     """
 
     @staticmethod
-    def read(attention, tgt_word_ids: Sequence[Optional[int]], src_word_ids: Sequence[Optional[int]],
-             n_t: int, n_s: int, *, shift: bool = True):
+    def read(
+        attention,
+        tgt_word_ids: Sequence[Optional[int]],
+        src_word_ids: Sequence[Optional[int]],
+        n_t: int,
+        n_s: int,
+        *,
+        shift: bool = True,
+    ):
         """``attention`` is ``[heads, dec_len, src_len]`` for one pair (decoder
         position 0 the start token, position ``k`` the input ``y_{k-1}``);
         ``tgt_word_ids[k]`` names the reuse word of target piece ``k`` (labels,
@@ -72,7 +92,7 @@ class AttentionReader:
         decoder row ``k + 1`` for target piece ``k``; naive reads row ``k``."""
         import numpy as np
 
-        att = np.asarray(attention, dtype=np.float32).mean(axis=0)            # [dec_len, src_len]
+        att = np.asarray(attention, dtype=np.float32).mean(axis=0)  # [dec_len, src_len]
         dec_len = att.shape[0]
         out = np.zeros((n_t, n_s), dtype=np.float32)
         counts = np.zeros(n_t, dtype=np.float32)
@@ -121,12 +141,17 @@ class LayerSelector:
         for links_f, links_b in zip(fwd, bwd):
             back = {(s, t) for s, t in enumerate(links_b) if t >= 0}
             fore = {(s, t) for t, s in enumerate(links_f) if s >= 0}
-            hits += len(fore & back); n_f += len(fore); n_b += len(back)
+            hits += len(fore & back)
+            n_f += len(fore)
+            n_b += len(back)
         return 1.0 - 2 * hits / max(n_f + n_b, 1)
 
     @classmethod
-    def select(cls, fwd_by_layer: Sequence[Sequence[Sequence[int]]], bwd_by_layer: Sequence[Sequence[Sequence[int]]]
-               ) -> Tuple[int, int]:
+    def select(
+        cls,
+        fwd_by_layer: Sequence[Sequence[Sequence[int]]],
+        bwd_by_layer: Sequence[Sequence[Sequence[int]]],
+    ) -> Tuple[int, int]:
         best = (2.0, 0, 0)
         for lf, fwd in enumerate(fwd_by_layer):
             for lb, bwd in enumerate(bwd_by_layer):
@@ -170,8 +195,11 @@ class Seq2SeqWrapper:
     @property
     def n_layers(self) -> int:
         self._ensure()
-        return int(self._model.config.num_decoder_layers if hasattr(self._model.config, "num_decoder_layers")
-                   else self._model.config.num_layers)
+        return int(
+            self._model.config.num_decoder_layers
+            if hasattr(self._model.config, "num_decoder_layers")
+            else self._model.config.num_layers
+        )
 
     @property
     def hidden_size(self) -> int:
@@ -196,10 +224,22 @@ class Seq2SeqWrapper:
         """Tokenised source and target of a batch, with word ids per piece."""
         self._ensure()
         tok = self._tokenizer
-        src = tok([list(s) for s, _ in pairs], is_split_into_words=True, padding=True, truncation=True,
-                  max_length=self.max_length, return_tensors="pt")
-        tgt = tok([list(t) for _, t in pairs], is_split_into_words=True, padding=True, truncation=True,
-                  max_length=self.max_length, return_tensors="pt")
+        src = tok(
+            [list(s) for s, _ in pairs],
+            is_split_into_words=True,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        tgt = tok(
+            [list(t) for _, t in pairs],
+            is_split_into_words=True,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
         src_words = [src.word_ids(i) for i in range(len(pairs))]
         tgt_words = [tgt.word_ids(i) for i in range(len(pairs))]
         labels = tgt["input_ids"].clone()
@@ -208,8 +248,18 @@ class Seq2SeqWrapper:
 
     # ---------- training ----------
 
-    def fit(self, pairs: Sequence[Tuple[Sequence[str], Sequence[str]]], *, epochs: int = 1, lr: float = 3e-4,
-            batch_size: int = 16, seed: int = 1, log=None, tag: str = "seq2seq", stopper=None) -> "Seq2SeqWrapper":
+    def fit(
+        self,
+        pairs: Sequence[Tuple[Sequence[str], Sequence[str]]],
+        *,
+        epochs: int = 1,
+        lr: float = 3e-4,
+        batch_size: int = 16,
+        seed: int = 1,
+        log=None,
+        tag: str = "seq2seq",
+        stopper=None,
+    ) -> Seq2SeqWrapper:
         """Teacher-forced fine-tuning; with a ``stopper`` (``early_stopping.EarlyStopping`` on the
         validation pairs' loss) ``epochs`` is its maximum and the best epoch's weights are restored."""
         import torch
@@ -231,18 +281,26 @@ class Seq2SeqWrapper:
             rng.shuffle(order)
             total, n = 0.0, 0
             for start in range(0, len(order), batch_size):
-                chunk = order[start:start + batch_size]
+                chunk = order[start : start + batch_size]
                 src, labels, _, _ = self.encode(chunk)
-                out = self._model(input_ids=src["input_ids"].to(self.device), attention_mask=src["attention_mask"].to(self.device),
-                                  labels=labels.to(self.device))
-                optimizer.zero_grad(); out.loss.backward()
+                out = self._model(
+                    input_ids=src["input_ids"].to(self.device),
+                    attention_mask=src["attention_mask"].to(self.device),
+                    labels=labels.to(self.device),
+                )
+                optimizer.zero_grad()
+                out.loss.backward()
                 torch.nn.utils.clip_grad_norm_(self._model.parameters(), 1.0)
-                optimizer.step(); scheduler.step()
-                total += float(out.loss.detach()); n += 1
+                optimizer.step()
+                scheduler.step()
+                total += float(out.loss.detach())
+                n += 1
                 if log and n % 500 == 0:
                     log(f"[{tag}] epoch {epoch} step {n}: loss {total / n:.4f}")
             if log:
-                log(f"[{tag}] epoch {epoch}/{epochs}: loss {total / max(n, 1):.4f} over {len(order)} pairs")
+                log(
+                    f"[{tag}] epoch {epoch}/{epochs}: loss {total / max(n, 1):.4f} over {len(order)} pairs"
+                )
             if stopper is not None:
                 keep_going = stopper.step(epoch, {"model": self._model})
                 self._model.train()
@@ -254,7 +312,9 @@ class Seq2SeqWrapper:
         self._model.eval()
         return self
 
-    def loss_on(self, pairs: Sequence[Tuple[Sequence[str], Sequence[str]]], *, batch_size: int = 16) -> float:
+    def loss_on(
+        self, pairs: Sequence[Tuple[Sequence[str], Sequence[str]]], *, batch_size: int = 16
+    ) -> float:
         """Mean teacher-forced loss over ``pairs`` (the early-stopping score of the translation stage)."""
         import torch
 
@@ -266,10 +326,14 @@ class Seq2SeqWrapper:
         total, n = 0.0, 0
         with torch.no_grad():
             for start in range(0, len(pairs), batch_size):
-                src, labels, _, _ = self.encode(pairs[start:start + batch_size])
-                out = self._model(input_ids=src["input_ids"].to(self.device),
-                                  attention_mask=src["attention_mask"].to(self.device), labels=labels.to(self.device))
-                total += float(out.loss) * len(pairs[start:start + batch_size]); n += len(pairs[start:start + batch_size])
+                src, labels, _, _ = self.encode(pairs[start : start + batch_size])
+                out = self._model(
+                    input_ids=src["input_ids"].to(self.device),
+                    attention_mask=src["attention_mask"].to(self.device),
+                    labels=labels.to(self.device),
+                )
+                total += float(out.loss) * len(pairs[start : start + batch_size])
+                n += len(pairs[start : start + batch_size])
         return total / max(n, 1)
 
     # ---------- forced decoding ----------
@@ -278,29 +342,44 @@ class Seq2SeqWrapper:
         import torch
 
         src, labels, src_words, tgt_words = self.encode(chunk)
-        labels_in = labels.clone(); labels_in[labels_in == -100] = self._tokenizer.pad_token_id
+        labels_in = labels.clone()
+        labels_in[labels_in == -100] = self._tokenizer.pad_token_id
         with torch.no_grad():
-            out = self._model(input_ids=src["input_ids"].to(self.device), attention_mask=src["attention_mask"].to(self.device),
-                              labels=labels_in.to(self.device), output_attentions=attentions, output_hidden_states=hidden)
+            out = self._model(
+                input_ids=src["input_ids"].to(self.device),
+                attention_mask=src["attention_mask"].to(self.device),
+                labels=labels_in.to(self.device),
+                output_attentions=attentions,
+                output_hidden_states=hidden,
+            )
         return out, src, labels, src_words, tgt_words
 
-    def attentions_all_layers(self, pairs: Sequence[Tuple[Sequence[str], Sequence[str]]], *, batch_size: int = 16,
-                              shift: bool = True) -> List[List[Any]]:
+    def attentions_all_layers(
+        self,
+        pairs: Sequence[Tuple[Sequence[str], Sequence[str]]],
+        *,
+        batch_size: int = 16,
+        shift: bool = True,
+    ) -> List[List[Any]]:
         """Per layer, one ``[n_t, n_s]`` matrix per pair."""
         self._ensure()
         self._model.eval()
         per_layer: List[List[Any]] = [[] for _ in range(self.n_layers)]
         for start in range(0, len(pairs), batch_size):
-            chunk = list(pairs[start:start + batch_size])
+            chunk = list(pairs[start : start + batch_size])
             out, src, labels, src_words, tgt_words = self.forward_batch(chunk, attentions=True)
             for layer, att in enumerate(out.cross_attentions):
-                att = att.float().cpu().numpy()                             # [B, heads, dec_len, src_len]
+                att = att.float().cpu().numpy()  # [B, heads, dec_len, src_len]
                 for i, (s_words, t_words) in enumerate(zip(src_words, tgt_words)):
                     n_s, n_t = len(chunk[i][0]), len(chunk[i][1])
-                    per_layer[layer].append(AttentionReader.read(att[i], t_words, s_words, n_t, n_s, shift=shift))
+                    per_layer[layer].append(
+                        AttentionReader.read(att[i], t_words, s_words, n_t, n_s, shift=shift)
+                    )
         return per_layer
 
-    def attentions(self, pairs, *, layer: int, batch_size: int = 16, shift: bool = True) -> List[Any]:
+    def attentions(
+        self, pairs, *, layer: int, batch_size: int = 16, shift: bool = True
+    ) -> List[Any]:
         return self.attentions_all_layers(pairs, batch_size=batch_size, shift=shift)[layer]
 
     def states(self, chunk, *, layer: int):
@@ -320,12 +399,14 @@ class Seq2SeqWrapper:
             kc = torch.zeros(n_s, device=self.device)
             for j, w in enumerate(s_words):
                 if w is not None and w < n_s:
-                    keys[w] += enc[i, j]; kc[w] += 1
+                    keys[w] += enc[i, j]
+                    kc[w] += 1
             queries = torch.zeros((n_t, dec.shape[-1]), device=self.device)
             qc = torch.zeros(n_t, device=self.device)
             for k, w in enumerate(t_words):
                 if w is not None and w < n_t and k + 1 < dec.shape[1]:
-                    queries[w] += dec[i, k + 1]; qc[w] += 1
+                    queries[w] += dec[i, k + 1]
+                    qc[w] += 1
             result.append((keys / kc.clamp(min=1)[:, None], queries / qc.clamp(min=1)[:, None]))
         return result
 
@@ -346,7 +427,9 @@ class AlignmentLayer:
         ```
     """
 
-    def __init__(self, hidden: int, *, device: str = "cpu", full_context: bool = False, dropout: float = 0.1):
+    def __init__(
+        self, hidden: int, *, device: str = "cpu", full_context: bool = False, dropout: float = 0.1
+    ):
         import torch
 
         self.hidden = hidden
@@ -360,11 +443,17 @@ class AlignmentLayer:
         self.w_k = torch.nn.Linear(hidden, hidden, bias=False).to(device)
         self.w_q = torch.nn.Linear(hidden, hidden, bias=False).to(device)
         self.null_key = torch.nn.Parameter(torch.zeros(hidden, device=device).normal_(std=0.02))
-        self.context = torch.nn.MultiheadAttention(hidden, num_heads=4, batch_first=True).to(device) if full_context else None
+        self.context = (
+            torch.nn.MultiheadAttention(hidden, num_heads=4, batch_first=True).to(device)
+            if full_context
+            else None
+        )
         self.training = False
 
     def modules(self):
-        return [self.norm_k, self.norm_q, self.w_k, self.w_q] + ([self.context] if self.context is not None else [])
+        return [self.norm_k, self.norm_q, self.w_k, self.w_q] + (
+            [self.context] if self.context is not None else []
+        )
 
     def parameters(self):
         return [p for m in self.modules() for p in m.parameters()] + [self.null_key]
@@ -380,16 +469,23 @@ class AlignmentLayer:
             m.eval()
 
     def state_dict(self) -> Dict[str, Any]:
-        return {"w_k": self.w_k.state_dict(), "w_q": self.w_q.state_dict(), "null_key": self.null_key.detach().cpu(),
-                "norm_k": self.norm_k.state_dict(), "norm_q": self.norm_q.state_dict(),
-                "context": self.context.state_dict() if self.context is not None else None}
+        return {
+            "w_k": self.w_k.state_dict(),
+            "w_q": self.w_q.state_dict(),
+            "null_key": self.null_key.detach().cpu(),
+            "norm_k": self.norm_k.state_dict(),
+            "norm_q": self.norm_q.state_dict(),
+            "context": self.context.state_dict() if self.context is not None else None,
+        }
 
     def load_state_dict(self, state: Dict[str, Any]) -> None:
         import torch
 
-        self.w_k.load_state_dict(state["w_k"]); self.w_q.load_state_dict(state["w_q"])
+        self.w_k.load_state_dict(state["w_k"])
+        self.w_q.load_state_dict(state["w_q"])
         if "norm_k" in state:
-            self.norm_k.load_state_dict(state["norm_k"]); self.norm_q.load_state_dict(state["norm_q"])
+            self.norm_k.load_state_dict(state["norm_k"])
+            self.norm_q.load_state_dict(state["norm_q"])
         with torch.no_grad():
             self.null_key.copy_(state["null_key"].to(self.device))
         if self.context is not None and state.get("context") is not None:
@@ -400,9 +496,13 @@ class AlignmentLayer:
 
         q = self.norm_q(queries)
         if self.context is not None:
-            q = q + self.context(q.unsqueeze(0), q.unsqueeze(0), q.unsqueeze(0), need_weights=False)[0].squeeze(0)
-        k = torch.cat([self.w_k(self.norm_k(keys)), self.w_k(self.null_key).unsqueeze(0)], dim=0)      # [n_s + 1, H]
-        scores = (self.w_q(q) @ k.T) / (self.hidden ** 0.5)
+            q = q + self.context(
+                q.unsqueeze(0), q.unsqueeze(0), q.unsqueeze(0), need_weights=False
+            )[0].squeeze(0)
+        k = torch.cat(
+            [self.w_k(self.norm_k(keys)), self.w_k(self.null_key).unsqueeze(0)], dim=0
+        )  # [n_s + 1, H]
+        scores = (self.w_q(q) @ k.T) / (self.hidden**0.5)
         if null_logit is not None:
             scores = scores.clone()
             scores[:, -1] = null_logit
@@ -421,7 +521,9 @@ class AlignmentLayer:
         import torch
 
         n_s = probs.shape[1] - 1
-        targets = torch.tensor([n_s if s is None or s < 0 else int(s) for s in links], device=probs.device)
+        targets = torch.tensor(
+            [n_s if s is None or s < 0 else int(s) for s in links], device=probs.device
+        )
         picked = probs[torch.arange(len(links), device=probs.device), targets]
         return -(torch.log(picked.clamp(min=1e-9))).mean()
 
@@ -433,9 +535,13 @@ class AlignmentLayer:
         source = probs[:, :-1]
         if source.shape[0] < 2 or source.shape[1] < 2:
             return probs.sum() * 0.0
-        pooled = torch.nn.functional.avg_pool2d(source.unsqueeze(0).unsqueeze(0), kernel_size=2, stride=1).squeeze()
+        pooled = torch.nn.functional.avg_pool2d(
+            source.unsqueeze(0).unsqueeze(0), kernel_size=2, stride=1
+        ).squeeze()
         pooled = pooled.reshape(source.shape[0] - 1, -1)
-        return -(torch.log(pooled.max(dim=1).values.clamp(min=1e-9))).sum() / max(source.shape[0], 1)
+        return -(torch.log(pooled.max(dim=1).values.clamp(min=1e-9))).sum() / max(
+            source.shape[0], 1
+        )
 
 
 # =============================================================================
@@ -445,7 +551,7 @@ class AlignmentLayer:
 
 @BaselineRegistry.register
 class NMTAligner(Baseline):
-    """"Translation model + alignment layer": the pairs-only neural row.
+    """ "Translation model + alignment layer": the pairs-only neural row.
 
     ``cfg.extra`` (``NMT_DEFAULTS``): ``backbone``, ``reading`` (``layer`` |
     ``shift_att`` | ``naive``), ``epochs``, ``lr``, ``batch_size``,
@@ -483,16 +589,26 @@ class NMTAligner(Baseline):
 
     @staticmethod
     def pairs_of(records: Sequence[Record]) -> List[Tuple[List[str], List[str]]]:
-        return [(list(r.source_tokens), list(r.reuse_tokens)) for r in records if r.source_tokens and r.reuse_tokens]
+        return [
+            (list(r.source_tokens), list(r.reuse_tokens))
+            for r in records
+            if r.source_tokens and r.reuse_tokens
+        ]
 
     # ---------- training ----------
 
-    def fit(self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()) -> "NMTAligner":
+    def fit(
+        self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
+    ) -> NMTAligner:
         import torch
 
         # the trained-on pairs and the shared synthetic pairs as translation data (no label is read);
         # the test passages join only with ``include_unlabeled``
-        records = list(train) + list(self.shared_synthetic) + (list(unlabeled) if int(self.dials["include_unlabeled"]) else [])
+        records = (
+            list(train)
+            + list(self.shared_synthetic)
+            + (list(unlabeled) if int(self.dials["include_unlabeled"]) else [])
+        )
         from retexo.baselines.em_aligner import extra_bitext
 
         records += extra_bitext(self.cfg.extra.get("extra_bitext"), log=log, name="nmt_aligner")
@@ -510,22 +626,55 @@ class NMTAligner(Baseline):
         valid = self.pairs_of(self.validation)
         stop_fwd = stop_bwd = None
         if valid:
-            stop_fwd = EarlyStopping.for_method(self, log=log, score=lambda: self.fwd.loss_on(valid, batch_size=batch),
-                                                higher_is_better=False, metric="validation translation loss, forward")
+            stop_fwd = EarlyStopping.for_method(
+                self,
+                log=log,
+                score=lambda: self.fwd.loss_on(valid, batch_size=batch),
+                higher_is_better=False,
+                metric="validation translation loss, forward",
+            )
             stop_bwd = EarlyStopping.for_method(
-                self, log=log, score=lambda: self.bwd.loss_on([(t, s) for s, t in valid], batch_size=batch),
-                higher_is_better=False, metric="validation translation loss, backward")
+                self,
+                log=log,
+                score=lambda: self.bwd.loss_on([(t, s) for s, t in valid], batch_size=batch),
+                higher_is_better=False,
+                metric="validation translation loss, backward",
+            )
             self.early_stopping = EarlyStoppingGroup({"forward": stop_fwd, "backward": stop_bwd})
         if str(self.dials["load_fwd"]):
-            self.fwd.load_state_dict(torch.load(Path(str(self.dials["load_fwd"])) / "seq2seq.pt", map_location=self.cfg.device))
+            self.fwd.load_state_dict(
+                torch.load(
+                    Path(str(self.dials["load_fwd"])) / "seq2seq.pt", map_location=self.cfg.device
+                )
+            )
         else:
-            self.fwd.fit(pairs, epochs=epochs, lr=lr, batch_size=batch, seed=self.cfg.seed, log=log, tag="nmt fwd",
-                         stopper=stop_fwd)
+            self.fwd.fit(
+                pairs,
+                epochs=epochs,
+                lr=lr,
+                batch_size=batch,
+                seed=self.cfg.seed,
+                log=log,
+                tag="nmt fwd",
+                stopper=stop_fwd,
+            )
         if str(self.dials["load_bwd"]):
-            self.bwd.load_state_dict(torch.load(Path(str(self.dials["load_bwd"])) / "seq2seq.pt", map_location=self.cfg.device))
+            self.bwd.load_state_dict(
+                torch.load(
+                    Path(str(self.dials["load_bwd"])) / "seq2seq.pt", map_location=self.cfg.device
+                )
+            )
         else:
-            self.bwd.fit([(t, s) for s, t in pairs], epochs=epochs, lr=lr, batch_size=batch, seed=self.cfg.seed, log=log,
-                         tag="nmt bwd", stopper=stop_bwd)
+            self.bwd.fit(
+                [(t, s) for s, t in pairs],
+                epochs=epochs,
+                lr=lr,
+                batch_size=batch,
+                seed=self.cfg.seed,
+                log=log,
+                tag="nmt bwd",
+                stopper=stop_bwd,
+            )
         dev_pairs = self.pairs_of(dev)[: int(self.dials["dev_pairs"])] or pairs[:200]
         if self.layer_fwd < 0 or self.layer_bwd < 0:
             self.select_layers(dev_pairs, log=log)
@@ -536,12 +685,21 @@ class NMTAligner(Baseline):
     def select_layers(self, dev_pairs, *, log=None) -> None:
         """Chen's agreement grid over the two models' layers on the dev pairs."""
         fwd = self.fwd.attentions_all_layers(dev_pairs, batch_size=int(self.dials["batch_size"]))
-        bwd = self.bwd.attentions_all_layers([(t, s) for s, t in dev_pairs], batch_size=int(self.dials["batch_size"]))
-        argmax = lambda mats: [[int(row.argmax()) if row.sum() > 0 else -1 for row in m] for m in mats]  # noqa: E731
-        self.layer_fwd, self.layer_bwd = LayerSelector.select([argmax(m) for m in fwd], [argmax(m) for m in bwd])
+        bwd = self.bwd.attentions_all_layers(
+            [(t, s) for s, t in dev_pairs], batch_size=int(self.dials["batch_size"])
+        )
+
+        def argmax(mats):
+            return [[int(row.argmax()) if row.sum() > 0 else -1 for row in m] for m in mats]
+
+        self.layer_fwd, self.layer_bwd = LayerSelector.select(
+            [argmax(m) for m in fwd], [argmax(m) for m in bwd]
+        )
         if log:
-            log(f"[nmt_aligner] layers by agreement: forward {self.layer_fwd}, backward {self.layer_bwd} "
-                f"(of {len(fwd)}), mutual AER {LayerSelector.mutual_aer(argmax(fwd[self.layer_fwd]), argmax(bwd[self.layer_bwd])):.3f}")
+            log(
+                f"[nmt_aligner] layers by agreement: forward {self.layer_fwd}, backward {self.layer_bwd} "
+                f"(of {len(fwd)}), mutual AER {LayerSelector.mutual_aer(argmax(fwd[self.layer_fwd]), argmax(bwd[self.layer_bwd])):.3f}"
+            )
 
     def guided_targets(self, pairs, *, batch_size: int) -> Tuple[List[List[int]], List[List[int]]]:
         """The symmetrised SHIFT-ATT links of both models: grow-diag-final over
@@ -551,10 +709,12 @@ class NMTAligner(Baseline):
 
         fwd_links, bwd_links = [], []
         for start in range(0, len(pairs), batch_size):
-            chunk = list(pairs[start:start + batch_size])
+            chunk = list(pairs[start : start + batch_size])
             f = self.fwd.attentions(chunk, layer=self.layer_fwd, batch_size=batch_size)
-            b = self.bwd.attentions([(t, s) for s, t in chunk], layer=self.layer_bwd, batch_size=batch_size)
-            for (s_tokens, t_tokens), mf, mb in zip(chunk, f, b):
+            b = self.bwd.attentions(
+                [(t, s) for s, t in chunk], layer=self.layer_bwd, batch_size=batch_size
+            )
+            for (s_tokens, _t_tokens), mf, mb in zip(chunk, f, b):
                 rows, rev = AttentionReader.rows(mf), AttentionReader.rows(mb)
                 links, _ = BaselineDecoder.decode_gdf(rows, rev, len(s_tokens))
                 fwd_links.append(links)
@@ -576,9 +736,13 @@ class NMTAligner(Baseline):
         lam = float(self.dials["lam"])
         fwd_links, bwd_links = self.guided_targets(pairs, batch_size=batch)
         if log:
-            log(f"[nmt_aligner] guided targets from {len(pairs)} pairs; training two alignment layers for {updates} updates")
-        for name, model, layer_index, links, oriented in (("fwd", self.fwd, self.layer_fwd, fwd_links, pairs),
-                                                          ("bwd", self.bwd, self.layer_bwd, bwd_links, [(t, s) for s, t in pairs])):
+            log(
+                f"[nmt_aligner] guided targets from {len(pairs)} pairs; training two alignment layers for {updates} updates"
+            )
+        for name, model, layer_index, links, oriented in (
+            ("fwd", self.fwd, self.layer_fwd, fwd_links, pairs),
+            ("bwd", self.bwd, self.layer_bwd, bwd_links, [(t, s) for s, t in pairs]),
+        ):
             align = AlignmentLayer(model.hidden_size, device=self.cfg.device, full_context=full)
             optimizer = torch.optim.Adam(align.parameters(), lr=float(self.dials["layer_lr"]))
             rng = random.Random(self.cfg.seed)
@@ -588,7 +752,7 @@ class NMTAligner(Baseline):
             while done < updates:
                 rng.shuffle(order)
                 for start in range(0, len(order), batch):
-                    idx = order[start:start + batch]
+                    idx = order[start : start + batch]
                     chunk = [oriented[i] for i in idx]
                     states = model.states(chunk, layer=layer_index)
                     losses = []
@@ -603,10 +767,15 @@ class NMTAligner(Baseline):
                     if not losses:
                         continue
                     loss = torch.stack(losses).mean()
-                    optimizer.zero_grad(); loss.backward(); optimizer.step()
-                    total += float(loss.detach()); done += 1
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    total += float(loss.detach())
+                    done += 1
                     if log and done % 500 == 0:
-                        log(f"[nmt_aligner] layer {name} update {done}/{updates}: guided loss {total / 500:.4f}")
+                        log(
+                            f"[nmt_aligner] layer {name} update {done}/{updates}: guided loss {total / 500:.4f}"
+                        )
                         total = 0.0
                     if done >= updates:
                         break
@@ -627,16 +796,21 @@ class NMTAligner(Baseline):
             import torch
 
             for start in range(0, len(pairs), batch):
-                chunk = list(pairs[start:start + batch])
-                for (s_tokens, t_tokens), (keys, queries) in zip(chunk, model.states(chunk, layer=layer_index)):
+                chunk = list(pairs[start : start + batch])
+                for (s_tokens, t_tokens), (keys, queries) in zip(
+                    chunk, model.states(chunk, layer=layer_index)
+                ):
                     if keys.shape[0] == 0 or queries.shape[0] == 0:
-                        out.append([[(-1, 1.0)] for _ in t_tokens]); continue
+                        out.append([[(-1, 1.0)] for _ in t_tokens])
+                        continue
                     with torch.no_grad():
                         probs = align(keys, queries).cpu().numpy()
                     rows: Rows = []
                     for t in range(len(t_tokens)):
                         if t < probs.shape[0]:
-                            row = [(int(s), float(probs[t, s])) for s in range(len(s_tokens))] + [(-1, float(probs[t, -1]))]
+                            row = [(int(s), float(probs[t, s])) for s in range(len(s_tokens))] + [
+                                (-1, float(probs[t, -1]))
+                            ]
                         else:
                             row = [(-1, 1.0)]
                         rows.append(sorted(row, key=lambda x: -x[1]))
@@ -644,8 +818,10 @@ class NMTAligner(Baseline):
             return out
         shift = reading != "naive"
         for start in range(0, len(pairs), batch):
-            chunk = list(pairs[start:start + batch])
-            for matrix in model.attentions(chunk, layer=max(layer_index, 0), batch_size=batch, shift=shift):
+            chunk = list(pairs[start : start + batch])
+            for matrix in model.attentions(
+                chunk, layer=max(layer_index, 0), batch_size=batch, shift=shift
+            ):
                 out.append(AttentionReader.rows(matrix))
         return out
 
@@ -672,13 +848,19 @@ class NMTAligner(Baseline):
             if model._model is not None:
                 (path / name).mkdir(parents=True, exist_ok=True)
                 torch.save(model.state_dict(), path / name / "seq2seq.pt")
-        torch.save({"layer_fwd": self.layer_fwd, "layer_bwd": self.layer_bwd,
-                    "align_fwd": self.align_fwd.state_dict() if self.align_fwd else None,
-                    "align_bwd": self.align_bwd.state_dict() if self.align_bwd else None,
-                    "full_context": bool(int(self.dials["full_context"]))}, path / "layers.pt")
+        torch.save(
+            {
+                "layer_fwd": self.layer_fwd,
+                "layer_bwd": self.layer_bwd,
+                "align_fwd": self.align_fwd.state_dict() if self.align_fwd else None,
+                "align_bwd": self.align_bwd.state_dict() if self.align_bwd else None,
+                "full_context": bool(int(self.dials["full_context"])),
+            },
+            path / "layers.pt",
+        )
 
     @classmethod
-    def load(cls, path: Path, cfg: BaselineConfig) -> "NMTAligner":
+    def load(cls, path: Path, cfg: BaselineConfig) -> NMTAligner:
         import torch
 
         path = Path(path)
@@ -689,7 +871,12 @@ class NMTAligner(Baseline):
         method.layer_fwd, method.layer_bwd = int(state["layer_fwd"]), int(state["layer_bwd"])
         for name in ("fwd", "bwd"):
             if state.get(f"align_{name}") is not None:
-                align = AlignmentLayer(method.fwd.hidden_size, device=cfg.device, full_context=bool(state["full_context"]))
-                align.load_state_dict(state[f"align_{name}"]); align.eval()
+                align = AlignmentLayer(
+                    method.fwd.hidden_size,
+                    device=cfg.device,
+                    full_context=bool(state["full_context"]),
+                )
+                align.load_state_dict(state[f"align_{name}"])
+                align.eval()
                 setattr(method, f"align_{name}", align)
         return method

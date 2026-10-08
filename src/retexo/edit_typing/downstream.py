@@ -63,8 +63,13 @@ class EvaluationPool:
         ```
     """
 
-    def __init__(self, queries: List[Dict[str, str]], sources: List[Dict[str, str]],
-                gold: Dict[Tuple[str, str], str], unmatched: int):
+    def __init__(
+        self,
+        queries: List[Dict[str, str]],
+        sources: List[Dict[str, str]],
+        gold: Dict[Tuple[str, str], str],
+        unmatched: int,
+    ):
         self.queries = queries
         self.sources = sources
         self.gold = gold
@@ -76,7 +81,7 @@ class EvaluationPool:
             return list(csv.DictReader(f))
 
     @classmethod
-    def load(cls, fold_dir: Path, labels_csv: Path) -> "EvaluationPool":
+    def load(cls, fold_dir: Path, labels_csv: Path) -> EvaluationPool:
         """``ground_truth.csv`` says which pairs are references; the reference *type*
         is joined from ``labels.csv`` on the cleaned text pair (the way the BERT
         3-class script does it; cit. wins when a pair carries both)."""
@@ -99,7 +104,7 @@ class EvaluationPool:
             rt = by_text.get((q_text.get(key[0], "").strip(), s_text.get(key[1], "").strip()))
             if rt is None:
                 unmatched += 1
-                rt = "cit."          # a reference of unknown type; counted, reported
+                rt = "cit."  # a reference of unknown type; counted, reported
             gold[key] = rt
         return cls(queries, sources, gold, unmatched)
 
@@ -113,14 +118,38 @@ NONE, RELATION, ENCLITIC, LEMMA, FORM = 0, 1, 2, 3, 4
 FINE_LEXICAL = ("SYN", "HYPER", "HYPO", "ANT", "SYN-DIST", "NE-SUB", "POS")
 
 SCRIPT_FEATURES = [
-    "n_q", "n_s", "n_links", "link_rate", "src_cov", "longest_run", "n_runs",
-    "nop_share", "morph_share", "subst_share", "lex_rel_share", "split_merge_share",
-    "ins_share", "del_share",
-    "quote_longest", "quote_n", "quote_share", "reorder_n", "reorder_share",
-    "frame_n", "adapt_n", "disperse_n",
-    "mean_link_p", "min_link_p", "mean_null_p_unlinked",
-    "form1_link_share", "lemma_link_share", "none_link_share",
-    "shared_forms", "shared_lemmas", "jaccard_lemma", "len_ratio",
+    "n_q",
+    "n_s",
+    "n_links",
+    "link_rate",
+    "src_cov",
+    "longest_run",
+    "n_runs",
+    "nop_share",
+    "morph_share",
+    "subst_share",
+    "lex_rel_share",
+    "split_merge_share",
+    "ins_share",
+    "del_share",
+    "quote_longest",
+    "quote_n",
+    "quote_share",
+    "reorder_n",
+    "reorder_share",
+    "frame_n",
+    "adapt_n",
+    "disperse_n",
+    "mean_link_p",
+    "min_link_p",
+    "mean_null_p_unlinked",
+    "form1_link_share",
+    "lemma_link_share",
+    "none_link_share",
+    "shared_forms",
+    "shared_lemmas",
+    "jaccard_lemma",
+    "len_ratio",
 ]
 
 
@@ -144,8 +173,9 @@ class ScriptFeaturizer:
         pf = np.asarray(pf, dtype=np.float32)
         form = pf[..., _F["same_form"]] > 0
         lemma = pf[..., _F["same_lemma"]] > 0
-        enclitic = (pf[..., _F["enclitic_stem_match"]] > 0) & \
-                   (pf[..., _F["enclitic_src"]] != pf[..., _F["enclitic_tgt"]])
+        enclitic = (pf[..., _F["enclitic_stem_match"]] > 0) & (
+            pf[..., _F["enclitic_src"]] != pf[..., _F["enclitic_tgt"]]
+        )
         relation = (pf[..., _F["wn_any"]] > 0) | (pf[..., _F["both_names"]] > 0)
         out = np.zeros(pf.shape[:2], dtype=np.int8)
         out[relation] = RELATION
@@ -155,8 +185,9 @@ class ScriptFeaturizer:
         return out
 
     @staticmethod
-    def features(view, script, n_s: int, link_p: Sequence[float],
-                null_p: Sequence[float], tiers: np.ndarray) -> List[float]:
+    def features(
+        view, script, n_s: int, link_p: Sequence[float], null_p: Sequence[float], tiers: np.ndarray
+    ) -> List[float]:
         """One row per pair. ``view`` is decode.per_token_view(script); ``tiers``
         the [n_t, n_s] tier grid; ``link_p`` the model's probability of the chosen
         link (0 where unlinked); ``null_p`` its null probability per word."""
@@ -204,18 +235,38 @@ class ScriptFeaturizer:
         lp = [link_p[t] for t in linked]
         npu = [null_p[t] for t in range(len(link)) if link[t] < 0]
         return [
-            n_t, n_s, n_links, n_links / n_t, n_links / max(n_s, 1), longest, n_runs,
-            counts.get("NOP", 0) / denom, counts.get("MORPH", 0) / denom, subst / denom,
-            lex_rel / denom, split_merge / denom,
-            counts.get("INS", 0) / n_t, del_n / max(n_s, 1),
-            max(quote_spans, default=0), len(quote_spans), sum(quote_spans) / n_t,
-            reorder_n, reorder_n / denom,
-            sum(view["frame"]), adapt_n, disperse_n,
-            float(np.mean(lp)) if lp else 0.0, float(min(lp)) if lp else 0.0,
+            n_t,
+            n_s,
+            n_links,
+            n_links / n_t,
+            n_links / max(n_s, 1),
+            longest,
+            n_runs,
+            counts.get("NOP", 0) / denom,
+            counts.get("MORPH", 0) / denom,
+            subst / denom,
+            lex_rel / denom,
+            split_merge / denom,
+            counts.get("INS", 0) / n_t,
+            del_n / max(n_s, 1),
+            max(quote_spans, default=0),
+            len(quote_spans),
+            sum(quote_spans) / n_t,
+            reorder_n,
+            reorder_n / denom,
+            sum(view["frame"]),
+            adapt_n,
+            disperse_n,
+            float(np.mean(lp)) if lp else 0.0,
+            float(min(lp)) if lp else 0.0,
             float(np.mean(npu)) if npu else 1.0,
-            form1 / denom, lemma_any / denom, none_any / denom,
-            shared_forms, shared_lemmas,
-            shared_lemmas / max(n_t + n_s - shared_lemmas, 1), n_t / max(n_s, 1),
+            form1 / denom,
+            lemma_any / denom,
+            none_any / denom,
+            shared_forms,
+            shared_lemmas,
+            shared_lemmas / max(n_t + n_s - shared_lemmas, 1),
+            n_t / max(n_s, 1),
         ]
 
 
@@ -242,48 +293,87 @@ class DownstreamScorer:
         rows = []
         for qi, qid in enumerate(qids):
             g, p = gold[qi], pred[qi]
-            tp = int(((g == 1) & (p == 1)).sum()); fp = int(((g == 0) & (p == 1)).sum())
-            fn = int(((g == 1) & (p == 0)).sum()); tn = int(((g == 0) & (p == 0)).sum())
+            tp = int(((g == 1) & (p == 1)).sum())
+            fp = int(((g == 0) & (p == 1)).sum())
+            fn = int(((g == 1) & (p == 0)).sum())
+            tn = int(((g == 0) & (p == 0)).sum())
             n = tp + fp + fn + tn
             prec = tp / (tp + fp) if tp + fp else 0.0
             rec = tp / (tp + fn) if tp + fn else 0.0
             f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
-            rows.append(dict(query_id=qid, precision=prec, recall=rec, f1=f1,
-                             accuracy=(tp + tn) / n if n else 0.0, tp=tp, fp=fp, fn=fn, tn=tn,
-                             fpr=fp / n if n else 0.0, fnr=fn / n if n else 0.0,
-                             smr=(fp + fn) / n if n else 0.0))
+            rows.append(
+                dict(
+                    query_id=qid,
+                    precision=prec,
+                    recall=rec,
+                    f1=f1,
+                    accuracy=(tp + tn) / n if n else 0.0,
+                    tp=tp,
+                    fp=fp,
+                    fn=fn,
+                    tn=tn,
+                    fpr=fp / n if n else 0.0,
+                    fnr=fn / n if n else 0.0,
+                    smr=(fp + fn) / n if n else 0.0,
+                )
+            )
         match = [r for r in rows if r["tp"] + r["fn"] > 0]
-        mean = lambda key, rs: float(np.mean([r[key] for r in rs])) if rs else 0.0
-        macro = {"precision": mean("precision", match), "recall": mean("recall", match),
-                 "f1": mean("f1", match), "accuracy": mean("accuracy", match),
-                 "fpr": mean("fpr", rows), "fnr": mean("fnr", rows), "smr": mean("smr", rows),
-                 "tp": sum(r["tp"] for r in rows), "fp": sum(r["fp"] for r in rows),
-                 "fn": sum(r["fn"] for r in rows), "tn": sum(r["tn"] for r in rows)}
-        tp_m = sum(r["tp"] for r in match); fp_m = sum(r["fp"] for r in match)
-        fn_m = sum(r["fn"] for r in match); tn_m = sum(r["tn"] for r in match)
+
+        def mean(key, rs):
+            return float(np.mean([r[key] for r in rs])) if rs else 0.0
+
+        macro = {
+            "precision": mean("precision", match),
+            "recall": mean("recall", match),
+            "f1": mean("f1", match),
+            "accuracy": mean("accuracy", match),
+            "fpr": mean("fpr", rows),
+            "fnr": mean("fnr", rows),
+            "smr": mean("smr", rows),
+            "tp": sum(r["tp"] for r in rows),
+            "fp": sum(r["fp"] for r in rows),
+            "fn": sum(r["fn"] for r in rows),
+            "tn": sum(r["tn"] for r in rows),
+        }
+        tp_m = sum(r["tp"] for r in match)
+        fp_m = sum(r["fp"] for r in match)
+        fn_m = sum(r["fn"] for r in match)
+        tn_m = sum(r["tn"] for r in match)
         p = tp_m / (tp_m + fp_m) if tp_m + fp_m else 0.0
         r = tp_m / (tp_m + fn_m) if tp_m + fn_m else 0.0
         tot_a = macro["tp"] + macro["fp"] + macro["fn"] + macro["tn"]
-        micro = {"precision": p, "recall": r, "f1": 2 * p * r / (p + r) if p + r else 0.0,
-                 "accuracy": (tp_m + tn_m) / (tp_m + fp_m + fn_m + tn_m) if match else 0.0,
-                 "fpr": macro["fp"] / tot_a if tot_a else 0.0,
-                 "fnr": macro["fn"] / tot_a if tot_a else 0.0,
-                 "smr": (macro["fp"] + macro["fn"]) / tot_a if tot_a else 0.0}
+        micro = {
+            "precision": p,
+            "recall": r,
+            "f1": 2 * p * r / (p + r) if p + r else 0.0,
+            "accuracy": (tp_m + tn_m) / (tp_m + fp_m + fn_m + tn_m) if match else 0.0,
+            "fpr": macro["fp"] / tot_a if tot_a else 0.0,
+            "fnr": macro["fn"] / tot_a if tot_a else 0.0,
+            "smr": (macro["fp"] + macro["fn"]) / tot_a if tot_a else 0.0,
+        }
         return macro, micro, rows
 
     @staticmethod
-    def find_threshold(labels: np.ndarray, probs: np.ndarray, *, method: str = "plateau_high",
-                       tolerance: float = 0.01) -> float:
+    def find_threshold(
+        labels: np.ndarray,
+        probs: np.ndarray,
+        *,
+        method: str = "plateau_high",
+        tolerance: float = 0.01,
+    ) -> float:
         """The paper's rule: over thresholds 0.01..0.99, the largest one whose
         binary F1 is within ``tolerance`` of the best (favours precision)."""
-        labels = np.asarray(labels).astype(int); probs = np.asarray(probs, dtype=float)
+        labels = np.asarray(labels).astype(int)
+        probs = np.asarray(probs, dtype=float)
         grid = np.arange(0.01, 1.00, 0.01)
         f1s = []
         for t in grid:
             pred = probs >= t
-            tp = int((pred & (labels == 1)).sum()); fp = int((pred & (labels == 0)).sum())
+            tp = int((pred & (labels == 1)).sum())
+            fp = int((pred & (labels == 0)).sum())
             fn = int((~pred & (labels == 1)).sum())
-            p = tp / (tp + fp) if tp + fp else 0.0; r = tp / (tp + fn) if tp + fn else 0.0
+            p = tp / (tp + fp) if tp + fp else 0.0
+            r = tp / (tp + fn) if tp + fn else 0.0
             f1s.append(2 * p * r / (p + r) if p + r else 0.0)
         f1s = np.asarray(f1s)
         if method == "max_f1":

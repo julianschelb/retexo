@@ -60,8 +60,9 @@ class CellGrid:
     n_source: int
 
     @classmethod
-    def from_word_rows(cls, words: Sequence, n_source: int, *, frame_from_head: bool = False,
-                       min_p: float = 1e-6) -> "CellGrid":
+    def from_word_rows(
+        cls, words: Sequence, n_source: int, *, frame_from_head: bool = False, min_p: float = 1e-6
+    ) -> CellGrid:
         """From ``TypedPointer.predict_cells`` output for one example: per reuse
         word ``(cands, cells, nulls, loc, frame)``, or ``None`` for a word lost
         to truncation.
@@ -147,7 +148,7 @@ class StructuredDecoder:
 
     # ---------- scoring ----------
 
-    def run_score(self, grid: CellGrid, run: Run, augment: Optional["Augment"] = None):
+    def run_score(self, grid: CellGrid, run: Run, augment: Optional[Augment] = None):
         """The score of one run: its cells' log probabilities plus the run bonus,
         plus the augmentation cost where one is given. Works on floats or tensors."""
         c = self.config
@@ -167,7 +168,7 @@ class StructuredDecoder:
                 total = total + augment.null(t, run.kind)
         return total - c.open_cost
 
-    def score(self, grid: CellGrid, segmentation: Segmentation, augment: Optional["Augment"] = None):
+    def score(self, grid: CellGrid, segmentation: Segmentation, augment: Optional[Augment] = None):
         """The score of a whole segmentation, crossing penalties included."""
         total = 0.0
         prev_end = None
@@ -181,7 +182,7 @@ class StructuredDecoder:
 
     # ---------- the programme ----------
 
-    def decode(self, grid: CellGrid, augment: Optional["Augment"] = None) -> Segmentation:
+    def decode(self, grid: CellGrid, augment: Optional[Augment] = None) -> Segmentation:
         """The best segmentation of the reuse under the grid (plus ``augment``, if given).
 
         Dynamic programme over reuse positions; the state is the previous QUOTE
@@ -209,23 +210,40 @@ class StructuredDecoder:
                 v = float(row[s])
                 if v > NEG_FINITE:
                     cell[t, s] = v + (augment.cell(t, s) if augment is not None else 0.0)
-        ins = np.array([max(float(grid.log_ins[t]), NEG_FINITE)
-                        + (augment.null(t, INS) if augment is not None else 0.0) for t in range(m)])
-        frm = np.array([max(float(grid.log_frame[t]), NEG_FINITE)
-                        + (augment.null(t, FRAME) if augment is not None else 0.0) for t in range(m)])
-        prefix = {INS: np.concatenate([[0.0], np.cumsum(ins)]), FRAME: np.concatenate([[0.0], np.cumsum(frm)])}
-        diagonal = np.zeros((m + 1, n + 1))                  # diagonal[t+1, s+1] = cell[t, s] + diagonal[t, s]
+        ins = np.array(
+            [
+                max(float(grid.log_ins[t]), NEG_FINITE)
+                + (augment.null(t, INS) if augment is not None else 0.0)
+                for t in range(m)
+            ]
+        )
+        frm = np.array(
+            [
+                max(float(grid.log_frame[t]), NEG_FINITE)
+                + (augment.null(t, FRAME) if augment is not None else 0.0)
+                for t in range(m)
+            ]
+        )
+        prefix = {
+            INS: np.concatenate([[0.0], np.cumsum(ins)]),
+            FRAME: np.concatenate([[0.0], np.cumsum(frm)]),
+        }
+        diagonal = np.zeros((m + 1, n + 1))  # diagonal[t+1, s+1] = cell[t, s] + diagonal[t, s]
         for t in range(m):
             diagonal[t + 1, 1:] = cell[t, :] + diagonal[t, :-1]
 
         # best[j][prev_end] = (score, back, used); prev_end -1 before any quote run,
         # used = the source words the path has linked so far, a boolean mask
-        best: List[Dict[int, Tuple[float, Optional[Tuple[int, int, Run]], "np.ndarray"]]] = [dict() for _ in range(m + 1)]
+        best: List[Dict[int, Tuple[float, Optional[Tuple[int, int, Run]], np.ndarray]]] = [
+            dict() for _ in range(m + 1)
+        ]
         best[0][-1] = (0.0, None, np.zeros(n, dtype=bool))
         for i in range(m):
             if not best[i]:
                 continue
-            states = [(state, entry) for state, entry in best[i].items() if entry[0] > NEG_FINITE / 2]
+            states = [
+                (state, entry) for state, entry in best[i].items() if entry[0] > NEG_FINITE / 2
+            ]
             if not states:
                 continue
             for state, (score, _, used) in states:
@@ -238,9 +256,14 @@ class StructuredDecoder:
             taken = [np.concatenate([[0], np.cumsum(used)]) for _, (_, _, used) in states]
             for length in range(1, min(longest, m - i) + 1):
                 a = np.arange(0, n - length + 1)
-                base = diagonal[i + length, a + length] - diagonal[i, a] + c.contiguity * (length - 1) - c.open_cost
+                base = (
+                    diagonal[i + length, a + length]
+                    - diagonal[i, a]
+                    + c.contiguity * (length - 1)
+                    - c.open_cost
+                )
                 table = np.full((len(states), len(a)), NEG_FINITE)
-                for k, (state, (score, _, used)) in enumerate(states):
+                for k, (state, (score, _, _used)) in enumerate(states):
                     cand = score + base
                     if state >= 0:
                         cand = cand - c.crossing * (a < state)
@@ -253,8 +276,10 @@ class StructuredDecoder:
                     state, (_, _, used) = states[int(winner[idx])]
                     run = Run(i, i + length, QUOTE, source_start=start)
                     now = used.copy()
-                    now[start:start + length] = True
-                    self._relax(best[i + length], start + length, float(value[idx]), (i, state, run), now)
+                    now[start : start + length] = True
+                    self._relax(
+                        best[i + length], start + length, float(value[idx]), (i, state, run), now
+                    )
         if not best[m]:
             return Segmentation([Run(0, m, INS)], m)
         state = max(best[m], key=lambda k: best[m][k][0])
@@ -288,7 +313,11 @@ class StructuredDecoder:
                 for y in range(x + 1, len(quotes)):
                     (ix, rx), (iy, ry) = quotes[x], quotes[y]
                     if rx.source_start < ry.source_end and ry.source_start < rx.source_end:
-                        loser_idx, loser = (ix, rx) if self.run_score(grid, rx) < self.run_score(grid, ry) else (iy, ry)
+                        loser_idx, loser = (
+                            (ix, rx)
+                            if self.run_score(grid, rx) < self.run_score(grid, ry)
+                            else (iy, ry)
+                        )
                         runs[loser_idx] = Run(loser.start, loser.end, INS)
                         changed = True
                         break
@@ -323,7 +352,11 @@ class StructuredDecoder:
 
         augment = Augment.against(gold, self.config.cost)
         delta = sum(augment.cell(t, s) for t, s in wrong.cells()) + sum(
-            augment.null(t, run.kind) for run in wrong.runs if run.kind != QUOTE for t in range(run.start, run.end))
+            augment.null(t, run.kind)
+            for run in wrong.runs
+            if run.kind != QUOTE
+            for t in range(run.start, run.end)
+        )
         gap = self.score(grid, wrong) + delta - self.score(grid, gold)
         if torch.is_tensor(gap):
             return torch.maximum(torch.zeros_like(gap), gap)
@@ -354,7 +387,7 @@ class Augment:
         self.cost = cost
 
     @classmethod
-    def against(cls, gold: Segmentation, cost: float = 1.0) -> "Augment":
+    def against(cls, gold: Segmentation, cost: float = 1.0) -> Augment:
         return cls(gold.links(), gold.frame(), cost)
 
     def cell(self, t: int, s: int) -> float:

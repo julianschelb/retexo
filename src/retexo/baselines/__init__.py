@@ -36,9 +36,22 @@ class BaselineRegistry:
     methods: Dict[str, Type] = {}
 
     #: Modules that register a baseline on import, in ``load_all`` order.
-    MODULES = ("floors", "typer", "em_aligner", "sultan_aligner", "sim_aligner",
-               "span_aligner", "typed_pointer", "tagger", "span_pair",
-               "refinement", "nmt_aligner", "full_system", "llm", "stored_rows")
+    MODULES = (
+        "floors",
+        "typer",
+        "em_aligner",
+        "sultan_aligner",
+        "sim_aligner",
+        "span_aligner",
+        "typed_pointer",
+        "tagger",
+        "span_pair",
+        "refinement",
+        "nmt_aligner",
+        "full_system",
+        "llm",
+        "stored_rows",
+    )
 
     @classmethod
     def register(cls, baseline_cls):

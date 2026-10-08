@@ -49,15 +49,11 @@ class PRF:
     f1: float = 0.0
 
     @classmethod
-    def from_counts(cls, matched: int, predicted: int, gold: int) -> "PRF":
+    def from_counts(cls, matched: int, predicted: int, gold: int) -> PRF:
         """Build from match counts, treating an empty side as zero."""
         precision = matched / predicted if predicted else 0.0
         recall = matched / gold if gold else 0.0
-        f1 = (
-            2 * precision * recall / (precision + recall)
-            if precision + recall
-            else 0.0
-        )
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
         return cls(precision, recall, f1)
 
 
@@ -148,16 +144,13 @@ class ScriptScorer:
         source, target = script.source_tokens, script.target_tokens
         shared = min(len(source), len(target))
         operations = [
-            EditOperation("NOP", (i,), (i,), (source[i],), (target[i],))
-            for i in range(shared)
+            EditOperation("NOP", (i,), (i,), (source[i],), (target[i],)) for i in range(shared)
         ]
         operations += [
-            EditOperation("INS", (), (j,), (), (target[j],))
-            for j in range(shared, len(target))
+            EditOperation("INS", (), (j,), (), (target[j],)) for j in range(shared, len(target))
         ]
         operations += [
-            EditOperation("DEL", (i,), (), (source[i],), ())
-            for i in range(shared, len(source))
+            EditOperation("DEL", (i,), (), (source[i],), ()) for i in range(shared, len(source))
         ]
         return EditScript(list(source), list(target), operations, script.registry)
 
@@ -176,12 +169,10 @@ class ScriptScorer:
 
         source, target = script.source_tokens, script.target_tokens
         operations = [
-            EditOperation("DEL", (i,), (), (token,), ())
-            for i, token in enumerate(source)
+            EditOperation("DEL", (i,), (), (token,), ()) for i, token in enumerate(source)
         ]
         operations += [
-            EditOperation("INS", (), (j,), (), (token,))
-            for j, token in enumerate(target)
+            EditOperation("INS", (), (j,), (), (token,)) for j, token in enumerate(target)
         ]
         return EditScript(list(source), list(target), operations, script.registry)
 
@@ -192,9 +183,7 @@ class ScriptScorer:
         for op in script.operations:
             if op.source_indices and op.target_indices:
                 for position, target in enumerate(op.target_indices):
-                    links[target] = op.source_indices[
-                        min(position, len(op.source_indices) - 1)
-                    ]
+                    links[target] = op.source_indices[min(position, len(op.source_indices) - 1)]
         return links
 
     @classmethod
@@ -279,9 +268,7 @@ class ScriptScorer:
         result.typed = PRF.from_counts(matched_t, predicted_t, gold_t)
         result.copy_only = PRF.from_counts(copy_m, copy_p, copy_g)
         result.degenerate = PRF.from_counts(degen_m, degen_p, gold_t)
-        result.per_operation = {
-            tag: PRF.from_counts(m, p, g) for tag, (m, p, g) in per_tag.items()
-        }
+        result.per_operation = {tag: PRF.from_counts(m, p, g) for tag, (m, p, g) in per_tag.items()}
         #: Averaged over operations rather than over instances, so a model that
         #: wins on the two majority tags cannot hide behind a micro-average.
         scored = [prf.f1 for tag, prf in result.per_operation.items() if per_tag[tag][2]]

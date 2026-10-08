@@ -118,8 +118,9 @@ def test_optimal_and_greedy_aligners_both_produce_valid_scripts():
     for aligner in (OptimalAligner(), GreedyAligner()):
         oracle = EditPlanOracle(resources=RESOURCES, aligner=aligner)
         script = oracle.plan("uox faucibus haesit", "haesit uox faucibus")
-        assert SCRIBA.verify(script, "uox faucibus haesit".split(),
-                             "haesit uox faucibus".split()), type(aligner).__name__
+        assert SCRIBA.verify(
+            script, "uox faucibus haesit".split(), "haesit uox faucibus".split()
+        ), type(aligner).__name__
 
 
 def test_relation_lookups_are_cached():
@@ -133,8 +134,7 @@ def test_relation_lookups_are_cached():
 # =============================================================================
 
 if __name__ == "__main__":
-    tests = [(n, f) for n, f in sorted(globals().items())
-             if n.startswith("test_") and callable(f)]
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = []
     for name, fn in tests:
         try:

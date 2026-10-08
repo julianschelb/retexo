@@ -40,11 +40,11 @@ from retexo.baselines.base import Baseline, BaselineConfig, Prediction, Rows
 from retexo.baselines.record import Record
 from retexo.core.normalize import normalize
 
-DEFAULT_ITERATIONS = 5          # Och and Ney 2003, section 6 (GIZA++ 1^5 H^5); fast_align ITERATIONS = 5
-DEFAULT_P0_HMM = 0.2            # Och and Ney 2003, p. 24, the held-out value of the empty-word transition
-DEFAULT_P0_DIAG = 0.08          # Dyer et al. 2013, p. 647, prob_align_null
-DEFAULT_TENSION = 4.0           # Dyer et al. 2013, p. 647, diagonal_tension
-DEFAULT_SMOOTHING = 0.05        # Och and Ney 2003, eq. 37, alpha (tuned on held-out data)
+DEFAULT_ITERATIONS = 5  # Och and Ney 2003, section 6 (GIZA++ 1^5 H^5); fast_align ITERATIONS = 5
+DEFAULT_P0_HMM = 0.2  # Och and Ney 2003, p. 24, the held-out value of the empty-word transition
+DEFAULT_P0_DIAG = 0.08  # Dyer et al. 2013, p. 647, prob_align_null
+DEFAULT_TENSION = 4.0  # Dyer et al. 2013, p. 647, diagonal_tension
+DEFAULT_SMOOTHING = 0.05  # Och and Ney 2003, eq. 37, alpha (tuned on held-out data)
 #: Plain EM by default: the Dirichlet smoothing adds ``alpha * n_target_types`` to every M-step denominator, which on a
 #: corpus of a few thousand passages (ten or more per source type) flattens every table row towards the null word and
 #: makes the likelihood fall after the first iteration (found on the Latin dry run, 2026-09-16); on parallel bitext of
@@ -86,16 +86,28 @@ class Corpus:
     the same ``(I, J)`` holds an int32 array ``[B, I + 1, J]`` of pair ids.
     """
 
-    def __init__(self, source: Sequence[Sequence[str]], target: Sequence[Sequence[str]],
-                 vs: Optional[Vocab] = None, vt: Optional[Vocab] = None, *, grow: bool = True):
+    def __init__(
+        self,
+        source: Sequence[Sequence[str]],
+        target: Sequence[Sequence[str]],
+        vs: Optional[Vocab] = None,
+        vt: Optional[Vocab] = None,
+        *,
+        grow: bool = True,
+    ):
         self.vs = vs or Vocab()
         self.vt = vt or Vocab()
         self.sentences: List[Tuple[np.ndarray, np.ndarray]] = []
         for s, t in zip(source, target):
             if not s or not t:
                 continue
-            s_ids = np.array([NULL] + [self.vs.add(w) if grow else max(self.vs.get(w), 0) for w in s], dtype=np.int64)
-            t_ids = np.array([self.vt.add(w) if grow else max(self.vt.get(w), 0) for w in t], dtype=np.int64)
+            s_ids = np.array(
+                [NULL] + [self.vs.add(w) if grow else max(self.vs.get(w), 0) for w in s],
+                dtype=np.int64,
+            )
+            t_ids = np.array(
+                [self.vt.add(w) if grow else max(self.vt.get(w), 0) for w in t], dtype=np.int64
+            )
             self.sentences.append((s_ids, t_ids))
         self.groups: Dict[Tuple[int, int], List[int]] = {}
         for n, (s_ids, t_ids) in enumerate(self.sentences):
@@ -115,8 +127,10 @@ class Corpus:
         self.group_ids: Dict[Tuple[int, int], np.ndarray] = {}
         offsets = np.cumsum([0] + [len(k) for k in keys])
         for shape, members in self.groups.items():
-            I, J = shape
-            block = np.stack([inverse[offsets[n]:offsets[n + 1]].reshape(I + 1, J) for n in members])
+            n_src, J = shape
+            block = np.stack(
+                [inverse[offsets[n] : offsets[n + 1]].reshape(n_src + 1, J) for n in members]
+            )
             self.group_ids[shape] = block.astype(np.int32)
 
     def __len__(self) -> int:
@@ -149,9 +163,14 @@ class LexicalTable:
             from scipy.special import digamma
 
             alpha = self.prior_alpha
-            self.theta = np.exp(digamma(counts + alpha) - digamma(totals[self.corpus.pair_s] + alpha * self.corpus.n_target_types))
+            self.theta = np.exp(
+                digamma(counts + alpha)
+                - digamma(totals[self.corpus.pair_s] + alpha * self.corpus.n_target_types)
+            )
         else:
-            self.theta = (counts + self.prior_alpha) / np.maximum(totals[self.corpus.pair_s] + self.prior_alpha * self.corpus.n_target_types, 1e-12)
+            self.theta = (counts + self.prior_alpha) / np.maximum(
+                totals[self.corpus.pair_s] + self.prior_alpha * self.corpus.n_target_types, 1e-12
+            )
         self.theta = np.maximum(self.theta, 1e-12)
 
     def sub(self, pair_ids: np.ndarray) -> np.ndarray:
@@ -173,27 +192,36 @@ class IBM1:
         self.iterations = iterations
         self.log_likelihood: List[float] = []
 
-    def posteriors(self, table: LexicalTable, pair_ids: np.ndarray, **_) -> Tuple[np.ndarray, float]:
+    def posteriors(
+        self, table: LexicalTable, pair_ids: np.ndarray, **_
+    ) -> Tuple[np.ndarray, float]:
         """``[B, I + 1, J]`` posteriors and the batch log-likelihood."""
         sub = table.sub(pair_ids)
         total = sub.sum(axis=1, keepdims=True)
         post = sub / np.maximum(total, 1e-300)
-        I = pair_ids.shape[1] - 1
-        ll = float(np.log(np.maximum(total, 1e-300)).sum() - pair_ids.shape[0] * pair_ids.shape[2] * math.log(I + 1))
+        n_src = pair_ids.shape[1] - 1
+        ll = float(
+            np.log(np.maximum(total, 1e-300)).sum()
+            - pair_ids.shape[0] * pair_ids.shape[2] * math.log(n_src + 1)
+        )
         return post, ll
 
-    def fit(self, corpus: Corpus, table: LexicalTable, *, log=None) -> "IBM1":
+    def fit(self, corpus: Corpus, table: LexicalTable, *, log=None) -> IBM1:
         for it in range(self.iterations):
             counts = np.zeros(corpus.n_pairs, dtype=np.float64)
             ll = 0.0
-            for shape, pair_ids in corpus.group_ids.items():
+            for _shape, pair_ids in corpus.group_ids.items():
                 post, batch_ll = self.posteriors(table, pair_ids)
-                counts += np.bincount(pair_ids.ravel(), weights=post.ravel(), minlength=corpus.n_pairs)
+                counts += np.bincount(
+                    pair_ids.ravel(), weights=post.ravel(), minlength=corpus.n_pairs
+                )
                 ll += batch_ll
             self.log_likelihood.append(ll)
             table.m_step(counts)
             if log:
-                log(f"[em_aligner] ibm1 iteration {it + 1}/{self.iterations} log-likelihood {ll:.1f}")
+                log(
+                    f"[em_aligner] ibm1 iteration {it + 1}/{self.iterations} log-likelihood {ll:.1f}"
+                )
         return self
 
 
@@ -202,44 +230,53 @@ class DiagonalIBM2(IBM1):
 
     name = "diag"
 
-    def __init__(self, iterations: int = DEFAULT_ITERATIONS, p0: float = DEFAULT_P0_DIAG, tension: float = DEFAULT_TENSION,
-                 optimise_tension: bool = True):
+    def __init__(
+        self,
+        iterations: int = DEFAULT_ITERATIONS,
+        p0: float = DEFAULT_P0_DIAG,
+        tension: float = DEFAULT_TENSION,
+        optimise_tension: bool = True,
+    ):
         super().__init__(iterations)
         self.p0 = p0
         self.tension = tension
         self.optimise_tension = optimise_tension
 
     @staticmethod
-    def h(I: int, J: int) -> np.ndarray:
+    def h(n_src: int, J: int) -> np.ndarray:
         """``-|j/J - i/I|`` for source position ``i`` (1..I) and target position ``j`` (1..J): shape ``[I, J]``."""
-        i = np.arange(1, I + 1, dtype=np.float64)[:, None] / I
+        i = np.arange(1, n_src + 1, dtype=np.float64)[:, None] / n_src
         j = np.arange(1, J + 1, dtype=np.float64)[None, :] / J
         return -np.abs(j - i)
 
-    def prior(self, I: int, J: int, tension: Optional[float] = None) -> np.ndarray:
+    def prior(self, n_src: int, J: int, tension: Optional[float] = None) -> np.ndarray:
         """``[I + 1, J]``: ``p0`` for the null row, the normalised diagonal prior below it."""
         lam = self.tension if tension is None else tension
-        weights = np.exp(lam * self.h(I, J))
+        weights = np.exp(lam * self.h(n_src, J))
         z = weights.sum(axis=0, keepdims=True)
-        out = np.empty((I + 1, J))
+        out = np.empty((n_src + 1, J))
         out[0] = self.p0
         out[1:] = (1.0 - self.p0) * weights / z
         return out
 
-    def posteriors(self, table: LexicalTable, pair_ids: np.ndarray, **_) -> Tuple[np.ndarray, float]:
-        I, J = pair_ids.shape[1] - 1, pair_ids.shape[2]
-        joint = table.sub(pair_ids) * self.prior(I, J)[None]
+    def posteriors(
+        self, table: LexicalTable, pair_ids: np.ndarray, **_
+    ) -> Tuple[np.ndarray, float]:
+        n_src, J = pair_ids.shape[1] - 1, pair_ids.shape[2]
+        joint = table.sub(pair_ids) * self.prior(n_src, J)[None]
         total = joint.sum(axis=1, keepdims=True)
         return joint / np.maximum(total, 1e-300), float(np.log(np.maximum(total, 1e-300)).sum())
 
-    def fit(self, corpus: Corpus, table: LexicalTable, *, log=None) -> "DiagonalIBM2":
+    def fit(self, corpus: Corpus, table: LexicalTable, *, log=None) -> DiagonalIBM2:
         for it in range(self.iterations):
             counts = np.zeros(corpus.n_pairs, dtype=np.float64)
             ll = 0.0
             expected: Dict[Tuple[int, int], np.ndarray] = {}
             for shape, pair_ids in corpus.group_ids.items():
                 post, batch_ll = self.posteriors(table, pair_ids)
-                counts += np.bincount(pair_ids.ravel(), weights=post.ravel(), minlength=corpus.n_pairs)
+                counts += np.bincount(
+                    pair_ids.ravel(), weights=post.ravel(), minlength=corpus.n_pairs
+                )
                 expected[shape] = post[:, 1:, :].sum(axis=0)
                 ll += batch_ll
             self.log_likelihood.append(ll)
@@ -247,7 +284,9 @@ class DiagonalIBM2(IBM1):
             if self.optimise_tension:
                 self.tension = self._best_tension(expected)
             if log:
-                log(f"[em_aligner] diag iteration {it + 1}/{self.iterations} log-likelihood {ll:.1f} tension {self.tension:.2f}")
+                log(
+                    f"[em_aligner] diag iteration {it + 1}/{self.iterations} log-likelihood {ll:.1f} tension {self.tension:.2f}"
+                )
         return self
 
     def _best_tension(self, expected: Dict[Tuple[int, int], np.ndarray]) -> float:
@@ -255,9 +294,9 @@ class DiagonalIBM2(IBM1):
         best, best_value = self.tension, -math.inf
         for lam in [x / 2 for x in range(2, 17)]:
             value = 0.0
-            for (I, J), post in expected.items():
-                weights = np.exp(lam * self.h(I, J))
-                log_prior = lam * self.h(I, J) - np.log(weights.sum(axis=0, keepdims=True))
+            for (n_src, J), post in expected.items():
+                weights = np.exp(lam * self.h(n_src, J))
+                log_prior = lam * self.h(n_src, J) - np.log(weights.sum(axis=0, keepdims=True))
                 value += float((post * log_prior).sum())
             if value > best_value:
                 best, best_value = lam, value
@@ -269,106 +308,131 @@ class HMMAligner:
 
     name = "hmm"
 
-    def __init__(self, iterations: int = DEFAULT_ITERATIONS, p0: float = DEFAULT_P0_HMM,
-                 smoothing_alpha: float = DEFAULT_SMOOTHING, max_jump: int = DEFAULT_MAX_JUMP):
+    def __init__(
+        self,
+        iterations: int = DEFAULT_ITERATIONS,
+        p0: float = DEFAULT_P0_HMM,
+        smoothing_alpha: float = DEFAULT_SMOOTHING,
+        max_jump: int = DEFAULT_MAX_JUMP,
+    ):
         self.iterations = iterations
         self.p0 = p0
         self.smoothing_alpha = smoothing_alpha
         self.max_jump = max_jump
-        self.jump = np.ones(2 * max_jump + 1, dtype=np.float64)      # c(d), d in [-max_jump, max_jump]
+        self.jump = np.ones(2 * max_jump + 1, dtype=np.float64)  # c(d), d in [-max_jump, max_jump]
         self.log_likelihood: List[float] = []
         self._transitions: Dict[int, np.ndarray] = {}
 
     def _bucket(self, d: np.ndarray) -> np.ndarray:
         return np.clip(d, -self.max_jump, self.max_jump) + self.max_jump
 
-    def transitions(self, I: int) -> np.ndarray:
+    def transitions(self, n_src: int) -> np.ndarray:
         """``[2I, 2I]`` row-stochastic matrix over real states ``0..I-1`` and null states ``I..2I-1``."""
-        if I in self._transitions:
-            return self._transitions[I]
-        pos = np.arange(I)
-        c = self.jump[self._bucket(pos[None, :] - pos[:, None])]             # c(i - i') for real -> real
+        if n_src in self._transitions:
+            return self._transitions[n_src]
+        pos = np.arange(n_src)
+        c = self.jump[self._bucket(pos[None, :] - pos[:, None])]  # c(i - i') for real -> real
         p = c / c.sum(axis=1, keepdims=True)
-        p = (1.0 - self.smoothing_alpha) * p + self.smoothing_alpha / I
+        p = (1.0 - self.smoothing_alpha) * p + self.smoothing_alpha / n_src
         real = (1.0 - self.p0) * p
-        T = np.zeros((2 * I, 2 * I))
-        T[:I, :I] = real
-        T[:I, I:] = self.p0 * np.eye(I)
-        T[I:, :I] = real
-        T[I:, I:] = self.p0 * np.eye(I)
-        self._transitions[I] = T
+        T = np.zeros((2 * n_src, 2 * n_src))
+        T[:n_src, :n_src] = real
+        T[:n_src, n_src:] = self.p0 * np.eye(n_src)
+        T[n_src:, :n_src] = real
+        T[n_src:, n_src:] = self.p0 * np.eye(n_src)
+        self._transitions[n_src] = T
         return T
 
-    def initial(self, I: int) -> np.ndarray:
-        start = np.full(2 * I, 0.0)
-        start[:I] = (1.0 - self.p0) / I
-        start[I:] = self.p0 / I
+    def initial(self, n_src: int) -> np.ndarray:
+        start = np.full(2 * n_src, 0.0)
+        start[:n_src] = (1.0 - self.p0) / n_src
+        start[n_src:] = self.p0 / n_src
         return start
 
     def _emissions(self, table: LexicalTable, pair_ids: np.ndarray) -> np.ndarray:
         """``[B, 2I, J]``: real states emit ``theta[s_i, t_j]``, null states ``theta[null, t_j]``."""
         sub = table.sub(pair_ids)
-        I = pair_ids.shape[1] - 1
-        null = np.repeat(sub[:, :1, :], I, axis=1)
+        n_src = pair_ids.shape[1] - 1
+        null = np.repeat(sub[:, :1, :], n_src, axis=1)
         return np.concatenate([sub[:, 1:, :], null], axis=1)
 
-    def forward_backward(self, table: LexicalTable, pair_ids: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
+    def forward_backward(
+        self, table: LexicalTable, pair_ids: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
         """Posteriors ``[B, 2I, J]``, expected transitions ``[2I, 2I]`` summed over the batch, log-likelihood."""
         B, I1, J = pair_ids.shape
-        I = I1 - 1
+        n_src = I1 - 1
         E = self._emissions(table, pair_ids)
-        T = self.transitions(I)
-        alpha = np.zeros((B, 2 * I, J))
-        beta = np.zeros((B, 2 * I, J))
+        T = self.transitions(n_src)
+        alpha = np.zeros((B, 2 * n_src, J))
+        beta = np.zeros((B, 2 * n_src, J))
         scale = np.zeros((B, J))
-        alpha[:, :, 0] = self.initial(I)[None, :] * E[:, :, 0]
+        alpha[:, :, 0] = self.initial(n_src)[None, :] * E[:, :, 0]
         scale[:, 0] = alpha[:, :, 0].sum(axis=1)
         alpha[:, :, 0] /= np.maximum(scale[:, :1], 1e-300)
         for j in range(1, J):
             alpha[:, :, j] = (alpha[:, :, j - 1] @ T) * E[:, :, j]
             scale[:, j] = alpha[:, :, j].sum(axis=1)
-            alpha[:, :, j] /= np.maximum(scale[:, j:j + 1], 1e-300)
+            alpha[:, :, j] /= np.maximum(scale[:, j : j + 1], 1e-300)
         beta[:, :, J - 1] = 1.0
         for j in range(J - 2, -1, -1):
-            beta[:, :, j] = ((beta[:, :, j + 1] * E[:, :, j + 1]) @ T.T) / np.maximum(scale[:, j + 1:j + 2], 1e-300)
+            beta[:, :, j] = ((beta[:, :, j + 1] * E[:, :, j + 1]) @ T.T) / np.maximum(
+                scale[:, j + 1 : j + 2], 1e-300
+            )
         gamma = alpha * beta
         gamma /= np.maximum(gamma.sum(axis=1, keepdims=True), 1e-300)
-        xi = np.zeros((2 * I, 2 * I))
+        xi = np.zeros((2 * n_src, 2 * n_src))
         for j in range(1, J):
-            right = (E[:, :, j] * beta[:, :, j]) / np.maximum(scale[:, j:j + 1], 1e-300)      # [B, 2I]
+            right = (E[:, :, j] * beta[:, :, j]) / np.maximum(
+                scale[:, j : j + 1], 1e-300
+            )  # [B, 2I]
             xi += np.einsum("bi,bk->ik", alpha[:, :, j - 1], right) * T
         ll = float(np.log(np.maximum(scale, 1e-300)).sum())
         return gamma, xi, ll
 
-    def posteriors(self, table: LexicalTable, pair_ids: np.ndarray, **_) -> Tuple[np.ndarray, float]:
+    def posteriors(
+        self, table: LexicalTable, pair_ids: np.ndarray, **_
+    ) -> Tuple[np.ndarray, float]:
         """``[B, I + 1, J]`` with the null mass in row 0 (the ``I`` empty states summed)."""
         gamma, _, ll = self.forward_backward(table, pair_ids)
-        I = pair_ids.shape[1] - 1
-        out = np.concatenate([gamma[:, I:, :].sum(axis=1, keepdims=True), gamma[:, :I, :]], axis=1)
+        n_src = pair_ids.shape[1] - 1
+        out = np.concatenate(
+            [gamma[:, n_src:, :].sum(axis=1, keepdims=True), gamma[:, :n_src, :]], axis=1
+        )
         return out, ll
 
-    def fit(self, corpus: Corpus, table: LexicalTable, *, log=None) -> "HMMAligner":
+    def fit(self, corpus: Corpus, table: LexicalTable, *, log=None) -> HMMAligner:
         for it in range(self.iterations):
             counts = np.zeros(corpus.n_pairs, dtype=np.float64)
             jump_counts = np.zeros_like(self.jump)
             ll = 0.0
             for shape, pair_ids in corpus.group_ids.items():
-                I = shape[0]
+                n_src = shape[0]
                 gamma, xi, batch_ll = self.forward_backward(table, pair_ids)
-                post = np.concatenate([gamma[:, I:, :].sum(axis=1, keepdims=True), gamma[:, :I, :]], axis=1)
-                counts += np.bincount(pair_ids.ravel(), weights=post.ravel(), minlength=corpus.n_pairs)
-                pos = np.arange(I)
-                origin = np.concatenate([pos, pos])                       # the position a null state remembers
-                d = self._bucket(pos[None, :] - origin[:, None])          # [2I, I] jump widths into real states
-                jump_counts += np.bincount(d.ravel(), weights=xi[:, :I].ravel(), minlength=len(self.jump))
+                post = np.concatenate(
+                    [gamma[:, n_src:, :].sum(axis=1, keepdims=True), gamma[:, :n_src, :]], axis=1
+                )
+                counts += np.bincount(
+                    pair_ids.ravel(), weights=post.ravel(), minlength=corpus.n_pairs
+                )
+                pos = np.arange(n_src)
+                origin = np.concatenate([pos, pos])  # the position a null state remembers
+                d = self._bucket(
+                    pos[None, :] - origin[:, None]
+                )  # [2I, I] jump widths into real states
+                jump_counts += np.bincount(
+                    d.ravel(), weights=xi[:, :n_src].ravel(), minlength=len(self.jump)
+                )
                 ll += batch_ll
             self.log_likelihood.append(ll)
             table.m_step(counts)
             self.jump = jump_counts + 1e-3
             self._transitions = {}
             if log:
-                log(f"[em_aligner] hmm iteration {it + 1}/{self.iterations} log-likelihood {ll:.1f} "
-                    f"p(+1) {self.jump[self.max_jump + 1] / self.jump.sum():.3f}")
+                log(
+                    f"[em_aligner] hmm iteration {it + 1}/{self.iterations} log-likelihood {ll:.1f} "
+                    f"p(+1) {self.jump[self.max_jump + 1] / self.jump.sum():.3f}"
+                )
         return self
 
 
@@ -389,7 +453,9 @@ class Direction:
         rows = []
         for j in range(post.shape[1]):
             column = post[:, j]
-            entries = [(i - 1, float(column[i])) for i in range(1, post.shape[0])] + [(-1, float(column[0]))]
+            entries = [(i - 1, float(column[i])) for i in range(1, post.shape[0])] + [
+                (-1, float(column[0]))
+            ]
             rows.append(sorted(entries, key=lambda x: -x[1]))
         return rows
 
@@ -404,23 +470,32 @@ class Direction:
         self.theta = np.zeros(0)
         self.n_target_types = 1
 
-    def fit(self, source: List[List[str]], target: List[List[str]], *, log=None) -> "Direction":
+    def fit(self, source: List[List[str]], target: List[List[str]], *, log=None) -> Direction:
         corpus = Corpus(source, target, self.vs, self.vt)
-        table = LexicalTable(corpus, prior_alpha=float(self.extra.get("prior_alpha", DEFAULT_PRIOR_ALPHA)),
-                             variational=bool(self.extra.get("variational", 0)))
+        table = LexicalTable(
+            corpus,
+            prior_alpha=float(self.extra.get("prior_alpha", DEFAULT_PRIOR_ALPHA)),
+            variational=bool(self.extra.get("variational", 0)),
+        )
         it_ibm1 = int(self.extra.get("iterations_ibm1", DEFAULT_ITERATIONS))
         it_hmm = int(self.extra.get("iterations_hmm", DEFAULT_ITERATIONS))
         if self.model == "diag":
-            self.estimator = DiagonalIBM2(it_ibm1, p0=float(self.extra.get("p0", DEFAULT_P0_DIAG)),
-                                          tension=float(self.extra.get("tension", DEFAULT_TENSION)),
-                                          optimise_tension=bool(self.extra.get("optimise_tension", 1)))
+            self.estimator = DiagonalIBM2(
+                it_ibm1,
+                p0=float(self.extra.get("p0", DEFAULT_P0_DIAG)),
+                tension=float(self.extra.get("tension", DEFAULT_TENSION)),
+                optimise_tension=bool(self.extra.get("optimise_tension", 1)),
+            )
             self.estimator.fit(corpus, table, log=log)
         else:
             self.ibm1 = IBM1(it_ibm1).fit(corpus, table, log=log)
             if self.model == "hmm":
-                self.estimator = HMMAligner(it_hmm, p0=float(self.extra.get("p0", DEFAULT_P0_HMM)),
-                                            smoothing_alpha=float(self.extra.get("smoothing_alpha", DEFAULT_SMOOTHING)),
-                                            max_jump=int(self.extra.get("max_jump", DEFAULT_MAX_JUMP)))
+                self.estimator = HMMAligner(
+                    it_hmm,
+                    p0=float(self.extra.get("p0", DEFAULT_P0_HMM)),
+                    smoothing_alpha=float(self.extra.get("smoothing_alpha", DEFAULT_SMOOTHING)),
+                    max_jump=int(self.extra.get("max_jump", DEFAULT_MAX_JUMP)),
+                )
                 self.estimator.fit(corpus, table, log=log)
             else:
                 self.estimator = self.ibm1
@@ -444,14 +519,14 @@ class Direction:
         s_ids = np.array([NULL] + [self.vs.get(w) for w in source])
         t_ids = np.array([self.vt.get(w) for w in target])
         theta = self._theta_matrix(s_ids, t_ids)
-        I, J = len(source), len(target)
+        n_src, J = len(source), len(target)
         if self.model == "diag":
-            joint = theta * self.estimator.prior(I, J)
+            joint = theta * self.estimator.prior(n_src, J)
             return joint / np.maximum(joint.sum(axis=0, keepdims=True), 1e-300)
         if self.model == "ibm1":
             return theta / np.maximum(theta.sum(axis=0, keepdims=True), 1e-300)
         table = _FixedTable(theta)
-        pair_ids = np.arange((I + 1) * J, dtype=np.int32).reshape(1, I + 1, J)
+        pair_ids = np.arange((n_src + 1) * J, dtype=np.int32).reshape(1, n_src + 1, J)
         post, _ = self.estimator.posteriors(table, pair_ids)
         return post[0]
 
@@ -514,8 +589,12 @@ class EMAligner(Baseline):
     decoder = "default"
 
     @staticmethod
-    def lemma_stream(record: Record, side: str, unit: str = "lemma",
-                     lemmatise: Optional[Callable[[str], str]] = None) -> List[str]:
+    def lemma_stream(
+        record: Record,
+        side: str,
+        unit: str = "lemma",
+        lemmatise: Optional[Callable[[str], str]] = None,
+    ) -> List[str]:
         """The tokens of one side as lemmas or normalised forms.
 
         With ``unit == "lemma"`` a token's lemma is the record's cached one (``annotation.lemma`` /
@@ -556,8 +635,9 @@ class EMAligner(Baseline):
         return source, target
 
     @staticmethod
-    def identity_dictionary(source: List[List[str]], target: List[List[str]], copies: int
-                            ) -> Tuple[List[List[str]], List[List[str]]]:
+    def identity_dictionary(
+        source: List[List[str]], target: List[List[str]], copies: int
+    ) -> Tuple[List[List[str]], List[List[str]]]:
         """``copies`` one-word pairs ``(w, w)`` for every type on both sides of the corpus: the identity of
         lemmas as a bilingual dictionary appended to the training corpus (the note's open dictionary prior)."""
         if copies <= 0:
@@ -566,7 +646,9 @@ class EMAligner(Baseline):
         pairs = [[w] for w in shared for _ in range(copies)]
         return pairs, [list(p) for p in pairs]
 
-    def fit(self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()) -> "EMAligner":
+    def fit(
+        self, train: List[Record], dev: List[Record], *, log=None, unlabeled: Sequence[Record] = ()
+    ) -> EMAligner:
         # the trained-on pairs and the shared synthetic pairs, as text (no label is read); the dev and test
         # passages join only with ``include_unlabeled`` (the transductive practice of the alignment literature)
         records = list(train) + list(self.shared_synthetic)
@@ -577,12 +659,20 @@ class EMAligner(Baseline):
             for key in ("iterations_ibm1", "iterations_hmm"):
                 self.cfg.extra[key] = min(int(self.cfg.extra.get(key, DEFAULT_ITERATIONS)), 2)
         source, target = self.corpus_from(records)
-        dict_s, dict_t = self.identity_dictionary(source, target, int(self.cfg.extra.get("identity_pairs", 0)))
+        dict_s, dict_t = self.identity_dictionary(
+            source, target, int(self.cfg.extra.get("identity_pairs", 0))
+        )
         source, target = source + dict_s, target + dict_t
         if log:
-            lemmatised = "the driver's lemmatiser" if self.unit == "lemma" and self.featurizer is not None else "no lemmatiser"
-            log(f"[em_aligner] corpus {len(source)} pairs ({len(dict_s)} identity pairs), model {self.model}, "
-                f"unit {self.unit} ({lemmatised})")
+            lemmatised = (
+                "the driver's lemmatiser"
+                if self.unit == "lemma" and self.featurizer is not None
+                else "no lemmatiser"
+            )
+            log(
+                f"[em_aligner] corpus {len(source)} pairs ({len(dict_s)} identity pairs), model {self.model}, "
+                f"unit {self.unit} ({lemmatised})"
+            )
         self.forward = Direction(self.model, self.cfg.extra).fit(source, target, log=log)
         if int(self.cfg.extra.get("both_directions", 1)):
             self.reverse = Direction(self.model, self.cfg.extra).fit(target, source, log=log)
@@ -600,7 +690,9 @@ class EMAligner(Baseline):
                 continue
             pred.scores = Direction.rows_from_posteriors(self.forward.predict(source, target))
             if self.reverse is not None:
-                pred.rev_scores = Direction.rows_from_posteriors(self.reverse.predict(target, source))
+                pred.rev_scores = Direction.rows_from_posteriors(
+                    self.reverse.predict(target, source)
+                )
             out.append(pred)
         return out
 
@@ -610,10 +702,18 @@ class EMAligner(Baseline):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         with open(path / "em_aligner.pkl", "wb") as handle:
-            pickle.dump({"model": self.model, "unit": self.unit, "forward": self.forward, "reverse": self.reverse}, handle)
+            pickle.dump(
+                {
+                    "model": self.model,
+                    "unit": self.unit,
+                    "forward": self.forward,
+                    "reverse": self.reverse,
+                },
+                handle,
+            )
 
     @classmethod
-    def load(cls, path: Path, cfg: BaselineConfig) -> "EMAligner":
+    def load(cls, path: Path, cfg: BaselineConfig) -> EMAligner:
         with open(Path(path) / "em_aligner.pkl", "rb") as handle:
             state = pickle.load(handle)
         cfg.extra.setdefault("model", state["model"])

@@ -8,12 +8,20 @@ from pathlib import Path
 
 import pytest
 
-pytest.skip("stale: imports ResourcePairs, which retexo.pretraining no longer defines", allow_module_level=True)
+pytest.skip(
+    "stale: imports ResourcePairs, which retexo.pretraining no longer defines",
+    allow_module_level=True,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retexo.pretraining import (GeometryProbe, PairPool, ResourcePairs, Stage0Config,  # noqa: E402
-                                    Stage0Trainer)
+from retexo.pretraining import (  # noqa: E402
+    GeometryProbe,
+    PairPool,
+    ResourcePairs,
+    Stage0Config,
+    Stage0Trainer,
+)
 
 
 def test_config_carries_the_notes_defaults():

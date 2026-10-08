@@ -34,8 +34,8 @@ import random
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-from retexo.formulations.change_detector import ChangeExample
 from retexo.core.normalize import normalize
+from retexo.formulations.change_detector import ChangeExample
 
 KINDS = ("easy", "lexical", "adjacent")
 
@@ -50,7 +50,15 @@ class NegativeBuilder:
         ```
     """
 
-    def __init__(self, data, held_out, *, exclude_texts: Iterable[str] = (), min_tokens: int = 6, max_tokens: int = 60):
+    def __init__(
+        self,
+        data,
+        held_out,
+        *,
+        exclude_texts: Iterable[str] = (),
+        min_tokens: int = 6,
+        max_tokens: int = 60,
+    ):
         """``held_out`` is one fold or several (the test fold, the dev fold); ``exclude_texts`` are
         further passages (the validation sample's) that no training negative may use on either side."""
         self.held_out = held_out
@@ -61,18 +69,26 @@ class NegativeBuilder:
         train = labels[~labels.fold_id.isin(folds)]
         held = labels[labels.fold_id.isin(folds)]
         # everything labelled, in any fold, is never a negative
-        self.attested: Set[Tuple[str, str]] = set(zip(labels.text_corpus_cleaned.astype(str),
-                                                      labels.text_query_cleaned.astype(str)))
+        self.attested: Set[Tuple[str, str]] = set(
+            zip(labels.text_corpus_cleaned.astype(str), labels.text_query_cleaned.astype(str))
+        )
         # held-out material stays out of the training negatives on both sides, compared normalised
         excluded = {normalize(str(t)) for t in exclude_texts}
         self.held_queries = {normalize(t) for t in held.text_query_cleaned.astype(str)} | excluded
         self.held_sources = {normalize(t) for t in held.text_corpus_cleaned.astype(str)} | excluded
-        self.train_rows = [r for r in train.itertuples()
-                           if isinstance(r.text_query_cleaned, str) and isinstance(r.text_corpus_cleaned, str)
-                           and normalize(r.text_query_cleaned) not in self.held_queries
-                           and normalize(r.text_corpus_cleaned) not in self.held_sources]
-        self.held_rows = [r for r in held.itertuples()
-                          if isinstance(r.text_query_cleaned, str) and isinstance(r.text_corpus_cleaned, str)]
+        self.train_rows = [
+            r
+            for r in train.itertuples()
+            if isinstance(r.text_query_cleaned, str)
+            and isinstance(r.text_corpus_cleaned, str)
+            and normalize(r.text_query_cleaned) not in self.held_queries
+            and normalize(r.text_corpus_cleaned) not in self.held_sources
+        ]
+        self.held_rows = [
+            r
+            for r in held.itertuples()
+            if isinstance(r.text_query_cleaned, str) and isinstance(r.text_corpus_cleaned, str)
+        ]
         # the corpus, indexed for the three kinds
         ok = corpus.text_cleaned.notna()
         self.rows = corpus[ok].reset_index(drop=True)
@@ -91,11 +107,14 @@ class NegativeBuilder:
         if (source, query) in self.attested:
             return False
         n_s, n_q = len(source.split()), len(query.split())
-        if not (self.min_tokens <= n_s <= self.max_tokens and self.min_tokens <= n_q <= self.max_tokens):
+        if not (
+            self.min_tokens <= n_s <= self.max_tokens and self.min_tokens <= n_q <= self.max_tokens
+        ):
             return False
-        if for_training and (normalize(query) in self.held_queries or normalize(source) in self.held_sources):
-            return False
-        return True
+        return not (
+            for_training
+            and (normalize(query) in self.held_queries or normalize(source) in self.held_sources)
+        )
 
     def _text(self, i: int) -> str:
         return str(self.rows.text_cleaned.iloc[i])
@@ -118,7 +137,7 @@ class NegativeBuilder:
         cited = str(row.text_corpus_cleaned)
         best, best_n = None, -1
         # a sample keeps this linear in the corpus of one author
-        for i in (cands if len(cands) <= 4000 else rng.sample(cands, 4000)):
+        for i in cands if len(cands) <= 4000 else rng.sample(cands, 4000):
             src = self._text(i)
             if src == cited:
                 continue
@@ -144,16 +163,25 @@ class NegativeBuilder:
     @staticmethod
     def negative_example(source: str, target: str, *, kind: str) -> ChangeExample:
         s, t = source.split(), target.split()
-        ex = ChangeExample(source_tokens=s, target_tokens=t, labels=[1] * len(t),
-                           operations=["INS"] * len(t), n_operations=len(t),
-                           source_labels=[1] * len(s), source_operations=["DEL"] * len(s),
-                           alignments=[-1] * len(t), fine_operations=["INS"] * len(t),
-                           frame_labels=None, link_features=[None] * len(t))
+        ex = ChangeExample(
+            source_tokens=s,
+            target_tokens=t,
+            labels=[1] * len(t),
+            operations=["INS"] * len(t),
+            n_operations=len(t),
+            source_labels=[1] * len(s),
+            source_operations=["DEL"] * len(s),
+            alignments=[-1] * len(t),
+            fine_operations=["INS"] * len(t),
+            frame_labels=None,
+            link_features=[None] * len(t),
+        )
         object.__setattr__(ex, "negative_kind", kind)
         return ex
 
-    def build(self, n: int, *, kinds: Sequence[str] = KINDS, seed: int = 0,
-              for_training: bool = True) -> List[ChangeExample]:
+    def build(
+        self, n: int, *, kinds: Sequence[str] = KINDS, seed: int = 0, for_training: bool = True
+    ) -> List[ChangeExample]:
         """``n`` negatives spread evenly over ``kinds``; training-fold queries
         (or held-out ones with ``for_training=False``, for evaluation)."""
         rng = random.Random(seed)

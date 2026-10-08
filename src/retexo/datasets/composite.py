@@ -76,9 +76,12 @@ class CompositeSubstitutionSource:
         """Tags some configured source can realise."""
         out = set()
         for tag, which in self.routing.items():
-            if which == "wordnet" and self.lexical is not None:
-                out.add(tag)
-            elif which in ("contextual", "morphology") and self.contextual is not None:
+            if (
+                which == "wordnet"
+                and self.lexical is not None
+                or which in ("contextual", "morphology")
+                and self.contextual is not None
+            ):
                 out.add(tag)
         return out
 
@@ -111,11 +114,10 @@ class CompositeSubstitutionSource:
         else:
             result = source.replacement(words[position], tag, rng)
 
-        if result and self.held_out_lemmas:
-            # Withheld vocabulary is refused rather than substituted, so the
-            # held-out half stays genuinely unseen during generation.
-            if result.lower() in self.held_out_lemmas:
-                return None
+        # Withheld vocabulary is refused rather than substituted, so the
+        # held-out half stays genuinely unseen during generation.
+        if result and self.held_out_lemmas and result.lower() in self.held_out_lemmas:
+            return None
         if result:
             self.produced[tag] = self.produced.get(tag, 0) + 1
         return result

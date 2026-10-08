@@ -3,6 +3,7 @@
 the typed synthetic generator, the negative-example builder, the older shape-realistic generator,
 the benchmark data loader, the real-pair relabelling teacher, and the window localizer, span
 parser and change-detection window measure that sit underneath them."""
+
 from __future__ import annotations
 
 from retexo.datasets.dataset import BenchmarkData, LabelledPair

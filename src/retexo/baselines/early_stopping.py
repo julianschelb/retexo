@@ -62,7 +62,7 @@ RULES: Dict[str, Tuple[int, int, int]] = {
 #: The share of the training records held out as the validation sample.
 VALIDATION_SHARE = 0.2
 
-Modules = Dict[str, Any]          # name -> anything with state_dict() / load_state_dict()
+Modules = Dict[str, Any]  # name -> anything with state_dict() / load_state_dict()
 
 
 # =============================================================================
@@ -84,8 +84,9 @@ class ValidationSplit:
         return str(record.reuse_meta.get("citation") or " ".join(record.reuse_tokens))
 
     @classmethod
-    def split(cls, records: Sequence[Record], *, share: float = VALIDATION_SHARE, seed: int = 1
-              ) -> Tuple[List[Record], List[Record]]:
+    def split(
+        cls, records: Sequence[Record], *, share: float = VALIDATION_SHARE, seed: int = 1
+    ) -> Tuple[List[Record], List[Record]]:
         """``(fit, valid)``: whole groups go to the validation side until it holds ``share`` of the records."""
         if share <= 0 or len(records) < 2:
             return list(records), []
@@ -126,13 +127,27 @@ class ValidationScorer:
         if "split_repair" in method.cfg.extra:
             dials["split_repair"] = float(method.cfg.extra["split_repair"])
         if any(p.scores for p in preds):
-            dials["theta"] = cls.tune_theta(method, records, preds, dials, grid=getattr(method, "theta_grid", None),
-                                            criterion=getattr(method, "tune_criterion", "token_accuracy"))
+            dials["theta"] = cls.tune_theta(
+                method,
+                records,
+                preds,
+                dials,
+                grid=getattr(method, "theta_grid", None),
+                criterion=getattr(method, "tune_criterion", "token_accuracy"),
+            )
         return [method.postprocess(r, p, dials) for r, p in zip(records, preds)], dials
 
     @staticmethod
-    def tune_theta(method, records: Sequence[Record], preds: Sequence[Any], dials: Dict[str, Any], *,
-                   grid: Optional[Sequence[float]] = None, criterion: str = "token_accuracy", level: str = "V1") -> float:
+    def tune_theta(
+        method,
+        records: Sequence[Record],
+        preds: Sequence[Any],
+        dials: Dict[str, Any],
+        *,
+        grid: Optional[Sequence[float]] = None,
+        criterion: str = "token_accuracy",
+        level: str = "V1",
+    ) -> float:
         """The null threshold on ``records`` by ``criterion``; ties go to the larger theta.
 
         ``token_accuracy`` and ``link_f1`` score the decoded links (``dec.tune_null_threshold``); ``l3``
@@ -149,18 +164,43 @@ class ValidationScorer:
 
         if criterion != "l3":
             return dec.tune_null_threshold(
-                [p.scores or [] for p in preds], [links_of(r)[0] for r in records],
-                rev_per_pair=[p.rev_scores for p in preds], n_source_per_pair=[r.n_source for r in records],
-                grid=grid, criterion=criterion, decoder=method.decoder, records=records, dials=dials)
-        grid = list(grid) if grid is not None else [round(0.05 * i, 2) for i in range(1, 20)]   # the decoder's default
+                [p.scores or [] for p in preds],
+                [links_of(r)[0] for r in records],
+                rev_per_pair=[p.rev_scores for p in preds],
+                n_source_per_pair=[r.n_source for r in records],
+                grid=grid,
+                criterion=criterion,
+                decoder=method.decoder,
+                records=records,
+                dials=dials,
+            )
+        grid = (
+            list(grid) if grid is not None else [round(0.05 * i, 2) for i in range(1, 20)]
+        )  # the decoder's default
         require_source = bool(getattr(method, "validation_require_source", True))
         best_theta, best_value = grid[0], -1.0
         for theta in grid:
             trial = {**dials, "theta": theta}
-            done = [method.postprocess(r, replace(p, links=list(p.links), tags=list(p.tags), frame=list(p.frame),
-                                                  extra=list(p.extra), meta=dict(p.meta)), trial)
-                    for r, p in zip(records, preds)]
-            value = float(BaselineScorer.op_scores(records, done, level, require_source=require_source)["macro_f1"])
+            done = [
+                method.postprocess(
+                    r,
+                    replace(
+                        p,
+                        links=list(p.links),
+                        tags=list(p.tags),
+                        frame=list(p.frame),
+                        extra=list(p.extra),
+                        meta=dict(p.meta),
+                    ),
+                    trial,
+                )
+                for r, p in zip(records, preds)
+            ]
+            value = float(
+                BaselineScorer.op_scores(records, done, level, require_source=require_source)[
+                    "macro_f1"
+                ]
+            )
             if value >= best_value:
                 best_theta, best_value = theta, value
         return best_theta
@@ -174,11 +214,21 @@ class ValidationScorer:
             return 0.0
         done, _ = cls._decoded(method, records)
         require_source = bool(getattr(method, "validation_require_source", True))
-        return float(BaselineScorer.op_scores(records, done, level, require_source=require_source)["macro_f1"])
+        return float(
+            BaselineScorer.op_scores(records, done, level, require_source=require_source)[
+                "macro_f1"
+            ]
+        )
 
     @classmethod
-    def evaluate(cls, method, records: Sequence[Record], *, level: str = "V1",
-                 negatives: Sequence[Record] = ()) -> Tuple[float, Dict[str, Any], Dict[str, Any]]:
+    def evaluate(
+        cls,
+        method,
+        records: Sequence[Record],
+        *,
+        level: str = "V1",
+        negatives: Sequence[Record] = (),
+    ) -> Tuple[float, Dict[str, Any], Dict[str, Any]]:
         """``(headline, full scorer result, dials)`` from one prediction: the headline is exactly ``score``'s
         value (what early stopping decides on); the full result holds every metric of the table's scorer,
         with the invented links on ``negatives`` decoded at the same dials."""
@@ -187,12 +237,24 @@ class ValidationScorer:
         records = list(records)
         done, dials = cls._decoded(method, records)
         require_source = bool(getattr(method, "validation_require_source", True))
-        headline = float(BaselineScorer.op_scores(records, done, level, require_source=require_source)["macro_f1"])
+        headline = float(
+            BaselineScorer.op_scores(records, done, level, require_source=require_source)[
+                "macro_f1"
+            ]
+        )
         neg = None
         if negatives:
             negatives = list(negatives)
-            neg = (negatives, [method.postprocess(r, p, dials) for r, p in zip(negatives, method.predict(negatives))])
-        full = BaselineScorer.score(records, done, negatives=neg, emits=getattr(method, "emits", "scores"))
+            neg = (
+                negatives,
+                [
+                    method.postprocess(r, p, dials)
+                    for r, p in zip(negatives, method.predict(negatives))
+                ],
+            )
+        full = BaselineScorer.score(
+            records, done, negatives=neg, emits=getattr(method, "emits", "scores")
+        )
         return headline, full, dials
 
 
@@ -219,20 +281,23 @@ class NoteMetrics:
         ops = result.get("ops") or {}
         out: Dict[str, Optional[float]] = {
             "token_accuracy": result.get("token_accuracy"),
-            "link_precision": link.get("precision"), "link_recall": link.get("recall"), "link_f1": link.get("f1"),
+            "link_precision": link.get("precision"),
+            "link_recall": link.get("recall"),
+            "link_f1": link.get("f1"),
             "invented_links_per_pair": (result.get("negatives") or {}).get("links_per_pair"),
         }
         for level, name in (("V1", "L3"), ("V3", "L4")):
             block = ops.get(level) or {}
             out[f"{name}_macro_f1"] = block.get("macro_f1")
-            out[f"{name}_micro_f1"] = block.get("accuracy")        # pooled over the labelled reuse words
+            out[f"{name}_micro_f1"] = block.get("accuracy")  # pooled over the labelled reuse words
             for op, scores in (block.get("per_class") or {}).items():
                 out[f"{name}_f1_{cls.PAPER.get(op, op)}"] = cls._f1(scores)
         per_class = (ops.get("V1") or {}).get("per_class") or {}
         for op in ("SUBST", "MORPH"):
             scores = per_class.get(op) or {}
-            out[f"sure_recall_{cls.PAPER.get(op, op)}"] = (scores["sure_found"] / scores["sure"]
-                                                             if scores.get("sure") else None)
+            out[f"sure_recall_{cls.PAPER.get(op, op)}"] = (
+                scores["sure_found"] / scores["sure"] if scores.get("sure") else None
+            )
         out["G1_mode_macro_f1"] = (ops.get("mode") or {}).get("macro_f1")
         out["G2_group_macro_f1"] = (ops.get("group") or {}).get("macro_f1")
         structure = result.get("structure") or {}
@@ -240,10 +305,14 @@ class NoteMetrics:
         out["quote_span_f1"] = cls._f1(structure.get("quote_span"))
         out["reorder_token_f1"] = cls._f1(structure.get("reorder_token"))
         out["disperse_pair_f1"] = cls._f1(structure.get("disperse_pair"))
-        out["resource_silent_link_accuracy"] = ((result.get("by_regime") or {}).get("no_rel_found") or {}).get("link_acc")
+        out["resource_silent_link_accuracy"] = (
+            (result.get("by_regime") or {}).get("no_rel_found") or {}
+        ).get("link_acc")
         out["replay_rate"] = result.get("replay_rate")
         out["invalid_output_rate"] = (result.get("invalid") or {}).get("rate")
-        return {k: (round(float(v), 5) if isinstance(v, (int, float)) else v) for k, v in out.items()}
+        return {
+            k: (round(float(v), 5) if isinstance(v, (int, float)) else v) for k, v in out.items()
+        }
 
 
 class TrainingMonitor:
@@ -262,7 +331,15 @@ class TrainingMonitor:
         ```
     """
 
-    def __init__(self, method, records: Sequence[Record], *, level: str = "V1", log=None, repairings: bool = True):
+    def __init__(
+        self,
+        method,
+        records: Sequence[Record],
+        *,
+        level: str = "V1",
+        log=None,
+        repairings: bool = True,
+    ):
         import time
 
         self.method, self.records, self.level, self.log = method, list(records), level, log
@@ -277,15 +354,20 @@ class TrainingMonitor:
             RuleTyper.annotate_regimes(self.records, featurizer)
 
     @classmethod
-    def for_method(cls, method, *, log=None) -> Optional["TrainingMonitor"]:
+    def for_method(cls, method, *, log=None) -> Optional[TrainingMonitor]:
         existing = getattr(method, "monitor", None)
         if existing is not None:
             return existing
         valid = getattr(method, "validation", None)
         if not valid:
             return None
-        monitor = cls(method, valid, level=getattr(method, "validation_level", "V1"), log=log,
-                      repairings=bool(int(method.cfg.extra.get("monitor_negatives", 1))))
+        monitor = cls(
+            method,
+            valid,
+            level=getattr(method, "validation_level", "V1"),
+            log=log,
+            repairings=bool(int(method.cfg.extra.get("monitor_negatives", 1))),
+        )
         method.monitor = monitor
         return monitor
 
@@ -303,8 +385,18 @@ class TrainingMonitor:
         out = []
         for i, j in zip(order, shifted):
             a, b = records[i], records[j]
-            out.append(replace(a, id=f"repair/{a.id}/{b.id}", source_tokens=list(b.source_tokens),
-                               source_work=b.source_work, links=[], spans=[], pair_label="no_match", pred=None))
+            out.append(
+                replace(
+                    a,
+                    id=f"repair/{a.id}/{b.id}",
+                    source_tokens=list(b.source_tokens),
+                    source_work=b.source_work,
+                    links=[],
+                    spans=[],
+                    pair_label="no_match",
+                    pred=None,
+                )
+            )
         return out
 
     def _flags(self):
@@ -315,28 +407,49 @@ class TrainingMonitor:
                 flags.extend((m, m.training) for m in module.modules())
         return flags
 
-    def evaluate(self, stage: str, *, epoch: Optional[int] = None, fraction: Optional[float] = None) -> float:
+    def evaluate(
+        self, stage: str, *, epoch: Optional[int] = None, fraction: Optional[float] = None
+    ) -> float:
         import time
 
         flags = self._flags()
         try:
-            headline, full, dials = ValidationScorer.evaluate(self.method, self.records, level=self.level,
-                                                              negatives=self.negatives)
-            for module, _ in flags:                  # the validation loss as validation: no dropout
+            headline, full, dials = ValidationScorer.evaluate(
+                self.method, self.records, level=self.level, negatives=self.negatives
+            )
+            for module, _ in flags:  # the validation loss as validation: no dropout
                 module.train(False)
-            valid_loss = self.method.validation_loss(self.records) if hasattr(self.method, "validation_loss") else None
+            valid_loss = (
+                self.method.validation_loss(self.records)
+                if hasattr(self.method, "validation_loss")
+                else None
+            )
         finally:
             for module, training in flags:
                 module.train(training)
-        point = {"stage": stage, "epoch": epoch, "fraction": fraction,
-                 "seconds": round(time.time() - self.started, 1), "theta": dials.get("theta"),
-                 "headline": round(headline, 5),
-                 "validation_loss": round(valid_loss, 5) if valid_loss is not None else None, **NoteMetrics.flat(full)}
+        point = {
+            "stage": stage,
+            "epoch": epoch,
+            "fraction": fraction,
+            "seconds": round(time.time() - self.started, 1),
+            "theta": dials.get("theta"),
+            "headline": round(headline, 5),
+            "validation_loss": round(valid_loss, 5) if valid_loss is not None else None,
+            **NoteMetrics.flat(full),
+        }
         self.points.append(point)
         if self.log:
-            where = f"epoch {epoch}" if epoch is not None else f"{stage} {fraction:.2f}" if fraction is not None else stage
-            self.log(f"[monitor] {where}: link F1 {point['link_f1'] if point['link_f1'] is not None else '-'}, "
-                     f"L3 macro F1 {point['L3_macro_f1']}, invented links per pair {point['invented_links_per_pair']}")
+            where = (
+                f"epoch {epoch}"
+                if epoch is not None
+                else f"{stage} {fraction:.2f}"
+                if fraction is not None
+                else stage
+            )
+            self.log(
+                f"[monitor] {where}: link F1 {point['link_f1'] if point['link_f1'] is not None else '-'}, "
+                f"L3 macro F1 {point['L3_macro_f1']}, invented links per pair {point['invented_links_per_pair']}"
+            )
         return headline
 
     def progress(self, stage: str, evals: int) -> Optional[Callable[[int, int], None]]:
@@ -390,31 +503,56 @@ class EarlyStopping:
     # ---------- construction ----------
 
     @classmethod
-    def for_method(cls, method, *, log=None, score: Optional[Callable[[], float]] = None,
-                   higher_is_better: bool = True, metric: str = "L3 macro F1") -> Optional["EarlyStopping"]:
+    def for_method(
+        cls,
+        method,
+        *,
+        log=None,
+        score: Optional[Callable[[], float]] = None,
+        higher_is_better: bool = True,
+        metric: str = "L3 macro F1",
+    ) -> Optional[EarlyStopping]:
         """The method's rule, or ``None`` when the run has no validation sample."""
         valid = getattr(method, "validation", None)
         if not valid:
             return None
         lo, patience, hi = RULES.get(method.name, (2, 2, 10))
         extra = method.cfg.extra
-        lo, patience, hi = int(extra.get("es_min", lo)), int(extra.get("es_patience", patience)), int(extra.get("es_max", hi))
+        lo, patience, hi = (
+            int(extra.get("es_min", lo)),
+            int(extra.get("es_patience", patience)),
+            int(extra.get("es_max", hi)),
+        )
         if method.cfg.smoke:
             lo, patience, hi = 1, 1, 2
         monitor = None
         if score is None:
             level = getattr(method, "validation_level", "V1")
             score = lambda: ValidationScorer.score(method, valid, level=level)  # noqa: E731
-            metric = {"V1": "L3 macro F1", "V3": "L4 macro F1", "mode": "mode (G1) macro F1"}.get(level, f"{level} macro F1")
-            monitor = TrainingMonitor.for_method(method, log=log)       # every note metric from the same prediction
+            metric = {"V1": "L3 macro F1", "V3": "L4 macro F1", "mode": "mode (G1) macro F1"}.get(
+                level, f"{level} macro F1"
+            )
+            monitor = TrainingMonitor.for_method(
+                method, log=log
+            )  # every note metric from the same prediction
             if monitor is not None:
                 monitor.level = level
-        stopper = cls(min_epochs=max(1, lo), patience=max(1, patience), max_epochs=max(lo, hi), score=score, log=log,
-                      higher_is_better=higher_is_better, metric=metric, monitor=monitor)
+        stopper = cls(
+            min_epochs=max(1, lo),
+            patience=max(1, patience),
+            max_epochs=max(lo, hi),
+            score=score,
+            log=log,
+            higher_is_better=higher_is_better,
+            metric=metric,
+            monitor=monitor,
+        )
         method.early_stopping = stopper
         if log:
-            log(f"[early stopping] {method.name}: {len(valid)} validation pairs, min {stopper.min_epochs}, "
-                f"patience {stopper.patience}, max {stopper.max_epochs} epochs, on {metric}")
+            log(
+                f"[early stopping] {method.name}: {len(valid)} validation pairs, min {stopper.min_epochs}, "
+                f"patience {stopper.patience}, max {stopper.max_epochs} epochs, on {metric}"
+            )
         return stopper
 
     # ---------- the loop ----------
@@ -422,19 +560,29 @@ class EarlyStopping:
     def _better(self, value: float) -> bool:
         if self.best_score is None:
             return True
-        return value > self.best_score + 1e-9 if self.higher_is_better else value < self.best_score - 1e-9
+        return (
+            value > self.best_score + 1e-9
+            if self.higher_is_better
+            else value < self.best_score - 1e-9
+        )
 
     def step(self, epoch: int, modules: Modules) -> bool:
         """Score the epoch, keep the best weights; ``False`` once training should stop."""
-        value = float(self.monitor.evaluate("epoch", epoch=epoch) if self.monitor is not None else self.score())
+        value = float(
+            self.monitor.evaluate("epoch", epoch=epoch)
+            if self.monitor is not None
+            else self.score()
+        )
         improved = self._better(value)
         if improved:
             self.best_score, self.best_epoch = value, epoch
             self._best_state = self.snapshot(modules)
         self.history.append({"epoch": epoch, "valid": round(value, 5)})
         if self.log:
-            self.log(f"[early stopping] epoch {epoch}: valid {self.metric} {value:.4f}"
-                     f"{' (best)' if improved else f' (best {self.best_score:.4f} at epoch {self.best_epoch})'}")
+            self.log(
+                f"[early stopping] epoch {epoch}: valid {self.metric} {value:.4f}"
+                f"{' (best)' if improved else f' (best {self.best_score:.4f} at epoch {self.best_epoch})'}"
+            )
         if epoch >= self.max_epochs:
             return False
         return not (epoch >= self.min_epochs and epoch - self.best_epoch >= self.patience)
@@ -447,8 +595,10 @@ class EarlyStopping:
             if module is not None and name in self._best_state:
                 module.load_state_dict(self._best_state[name])
         if self.log:
-            self.log(f"[early stopping] restored epoch {self.best_epoch} (valid {self.metric} {self.best_score:.4f}, "
-                     f"{len(self.history)} epochs run)")
+            self.log(
+                f"[early stopping] restored epoch {self.best_epoch} (valid {self.metric} {self.best_score:.4f}, "
+                f"{len(self.history)} epochs run)"
+            )
 
     @staticmethod
     def snapshot(modules: Modules) -> Dict[str, Any]:
@@ -462,7 +612,11 @@ class EarlyStopping:
                 return {k: copy(v) for k, v in value.items()}
             return value
 
-        return {name: copy(module.state_dict()) for name, module in modules.items() if module is not None}
+        return {
+            name: copy(module.state_dict())
+            for name, module in modules.items()
+            if module is not None
+        }
 
     def release(self) -> None:
         """Drop the in-memory copy once training is over."""
@@ -470,9 +624,16 @@ class EarlyStopping:
 
     def summary(self) -> Dict[str, Any]:
         """What the run record keeps: the chosen epoch, its score, and the whole validation curve."""
-        return {"metric": self.metric, "min_epochs": self.min_epochs, "patience": self.patience,
-                "max_epochs": self.max_epochs, "best_epoch": self.best_epoch, "best_score": self.best_score,
-                "epochs_run": len(self.history), "history": self.history}
+        return {
+            "metric": self.metric,
+            "min_epochs": self.min_epochs,
+            "patience": self.patience,
+            "max_epochs": self.max_epochs,
+            "best_epoch": self.best_epoch,
+            "best_score": self.best_score,
+            "epochs_run": len(self.history),
+            "history": self.history,
+        }
 
 
 class EarlyStoppingGroup:

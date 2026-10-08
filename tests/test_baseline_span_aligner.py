@@ -12,13 +12,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from retexo.baselines.base import BaselineConfig  # noqa: E402
 from retexo.baselines.decoder import BaselineDecoder  # noqa: E402
 from retexo.baselines.record import Edge, Record  # noqa: E402
-from retexo.baselines.span_aligner import (QEND_TOKEN, Q_TOKEN, QueryResult, SpanAligner,  # noqa: E402
-                                               SpanEncoder, span_scores)
+from retexo.baselines.span_aligner import (  # noqa: E402
+    Q_TOKEN,
+    QEND_TOKEN,
+    QueryResult,
+    SpanAligner,
+    SpanEncoder,
+    span_scores,
+)
 
 
 def record(source, reuse, edges=()):
-    return Record(id="t/1", level="gold", fold=4, source_work="", source_tokens=source, reuse_work="",
-                  reuse_tokens=reuse, pair_label="cit", links=list(edges))
+    return Record(
+        id="t/1",
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=source,
+        reuse_work="",
+        reuse_tokens=reuse,
+        pair_label="cit",
+        links=list(edges),
+    )
 
 
 # =============================================================================
@@ -52,8 +67,8 @@ def test_span_scores_best_span_is_the_argmax_within_max_words():
     spans_b = [(1, 2), (2, 4), (4, 5)]
     start_logits = torch.full((6,), -10.0)
     end_logits = torch.full((6,), -10.0)
-    start_logits[2] = 10.0   # word 1 starts at subword 2
-    end_logits[3] = 10.0     # word 1 ends at subword 3 (its span is (2,4), last position 3)
+    start_logits[2] = 10.0  # word 1 starts at subword 2
+    end_logits[3] = 10.0  # word 1 ends at subword 3 (its span is (2,4), last position 3)
     start_logits[0] = -10.0  # null is not favoured
     end_logits[0] = -10.0
     result = span_scores(start_logits, end_logits, spans_b, max_words=2)
@@ -68,8 +83,10 @@ def test_span_scores_s_null_is_the_cls_position():
     start_logits = torch.tensor([5.0, -5.0])
     end_logits = torch.tensor([5.0, -5.0])
     result = span_scores(start_logits, end_logits, spans_b, max_words=3)
-    assert result.s_null > 0.9        # position 0 (CLS) dominates both softmaxes
-    assert result.best_words == (0,)  # still the best (only) real candidate, decoder decides null vs. real
+    assert result.s_null > 0.9  # position 0 (CLS) dominates both softmaxes
+    assert result.best_words == (
+        0,
+    )  # still the best (only) real candidate, decoder decides null vs. real
 
 
 def test_span_scores_respects_max_words():
@@ -80,11 +97,11 @@ def test_span_scores_respects_max_words():
     start_logits = torch.full((5,), -10.0)
     end_logits = torch.full((5,), -10.0)
     start_logits[1] = 10.0
-    end_logits[2] = 10.0     # the true best span covers words 0 and 1 together
+    end_logits[2] = 10.0  # the true best span covers words 0 and 1 together
     result_wide = span_scores(start_logits, end_logits, spans_b, max_words=2)
     result_narrow = span_scores(start_logits, end_logits, spans_b, max_words=1)
     assert result_wide.best_words == (0, 1)
-    assert result_narrow.best_words != (0, 1)   # max_words=1 forbids the two-word span
+    assert result_narrow.best_words != (0, 1)  # max_words=1 forbids the two-word span
 
 
 def test_span_scores_empty_context_returns_only_the_null():
@@ -103,7 +120,7 @@ def test_row_carries_omega_best_on_every_span_word_and_s_null_on_the_null():
     result = QueryResult(best_words=(1, 2), omega_best=0.7, s_null=0.2)
     row = SpanAligner._row(result)
     assert dict(row) == {1: 0.7, 2: 0.7, -1: 0.2}
-    assert row[0][1] >= row[-1][1]   # sorted best first
+    assert row[0][1] >= row[-1][1]  # sorted best first
 
 
 # =============================================================================
@@ -115,12 +132,12 @@ def test_symmetrise_average_matches_nagatas_figure_5_arithmetic():
     # reuse word 0 -> source word 0 only in the forward direction, omega 0.8;
     # reuse word 1 -> source word 1 only in the forward direction, omega 0.6
     rows = [[(0, 0.8), (-1, 0.1)], [(1, 0.6), (-1, 0.3)]]
-    rev_rows = [[(-1, 1.0)], [(-1, 1.0)]]   # neither source word points back
+    rev_rows = [[(-1, 1.0)], [(-1, 1.0)]]  # neither source word points back
     merged = BaselineDecoder.symmetrise_average(rows, rev_rows)
     assert abs(dict(merged[0])[0] - 0.4) < 1e-9
     assert abs(dict(merged[1])[1] - 0.3) < 1e-9
     links = BaselineDecoder.decode_threshold(merged, theta=0.4)
-    assert links == [0, -1]   # 0.4 clears theta, 0.3 does not
+    assert links == [0, -1]  # 0.4 clears theta, 0.3 does not
 
 
 # =============================================================================
@@ -151,15 +168,17 @@ def test_extra_edges_empty_for_single_word_spans():
 
 
 def test_queries_of_one_query_per_word_both_directions_with_null_targets():
-    rec = record(["arma", "cano"], ["cano", "gladius"], edges=[Edge(r=0, s=1, op="COPY", sure=True)])
+    rec = record(
+        ["arma", "cano"], ["cano", "gladius"], edges=[Edge(r=0, s=1, op="COPY", sure=True)]
+    )
     method = SpanAligner(BaselineConfig(device="cpu"))
     queries = method.queries_of([rec])
     fwd = [(i, t) for q, c, i, t in queries if q is rec.reuse_tokens]
     rev = [(i, t) for q, c, i, t in queries if q is rec.source_tokens]
     assert len(fwd) == rec.n_reuse and len(rev) == rec.n_source
-    assert dict(fwd)[0] == (1, 1)    # "cano" (reuse 0) links to source word 1
-    assert dict(fwd)[1] is None      # "gladius" (reuse 1) is a null question
-    assert dict(rev)[1] == (0, 0)    # source word 1 links back to reuse 0
+    assert dict(fwd)[0] == (1, 1)  # "cano" (reuse 0) links to source word 1
+    assert dict(fwd)[1] is None  # "gladius" (reuse 1) is a null question
+    assert dict(rev)[1] == (0, 0)  # source word 1 links back to reuse 0
     assert dict(rev)[0] is None
 
 
@@ -219,15 +238,17 @@ def test_predict_returns_scores_and_extra_from_a_fake_encoder():
     null_win = (torch.tensor([10.0, -10.0, -10.0]), torch.tensor([10.0, -10.0, -10.0]))
     word_win = (torch.tensor([-10.0, 10.0, -10.0]), torch.tensor([-10.0, 10.0, -10.0]))
     method = SpanAligner(BaselineConfig(device="cpu"))
-    method.encoder = _FakeEncoder(spans_by_len={2: [(1, 2), (2, 3)]}, logits_by_index={0: null_win, 1: word_win})
+    method.encoder = _FakeEncoder(
+        spans_by_len={2: [(1, 2), (2, 3)]}, logits_by_index={0: null_win, 1: word_win}
+    )
     method.heads = _FakeHeads({0: null_win, 1: word_win})
     preds = method.predict([rec])
     assert len(preds) == 1
     pred = preds[0]
     assert len(pred.scores) == rec.n_reuse
     assert len(pred.rev_scores) == rec.n_source
-    assert dict(pred.scores[0])[-1] > dict(pred.scores[0]).get(0, 0.0)   # query 0: null wins
-    assert dict(pred.scores[1]).get(0, 0.0) > 0.0                        # query 1: word 0 wins
+    assert dict(pred.scores[0])[-1] > dict(pred.scores[0]).get(0, 0.0)  # query 0: null wins
+    assert dict(pred.scores[1]).get(0, 0.0) > 0.0  # query 1: word 0 wins
 
 
 def test_predict_empty_passage_returns_empty_prediction_without_error():

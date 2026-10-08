@@ -22,11 +22,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from retexo.formulations.encoding import DERIVED_TAGS, NULL_SOURCE, ScriptEncoder
-from retexo.formulations.base import FormulationConfig, ScriptExample, ScriptModel
-from retexo.operations import EditOperation, OperationRegistry
-from retexo.formulations.pair_encoding import PairEncoder
 from retexo.core.script import EditScript
+from retexo.formulations.base import FormulationConfig, ScriptExample, ScriptModel
+from retexo.formulations.encoding import DERIVED_TAGS, NULL_SOURCE, ScriptEncoder
+from retexo.formulations.pair_encoding import PairEncoder
+from retexo.operations import EditOperation, OperationRegistry
 
 # =============================================================================
 # Config
@@ -188,7 +188,7 @@ class TokenClassifierModel(ScriptModel):
         weights = torch.ones(len(self.labels))
         # Only classes present in the data are reweighted; an absent class
         # keeps weight one, since inverse frequency is undefined for zero.
-        weights[seen] = (counts[seen].sum() / (seen.sum() * counts[seen]))
+        weights[seen] = counts[seen].sum() / (seen.sum() * counts[seen])
         return weights.clamp(max=self.config.max_class_weight).to(self.config.device)
 
     def _cost_vector(self):
@@ -220,8 +220,7 @@ class TokenClassifierModel(ScriptModel):
         null_probability = pointer_probs[:, self.config.max_source_positions]
 
         typed_cost = (op_probs * self._cost_vector()).sum(dim=-1)
-        return (null_probability * insert_cost
-                + (1.0 - null_probability) * typed_cost).mean()
+        return (null_probability * insert_cost + (1.0 - null_probability) * typed_cost).mean()
 
     def _pointer_weights(self):
         """Pointer-head weights, down-weighting the null (insertion) class."""
@@ -240,9 +239,7 @@ class TokenClassifierModel(ScriptModel):
 
         moved = {k: v.to(self.config.device) for k, v in batch.items()}
         hidden = self._encoder(**moved).last_hidden_state
-        op_loss_fn = torch.nn.CrossEntropyLoss(
-            ignore_index=-100, weight=self._op_weights
-        )
+        op_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100, weight=self._op_weights)
         pointer_loss_fn = torch.nn.CrossEntropyLoss(
             ignore_index=-100, weight=self._pointer_weights()
         )
@@ -250,12 +247,8 @@ class TokenClassifierModel(ScriptModel):
             self._op_head(hidden).view(-1, len(self.labels)),
             op_labels.to(self.config.device).view(-1),
         )
-        pointer_logits = self._pointer_head(hidden).view(
-            -1, self.config.max_source_positions + 1
-        )
-        pointer_loss = pointer_loss_fn(
-            pointer_logits, pointers.to(self.config.device).view(-1)
-        )
+        pointer_logits = self._pointer_head(hidden).view(-1, self.config.max_source_positions + 1)
+        pointer_loss = pointer_loss_fn(pointer_logits, pointers.to(self.config.device).view(-1))
         total = op_loss + self.config.pointer_loss_weight * pointer_loss
 
         if self.config.cost_weight:
@@ -270,7 +263,7 @@ class TokenClassifierModel(ScriptModel):
 
     # ---------- Training ----------
 
-    def fit(self, train: Sequence[ScriptExample]) -> "TokenClassifierModel":
+    def fit(self, train: Sequence[ScriptExample]) -> TokenClassifierModel:
         """Train both heads jointly on per-reuse-token operations and pointers."""
         import torch
 
@@ -305,7 +298,8 @@ class TokenClassifierModel(ScriptModel):
         self._build()
         self._encoder.eval()
         stub = ScriptExample(
-            source_tokens, target_tokens,
+            source_tokens,
+            target_tokens,
             EditScript(list(source_tokens), list(target_tokens), [], self.registry),
         )
         batch, _, _, spans = self._encode([stub])
@@ -347,32 +341,37 @@ class TokenClassifierModel(ScriptModel):
 
         def flush_frames() -> None:
             if frame_run:
-                operations.append(EditOperation(
-                    "FRAME", (), tuple(frame_run), (),
-                    tuple(target_tokens[i] for i in frame_run),
-                ))
+                operations.append(
+                    EditOperation(
+                        "FRAME",
+                        (),
+                        tuple(frame_run),
+                        (),
+                        tuple(target_tokens[i] for i in frame_run),
+                    )
+                )
                 frame_run.clear()
 
         for index, token in enumerate(target_tokens):
             tag = tags[index] if index < len(tags) else "INS"
             source = sources[index] if index < len(sources) else NULL_SOURCE
-            unaligned = (source == NULL_SOURCE or source in claimed
-                         or source >= len(source_tokens))
+            unaligned = source == NULL_SOURCE or source in claimed or source >= len(source_tokens)
             if unaligned:
                 if tag == "FRAME":
                     frame_run.append(index)
                 else:
                     flush_frames()
-                    operations.append(
-                        EditOperation("INS", (), (index,), (), (token,))
-                    )
+                    operations.append(EditOperation("INS", (), (index,), (), (token,)))
                 continue
             flush_frames()
             claimed.add(source)
             operations.append(
                 EditOperation(
                     tag if tag not in ("INS", "DEL", "FRAME") else "NOP",
-                    (source,), (index,), (source_tokens[source],), (token,),
+                    (source,),
+                    (index,),
+                    (source_tokens[source],),
+                    (token,),
                 )
             )
         flush_frames()
@@ -384,17 +383,17 @@ class TokenClassifierModel(ScriptModel):
     # ---------- Persistence ----------
 
     @classmethod
-    def load(cls, path: "Path") -> "TokenClassifierModel":
+    def load(cls, path: Path) -> TokenClassifierModel:
         """Reconstruct a saved tagger for inference.
 
         Reads the fine-tuned encoder in place of the base checkpoint, restores
         both heads and the exact label order, so ``predict`` behaves as it did
         at save time.
         """
+        from pathlib import Path as _Path
+
         import torch
         from transformers import AutoModel
-
-        from pathlib import Path as _Path
 
         path = _Path(path)
         heads = torch.load(path / "heads.pt", map_location="cpu")
@@ -405,9 +404,7 @@ class TokenClassifierModel(ScriptModel):
         model._encoder = AutoModel.from_pretrained(str(path))
         hidden = model._encoder.config.hidden_size
         model._op_head = torch.nn.Linear(hidden, len(model.labels))
-        model._pointer_head = torch.nn.Linear(
-            hidden, model.config.max_source_positions + 1
-        )
+        model._pointer_head = torch.nn.Linear(hidden, model.config.max_source_positions + 1)
         model._op_head.load_state_dict(heads["op_head"])
         model._pointer_head.load_state_dict(heads["pointer_head"])
         for module in (model._encoder, model._op_head, model._pointer_head):
@@ -423,9 +420,11 @@ class TokenClassifierModel(ScriptModel):
         path.mkdir(parents=True, exist_ok=True)
         self._encoder.save_pretrained(path)
         torch.save(
-            {"op_head": self._op_head.state_dict(),
-             "pointer_head": self._pointer_head.state_dict(),
-             "labels": self.labels,
-             "pair_encoder": self._pair_encoder.name},
+            {
+                "op_head": self._op_head.state_dict(),
+                "pointer_head": self._pointer_head.state_dict(),
+                "labels": self.labels,
+                "pair_encoder": self._pair_encoder.name,
+            },
             path / "heads.pt",
         )

@@ -151,5 +151,4 @@ class Resources:
         return ("n", "a", "v", "r")
 
 
-__all__ = ["DEFAULT_CACHE", "DEFAULT_VECTORS", "LatinWordNet", "Morphology",
-           "Resources", "Vectors"]
+__all__ = ["DEFAULT_CACHE", "DEFAULT_VECTORS", "LatinWordNet", "Morphology", "Resources", "Vectors"]

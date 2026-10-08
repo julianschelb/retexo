@@ -11,14 +11,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from retexo.baselines.base import BaselineConfig  # noqa: E402
 from retexo.baselines.record import Edge, Record, Span  # noqa: E402
-from retexo.baselines.tagger import (LABEL_SETS, TaggerMode, TaggerV1, _class_weights,  # noqa: E402
-                                         examples_from_records)
+from retexo.baselines.tagger import (  # noqa: E402
+    LABEL_SETS,
+    TaggerMode,
+    TaggerV1,
+    _class_weights,
+    examples_from_records,
+)
 
 
 def record(source, reuse, edges=(), spans=(), annotation=None):
-    return Record(id="t/1", level="gold", fold=4, source_work="", source_tokens=source, reuse_work="",
-                  reuse_tokens=reuse, pair_label="cit", links=list(edges), spans=list(spans),
-                  annotation=annotation or {})
+    return Record(
+        id="t/1",
+        level="gold",
+        fold=4,
+        source_work="",
+        source_tokens=source,
+        reuse_work="",
+        reuse_tokens=reuse,
+        pair_label="cit",
+        links=list(edges),
+        spans=list(spans),
+        annotation=annotation or {},
+    )
 
 
 # =============================================================================
@@ -86,9 +101,9 @@ def test_class_weights_inverse_frequency_capped_and_normalised():
     recs += [record(["a"], ["x"], edges=[Edge(r=0, s=0, op="MORPH")])] * 5
     examples = examples_from_records(recs, v1)
     weights = dict(_class_weights(examples, v1.classes, cap=20.0))
-    assert weights["COPY"] == 1.0                 # the most frequent class
-    assert weights["MORPH"] == 20.0                # 100/5 = 20, exactly at the cap
-    assert weights["SUBST"] == 20.0                # never seen: capped, not infinite
+    assert weights["COPY"] == 1.0  # the most frequent class
+    assert weights["MORPH"] == 20.0  # 100/5 = 20, exactly at the cap
+    assert weights["SUBST"] == 20.0  # never seen: capped, not infinite
     assert weights["FRAME"] == 20.0
 
 
@@ -98,7 +113,7 @@ def test_class_weights_uncapped_case():
     recs += [record(["a"], ["x"], edges=[Edge(r=0, s=0, op="MORPH")])] * 5
     examples = examples_from_records(recs, v1)
     weights = dict(_class_weights(examples, v1.classes, cap=20.0))
-    assert weights["MORPH"] == 2.0                 # 10/5, under the cap
+    assert weights["MORPH"] == 2.0  # 10/5, under the cap
 
 
 # =============================================================================
@@ -109,7 +124,7 @@ def test_class_weights_uncapped_case():
 def test_gate_keep_bias_forces_every_token_to_the_keep_class():
     import torch
 
-    logits = torch.tensor([[0.0, 5.0], [0.0, 5.0]])   # class 1 wins on raw logits
+    logits = torch.tensor([[0.0, 5.0], [0.0, 5.0]])  # class 1 wins on raw logits
     chosen = TaggerV1.gate(logits, keep_index=0, keep_bias=10.0, min_change_p=0.0)
     assert chosen == [0, 0]
 
@@ -119,7 +134,7 @@ def test_gate_min_change_p_one_keeps_every_pair():
 
     logits = torch.tensor([[0.0, 5.0], [0.0, 5.0]])
     chosen = TaggerV1.gate(logits, keep_index=0, keep_bias=0.0, min_change_p=1.0)
-    assert chosen == [0, 0]   # no probability can exceed 1.0, so the pair stays all-keep
+    assert chosen == [0, 0]  # no probability can exceed 1.0, so the pair stays all-keep
 
 
 def test_gate_default_dials_recovers_the_argmax():
@@ -137,7 +152,7 @@ def test_gate_default_dials_recovers_the_argmax():
 
 class _FakeModel:
     def predict_source(self, examples):
-        return [[0, 1, 0] for _ in examples]   # DEL on the middle source word
+        return [[0, 1, 0] for _ in examples]  # DEL on the middle source word
 
 
 def test_predict_wires_links_tags_frame_and_dels():

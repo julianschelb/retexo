@@ -27,8 +27,22 @@ V0 = ("KEEP", "REPLACE", "INS", "DEL")
 V1 = ("COPY", "MORPH", "SUBST", "INS", "DEL")
 MODES = ("VERBATIM", "ALLUSION", "FRAME", "NOMATCH")
 GROUPS = ("form", "lexical-semantic", "cardinality", "structural", "residual")
-V3 = ("COPY", "MORPH", "SYN", "POS", "NE-SUB", "SUBST", "SPLIT", "MERGE",
-      "REORDER", "FRAME", "QUOTE", "DISPERSE", "INS", "DEL")
+V3 = (
+    "COPY",
+    "MORPH",
+    "SYN",
+    "POS",
+    "NE-SUB",
+    "SUBST",
+    "SPLIT",
+    "MERGE",
+    "REORDER",
+    "FRAME",
+    "QUOTE",
+    "DISPERSE",
+    "INS",
+    "DEL",
+)
 #: What an edge may carry.
 EDGE_OPS = ("COPY", "MORPH", "SYN", "POS", "NE-SUB", "SUBST", "SPLIT", "MERGE")
 LEXICAL = ("SYN", "POS", "NE-SUB", "SUBST")
@@ -36,9 +50,16 @@ LEVELS = ("V0", "V1", "mode", "group", "V3")
 
 #: Old spellings and demoted relations; ``None`` means the tag is dropped.
 ALIASES: Dict[str, Optional[str]] = {
-    "NOP": "COPY", "SYN-DIST": "SYN", "HYPER": "SUBST", "HYPO": "SUBST",
-    "ANT": "SUBST", "CO-HYPO": "SUBST", "ADAPT": None,
-    "FORM": "MORPH", "SENSE": "SUBST", "LINK": "SUBST",
+    "NOP": "COPY",
+    "SYN-DIST": "SYN",
+    "HYPER": "SUBST",
+    "HYPO": "SUBST",
+    "ANT": "SUBST",
+    "CO-HYPO": "SUBST",
+    "ADAPT": None,
+    "FORM": "MORPH",
+    "SENSE": "SUBST",
+    "LINK": "SUBST",
 }
 #: Relations kept as ``detail`` when demoted (SYN-DIST folds into SYN, the others into SUBST).
 DEMOTED = ("HYPER", "HYPO", "ANT", "CO-HYPO", "SYN-DIST")
@@ -65,28 +86,57 @@ PAPER_SUBST_DETAILS = ("SYN", "POS", "NE-SUB", "SYN-DIST") + LEXICAL_DETAILS["SU
 PAPER_FORMAT = "2026-09-24"
 
 _GROUP = {
-    "COPY": "form", "MORPH": "form",
-    "SYN": "lexical-semantic", "POS": "lexical-semantic", "NE-SUB": "lexical-semantic",
+    "COPY": "form",
+    "MORPH": "form",
+    "SYN": "lexical-semantic",
+    "POS": "lexical-semantic",
+    "NE-SUB": "lexical-semantic",
     "SUBST": "lexical-semantic",
-    "SPLIT": "cardinality", "MERGE": "cardinality",
-    "REORDER": "structural", "FRAME": "structural", "QUOTE": "structural", "DISPERSE": "structural",
-    "INS": "residual", "DEL": "residual",
+    "SPLIT": "cardinality",
+    "MERGE": "cardinality",
+    "REORDER": "structural",
+    "FRAME": "structural",
+    "QUOTE": "structural",
+    "DISPERSE": "structural",
+    "INS": "residual",
+    "DEL": "residual",
 }
 _V1 = {
-    "COPY": "COPY", "MORPH": "MORPH",
-    "SYN": "SUBST", "POS": "SUBST", "NE-SUB": "SUBST", "SUBST": "SUBST",
-    "SPLIT": "SUBST", "MERGE": "SUBST",
-    "REORDER": "COPY", "QUOTE": "COPY", "DISPERSE": "SUBST",
-    "FRAME": "INS", "INS": "INS", "DEL": "DEL",
+    "COPY": "COPY",
+    "MORPH": "MORPH",
+    "SYN": "SUBST",
+    "POS": "SUBST",
+    "NE-SUB": "SUBST",
+    "SUBST": "SUBST",
+    "SPLIT": "SUBST",
+    "MERGE": "SUBST",
+    "REORDER": "COPY",
+    "QUOTE": "COPY",
+    "DISPERSE": "SUBST",
+    "FRAME": "INS",
+    "INS": "INS",
+    "DEL": "DEL",
 }
 _V0 = {
-    "COPY": "KEEP", "MORPH": "REPLACE", "SYN": "REPLACE", "POS": "REPLACE", "NE-SUB": "REPLACE",
-    "SUBST": "REPLACE", "SPLIT": "REPLACE", "MERGE": "REPLACE",
-    "REORDER": "KEEP", "QUOTE": "KEEP", "DISPERSE": "REPLACE",
-    "FRAME": "INS", "INS": "INS", "DEL": "DEL",
+    "COPY": "KEEP",
+    "MORPH": "REPLACE",
+    "SYN": "REPLACE",
+    "POS": "REPLACE",
+    "NE-SUB": "REPLACE",
+    "SUBST": "REPLACE",
+    "SPLIT": "REPLACE",
+    "MERGE": "REPLACE",
+    "REORDER": "KEEP",
+    "QUOTE": "KEEP",
+    "DISPERSE": "REPLACE",
+    "FRAME": "INS",
+    "INS": "INS",
+    "DEL": "DEL",
 }
 _MODE_OF_GROUP = {
-    "form": "VERBATIM", "lexical-semantic": "ALLUSION", "cardinality": "ALLUSION",
+    "form": "VERBATIM",
+    "lexical-semantic": "ALLUSION",
+    "cardinality": "ALLUSION",
     "residual": "NOMATCH",
 }
 
@@ -265,8 +315,9 @@ class Labels:
         return {"V0": V0, "V1": V1, "mode": MODES, "group": GROUPS, "V3": V3}[level]
 
     @classmethod
-    def token_labels(cls, links: Sequence[int], tags: Sequence[str], frame: Sequence[int],
-                     level: str) -> List[str]:
+    def token_labels(
+        cls, links: Sequence[int], tags: Sequence[str], frame: Sequence[int], level: str
+    ) -> List[str]:
         """One label per reuse word at ``level`` from the interface (II) triple.
 
         Unlinked words are INS (FRAME where the frame mask says so, at levels
