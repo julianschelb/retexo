@@ -49,6 +49,11 @@ DEFAULT_MAX_WORDS = 3
 DEFAULT_MAX_LENGTH = 320
 
 
+# =============================================================================
+# QueryResult
+# =============================================================================
+
+
 @dataclass
 class QueryResult:
     """One query's answer: the best span's words (empty if null wins), its
@@ -93,6 +98,8 @@ class SpanEncoder:
         self.q_id = 0
         self.qend_id = 0
         self.vocab_size = 0
+
+    # ---------- lazy backend ----------
 
     @property
     def hidden_size(self) -> int:
@@ -154,6 +161,8 @@ class SpanEncoder:
             embeddings = self._model.get_input_embeddings().weight
             embeddings[self.q_id] = embeddings[cls_id]
             embeddings[self.qend_id] = embeddings[cls_id]
+
+    # ---------- forward pass ----------
 
     def forward_hidden(self, batch: Dict):
         """The encoder's last hidden state for one already-built batch."""

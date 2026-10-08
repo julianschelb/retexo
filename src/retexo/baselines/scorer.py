@@ -37,6 +37,10 @@ from retexo.baselines.base import Prediction
 from retexo.baselines.record import Record, extra_edges, links_of
 from retexo.baselines.typer import coverage  # noqa: F401  (re-exported: defined once in 30 Typer)
 
+# =============================================================================
+# BaselineScorer
+# =============================================================================
+
 
 class BaselineScorer:
     """One scorer for every table, reading dumps and never a model.
@@ -764,6 +768,10 @@ class BaselineScorer:
         kappa = (po - pe) / (1 - pe) if pe < 1 else 1.0
         return {"iaa": iaa, "kappa": kappa}
 
+
+# =============================================================================
+# Module-level aliases
+# =============================================================================
 
 #: Backward-compatible module-level aliases; ``sc.score_dump(...)`` etc. still work.
 QUOTE_MIN = BaselineScorer.QUOTE_MIN

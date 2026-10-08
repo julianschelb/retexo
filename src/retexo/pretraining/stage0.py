@@ -704,6 +704,8 @@ class GeometryProbe:
         self.bootstrap = bootstrap
         self.seed = seed
 
+    # ---------- vector extraction ----------
+
     def _vectors(self, model_name: str, records: Sequence[Record], log=None):
         """Per record: (source word vectors, reuse word vectors) from one joint encoding at ``layer``."""
         import torch
@@ -733,6 +735,8 @@ class GeometryProbe:
                     log(f"[probe] {min(i + 16, len(records))}/{len(records)} records encoded")
         return out
 
+    # ---------- cosine and AUC statistics ----------
+
     @staticmethod
     def _cos(a, b) -> float:
         import torch
@@ -751,6 +755,8 @@ class GeometryProbe:
         ranks = rankdata(np.concatenate([p, n]))  # ties share their average rank
         r_pos = ranks[: len(p)].sum()
         return float((r_pos - len(p) * (len(p) + 1) / 2) / (len(p) * len(n)))
+
+    # ---------- running the probe ----------
 
     def run(self, model_name: str, records: Sequence[Record], *, log=None) -> ProbeResult:
         import numpy as np

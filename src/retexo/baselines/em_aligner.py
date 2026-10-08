@@ -242,6 +242,8 @@ class DiagonalIBM2(IBM1):
         self.tension = tension
         self.optimise_tension = optimise_tension
 
+    # ---------- Diagonal prior ----------
+
     @staticmethod
     def h(n_src: int, J: int) -> np.ndarray:
         """``-|j/J - i/I|`` for source position ``i`` (1..I) and target position ``j`` (1..J): shape ``[I, J]``."""
@@ -258,6 +260,8 @@ class DiagonalIBM2(IBM1):
         out[0] = self.p0
         out[1:] = (1.0 - self.p0) * weights / z
         return out
+
+    # ---------- EM ----------
 
     def posteriors(
         self, table: LexicalTable, pair_ids: np.ndarray, **_
@@ -323,6 +327,8 @@ class HMMAligner:
         self.log_likelihood: List[float] = []
         self._transitions: Dict[int, np.ndarray] = {}
 
+    # ---------- Jump model ----------
+
     def _bucket(self, d: np.ndarray) -> np.ndarray:
         return np.clip(d, -self.max_jump, self.max_jump) + self.max_jump
 
@@ -348,6 +354,8 @@ class HMMAligner:
         start[:n_src] = (1.0 - self.p0) / n_src
         start[n_src:] = self.p0 / n_src
         return start
+
+    # ---------- Emissions and forward-backward ----------
 
     def _emissions(self, table: LexicalTable, pair_ids: np.ndarray) -> np.ndarray:
         """``[B, 2I, J]``: real states emit ``theta[s_i, t_j]``, null states ``theta[null, t_j]``."""
@@ -389,6 +397,8 @@ class HMMAligner:
             xi += np.einsum("bi,bk->ik", alpha[:, :, j - 1], right) * T
         ll = float(np.log(np.maximum(scale, 1e-300)).sum())
         return gamma, xi, ll
+
+    # ---------- EM ----------
 
     def posteriors(
         self, table: LexicalTable, pair_ids: np.ndarray, **_
@@ -587,6 +597,8 @@ class EMAligner(Baseline):
     trainable = True
     typer = "rule"
     decoder = "default"
+
+    # ---------- Setup ----------
 
     @staticmethod
     def lemma_stream(

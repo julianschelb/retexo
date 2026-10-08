@@ -436,6 +436,8 @@ class LLMPromptOnly(Baseline):
                 out[row["id"]] = row["reply"]
         return out
 
+    # ---------- baseline interface ----------
+
     def predict(self, records: List[Record]) -> List[Prediction]:
         from concurrent.futures import ThreadPoolExecutor
 
@@ -751,6 +753,8 @@ class ScriptRater:
         base = self.load_base()
         self.model = PeftModel.from_pretrained(base, str(adapter_dir))
         return self.model
+
+    # ---------- generation ----------
 
     def generate(self, records: Sequence[Record], *, log=None) -> List[str]:
         """One reply per record, greedy, ``max_new_tokens = min(12 n + 40, 1800)``."""

@@ -184,6 +184,8 @@ class Seq2SeqWrapper:
         self._model = None
         self._tokenizer = None
 
+    # ---------- Model access ----------
+
     def _ensure(self) -> None:
         if self._model is not None:
             return
@@ -450,6 +452,8 @@ class AlignmentLayer:
         )
         self.training = False
 
+    # ---------- Trainable surface ----------
+
     def modules(self):
         return [self.norm_k, self.norm_q, self.w_k, self.w_q] + (
             [self.context] if self.context is not None else []
@@ -457,6 +461,8 @@ class AlignmentLayer:
 
     def parameters(self):
         return [p for m in self.modules() for p in m.parameters()] + [self.null_key]
+
+    # ---------- Modes and persistence ----------
 
     def train(self) -> None:
         self.training = True
@@ -491,6 +497,8 @@ class AlignmentLayer:
         if self.context is not None and state.get("context") is not None:
             self.context.load_state_dict(state["context"])
 
+    # ---------- Forward pass ----------
+
     def logits(self, keys, queries, *, null_logit: Optional[float] = None):
         import torch
 
@@ -514,6 +522,8 @@ class AlignmentLayer:
         import torch
 
         return torch.softmax(self.logits(keys, queries, null_logit=null_logit), dim=-1)
+
+    # ---------- Losses ----------
 
     @staticmethod
     def guided_loss(probs, links: Sequence[int]):

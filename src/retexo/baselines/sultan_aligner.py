@@ -315,6 +315,8 @@ class SultanAligner(Baseline):
         self.cross_orientation = bool(cfg.extra.get("cross_orientation", False))
         self._parser = None
 
+    # ---------- Lazy resources ----------
+
     @property
     def stopwords(self) -> frozenset:
         """The stop-word list: ``substitution.STOPWORDS`` for Latin, NLTK's English list."""
