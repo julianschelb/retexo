@@ -1,4 +1,5 @@
 import { OP_STYLE } from "../labels.js";
+import { UNLINKED } from "../unlinked.js";
 
 // Every label a word can carry in the mapping, in the paper's operation inventory.
 const TAGS = [
@@ -7,9 +8,11 @@ const TAGS = [
   ["SUBST", "A different word in the same slot: a synonym, a derivation, another name (Danaos / Graecos), or a replacement with no lexical relation."],
   ["SPLIT", "One source word becomes two reuse words, e.g. a glued enclitic written apart (nostroque / nostro, quae). Both reuse words point to the same source word."],
   ["MERGE", "Two source words become one reuse word. The link points to the first of them."],
-  ["FRAME", "The citing formula: the later author's own words introducing the quotation (ut ait poeta, inquit). No source word."],
-  ["INS", "Inserted: a word of the later author with no counterpart in the source."],
-  ["DEL", "Deleted: a source word the later author did not take over (source side only, shown in grey)."],
+  ["MARK", "The citing formula: the later author's own words introducing the quotation (ut ait poeta, inquit). No source word."],
+  ["INS", "Inserted: a word of the later author inside the reused stretch, between the first and the last linked word, with no counterpart in the source."],
+  ["NEW", "New text: a word of the later author outside the reused stretch, the passage around the reuse."],
+  ["DEL", "Deleted: a source word inside the reused stretch that the later author did not take over (source side only, shown in grey)."],
+  ["OUT", "Not taken up: a source word outside the reused stretch (source side only, shown in grey)."],
 ];
 
 export default function Legend() {
@@ -19,7 +22,7 @@ export default function Legend() {
       <dl className="grid gap-x-6 gap-y-1.5 text-xs text-ink-2 md:grid-cols-2">
         {TAGS.map(([tag, text]) => {
           const style = OP_STYLE[tag] ?? OP_STYLE.INS;
-          const muted = tag === "INS" || tag === "DEL" || tag === "FRAME";
+          const muted = UNLINKED.has(tag);
           return (
             <div key={tag} className="flex gap-2">
               <dt className={`w-14 shrink-0 pt-px text-[.65rem] font-semibold uppercase tracking-wide ${muted ? "text-muted" : style.text}`}>{tag}</dt>

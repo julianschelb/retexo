@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { OP_STYLE } from "../labels.js";
+import { reuseTags as tagReuse, sourceTags as tagSource, UNLINKED } from "../unlinked.js";
 
 // The mapping, laid out across the width: the source passage on top, the reuse passage below, each on one line
 // (the pane scrolls sideways for long passages), and one curve per link from the source word down to the reuse word,
@@ -23,12 +24,12 @@ function Words({ tokens, side, tags, linked, register, hover, onHover }) {
         const tag = tags[i];
         const style = OP_STYLE[tag] ?? OP_STYLE.INS;
         const on = hover?.has(key);
-        const plain = !linked.has(i) && tag !== "FRAME";
+        const plain = !linked.has(i) && tag !== "MARK";
         const word = (
           <span ref={(el) => register(key, el)} onMouseEnter={() => onHover(key)} onMouseLeave={() => onHover(null)}
                 className={`rounded-sm px-1 transition-colors ${plain ? "text-muted" : `${style.bg} text-ink`} ${
                   on ? `outline outline-2 ${plain ? "outline-muted" : style.outline}` : ""}`}
-                title={side === "reuse" ? `${token}: ${tag}` : plain ? `${token}: DEL` : token}>
+                title={side === "reuse" || plain ? `${token}: ${tag}` : token}>
             {token}
           </span>
         );
@@ -38,7 +39,7 @@ function Words({ tokens, side, tags, linked, register, hover, onHover }) {
           <span key={i} className="inline-flex flex-col items-center">
             {word}
             <span className={`mt-0.5 font-sans text-[.6rem] font-semibold uppercase tracking-wide ${
-              tag === "INS" || tag === "FRAME" ? "text-muted/70" : style.text}`}>{tag}</span>
+              UNLINKED.has(tag) ? "text-muted/70" : style.text}`}>{tag}</span>
           </span>
         );
       })}
@@ -78,10 +79,8 @@ export default function MappingDiagram({ source, reuse, links, spans = [] }) {
     return () => observer.disconnect();
   }, [source, reuse, links]);
 
-  const frame = new Set();
-  for (const span of spans) for (let r = span.start; r < span.end; r += 1) frame.add(r);
-  const reuseTags = reuse.map((_, r) => links.find((e) => e.r === r)?.op ?? (frame.has(r) ? "FRAME" : "INS"));
-  const sourceTags = source.map((_, s) => links.find((e) => e.s === s)?.op ?? "INS");
+  const reuseTags = tagReuse(reuse.length, links, spans);
+  const sourceTags = tagSource(source.length, links);
   const linkedSource = new Set(links.map((e) => e.s));
   const linkedReuse = new Set(links.map((e) => e.r));
 

@@ -1,8 +1,10 @@
 // The mapping diagram of the Gradio demo (notebooks/80_Edit_Script_Generation/demo/app.py, render_diagram):
 // source words right-aligned on the left, reuse words on the right, one cubic curve per link, thicker and more
-// opaque the more confident; each reuse word carries its operation and probability, unlinked source words DEL.
+// opaque the more confident; each reuse word carries its operation and probability, unlinked source words DEL or OUT.
 // The demo's geometry, scaled up for reading (an 860-wide viewBox, 36-unit rows, 18-unit words); lighter lines;
 // colours from this app's operation palette.
+
+import { reuseTags, sourceTags } from "../unlinked.js";
 
 const ROW = 36, TOP = 56, LEFT_X = 290, RIGHT_X = 520, WIDTH = 860, HEAD_LENGTH = 9, HEAD_WIDTH = 8;
 
@@ -12,9 +14,11 @@ const COLOUR = {
   SUBST: "var(--color-op-subst)",
   SPLIT: "var(--color-op-split)",
   MERGE: "var(--color-op-split)",
-  FRAME: "var(--color-muted)",
+  MARK: "var(--color-muted)",
   INS: "var(--color-muted)",
+  NEW: "var(--color-muted)",
   DEL: "var(--color-muted)",
+  OUT: "var(--color-muted)",
 };
 
 // The curve ends horizontally, so the head is a right-pointing triangle whose tip stops just short of the reuse
@@ -33,13 +37,13 @@ function Curve({ s, r, colour, weight, opacity, tooltip }) {
   );
 }
 
-// links: [{r, s, op, p?}]; spans: FRAME spans on the reuse side.
+// links: [{r, s, op, p?}]; spans: citing-formula (MARK) spans on the reuse side.
 export default function MappingVertical({ source, reuse, links, spans = [] }) {
   const height = Math.max(source.length, reuse.length, 1) * ROW + TOP + 24;
   const byR = new Map(links.map((e) => [e.r, e]));
   const claimed = new Set(links.map((e) => e.s));
-  const frame = new Set();
-  for (const span of spans) for (let r = span.start; r < span.end; r += 1) frame.add(r);
+  const rTags = reuseTags(reuse.length, links, spans);
+  const sTags = sourceTags(source.length, links);
 
   return (
     <div className="overflow-x-auto">
@@ -62,14 +66,14 @@ export default function MappingVertical({ source, reuse, links, spans = [] }) {
           return (
             <g key={`s${s}`}>
               <text x={LEFT_X} y={y} textAnchor="end" fill={kept ? "var(--color-ink)" : COLOUR.DEL} fontWeight={kept ? 600 : 400}>{token}</text>
-              {!kept && <text x={LEFT_X + 14} y={y} fill={COLOUR.DEL} fontSize={12} className="font-sans">DEL</text>}
+              {!kept && <text x={LEFT_X + 14} y={y} fill={COLOUR.DEL} fontSize={12} className="font-sans">{sTags[s]}</text>}
             </g>
           );
         })}
 
         {reuse.map((token, r) => {
           const y = TOP + r * ROW, e = byR.get(r);
-          const tag = e ? e.op : frame.has(r) ? "FRAME" : "INS";
+          const tag = rTags[r];
           return (
             <g key={`r${r}`}>
               <text x={RIGHT_X} y={y} fill={e ? "var(--color-ink)" : COLOUR.INS} fontWeight={e ? 600 : 400}>{token}</text>

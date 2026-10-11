@@ -7,8 +7,11 @@ export const OP_STYLE = {
   SUBST: { text: "text-op-subst", bg: "bg-op-subst-soft", border: "border-op-subst", outline: "outline-op-subst" },
   SPLIT: { text: "text-op-split", bg: "bg-op-split-soft", border: "border-op-split", outline: "outline-op-split" },
   MERGE: { text: "text-op-split", bg: "bg-op-split-soft", border: "border-op-split", outline: "outline-op-split" },
-  FRAME: { text: "text-muted", bg: "bg-line-soft", border: "border-muted", outline: "outline-muted" },
+  MARK: { text: "text-muted", bg: "bg-line-soft", border: "border-muted", outline: "outline-muted" },
   INS: { text: "text-ink", bg: "", border: "border-transparent", outline: "outline-muted" },
+  NEW: { text: "text-ink", bg: "", border: "border-transparent", outline: "outline-muted" },
+  DEL: { text: "text-ink", bg: "", border: "border-transparent", outline: "outline-muted" },
+  OUT: { text: "text-ink", bg: "", border: "border-transparent", outline: "outline-muted" },
 };
 
 export const LABEL_NAME = { cit: "cit.", cf: "cf.", no_match: "no match" };

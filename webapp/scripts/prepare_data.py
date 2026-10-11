@@ -5,7 +5,7 @@ Writes public/data/records.jsonl, one pair per line:
     {"id", "pair_label" ("cit" | "cf"), "fold",
      "source": {"author", "work", "citation", "tokens", "text", "text_original", "text_english"},
      "reuse":  {... the same ...},
-     "pred": {"links": [{"r", "s", "op", "p", "relation"}], "frame_spans": [{"start", "end", "label"}]}}
+     "pred": {"links": [{"r", "s", "op", "p", "relation"}], "frame_spans": [{"start", "end", "label": "MARK"}]}}
 
 The links, labels and citing formulas come from the edit_scripts dataset; the Latin texts and English translations
 from the labels dataset, joined on the reference's id.
@@ -51,7 +51,9 @@ def build_records(scripts: pd.DataFrame, labels: pd.DataFrame) -> list[dict]:
         links = [{"r": int(link["reuse"]), "s": int(link["source"]), "op": link["label"],
                   "p": None if _none(link["confidence"]) is None else float(link["confidence"]),
                   "relation": _none(link["relation"])} for link in row.links]
-        spans = [{"start": int(s["start"]), "end": int(s["end"]), "label": "FRAME"} for s in row.frame]
+        # citing formulas: the column mark since the dataset of 2026-10-12, frame before
+        marks = row.mark if hasattr(row, "mark") else row.frame
+        spans = [{"start": int(s["start"]), "end": int(s["end"]), "label": "MARK"} for s in marks]
         records.append({
             "id": row.id,
             "pair_label": str(row.reference_type).rstrip("."),

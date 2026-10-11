@@ -18,11 +18,15 @@ that reference's fold, so every record is a true held-out prediction.
   "source": {"author": "verg", "work": "verg. aen.", "citation": "<verg. aen. 6.847.1>", "tokens": ["Excudent", "alii", "..."]},
   "reuse":  {"author": "hier", "work": "hier. epist.", "citation": "<hier. epist. 117.7.1.1>", "tokens": ["Legimus", "in", "..."]},
   "links": [
-    {"reuse": 5, "source": 2, "label": "COPY", "relation": null, "confidence": 0.9994}
+    {"reuse": 5, "source": 2, "label": "COPY", "relation": null, "confidence": 0.9994},
+    {"reuse": 8, "source": 4, "label": "COPY", "relation": null, "confidence": 0.99685}
   ],
-  "frame": [],
-  "insertions": [0, 1, 2, 3, 4, 6],
-  "deletions": [0, 1, 3, 5, 6]
+  "mark": [],
+  "insertions": [6, 7],
+  "new_text": [0, 1, 2, 3, 4, 9, 10, "..."],
+  "deletions": [3],
+  "not_taken_up": [0, 1, 5, 6, 7, 8, "..."],
+  "patterns": {"quote": [], "reorder": [], "disperse": []}
 }
 ```
 
@@ -34,11 +38,15 @@ that reference's fold, so every record is a true held-out prediction.
 | `reference_type` | `cit.` (citation) or `cf.` (allusion), as in the benchmark |
 | `source`, `reuse` | the earlier and the later passage: author, work, citation, and the words |
 | `links` | one entry per linked reuse word |
-| `frame` | citing formulas such as *ut ait Maro*, as half-open ranges `[start, end)` of reuse words |
-| `insertions` | reuse words that are neither linked nor part of a citing formula |
-| `deletions` | source words that no link claims |
+| `mark` | citing formulas such as *ut ait Maro* (`MARK`), as half-open ranges `[start, end)` of reuse words |
+| `insertions` | reuse words without a link inside the reused stretch (`INS`) |
+| `new_text` | reuse words without a link outside the reused stretch (`NEW`) |
+| `deletions` | source words that no link claims, inside the reused stretch (`DEL`) |
+| `not_taken_up` | source words that no link claims, outside the reused stretch (`OUT`) |
+| `patterns` | `quote` runs (half-open ranges of reuse words), `reorder` and `disperse` reuse words, see [Labels](labels.md#patterns) |
 
-All indices are positions in the `tokens` of the passage they belong to, counted from 0.
+The reused stretch of a passage runs from its first to its last linked word. All indices are positions in the `tokens`
+of the passage they belong to, counted from 0.
 
 ### Links
 
@@ -47,7 +55,7 @@ All indices are positions in the `tokens` of the passage they belong to, counted
 | `reuse` | index of the reuse word |
 | `source` | index of the source word it takes up |
 | `label` | `COPY`, `INFLECT`, `SUBST`, `SPLIT` or `MERGE`, see [Labels](labels.md) |
-| `relation` | for a `SUBST`, the relation between the two words when the model names one (`SYN`, `POS`, `NE-SUB`, ...), else `null` |
+| `relation` | for a `SUBST`, the relation between the two words when the model names one (`SYN`, `DERIV`, `NE-SUB`, ...), else `null` |
 | `confidence` | the model's probability for this link |
 
 Two details of the encoding:
@@ -77,6 +85,11 @@ df = pd.read_parquet("hf://datasets/julian-schelb/latin-classical-intertextualit
 
 `retexo export` converts the raw `predictions.jsonl` that a run writes into this format, see the [CLI](cli.md). The
 format is versioned in `retexo.export.SCHEMA_VERSION`.
+
+The dataset changed on 2026-10-12: `frame` became `mark`, the relation `POS` became `DERIV`, the former `insertions` and
+`deletions` were split by the reused stretch into `insertions` and `new_text`, and `deletions` and `not_taken_up`, and
+`patterns` was added. The links and their confidences are unchanged. `retexo export` still writes the earlier version;
+until it is updated, the published dataset is converted from its output with the rule above.
 
 ## What these predictions are not
 
