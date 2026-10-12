@@ -86,10 +86,9 @@ df = pd.read_parquet("hf://datasets/julian-schelb/latin-classical-intertextualit
 `retexo export` converts the raw `predictions.jsonl` that a run writes into this format, see the [CLI](cli.md). The
 format is versioned in `retexo.export.SCHEMA_VERSION`.
 
-The dataset changed on 2026-10-12: `frame` became `mark`, the relation `POS` became `DERIV`, the former `insertions` and
-`deletions` were split by the reused stretch into `insertions` and `new_text`, and `deletions` and `not_taken_up`, and
-`patterns` was added. The links and their confidences are unchanged. `retexo export` still writes the earlier version;
-until it is updated, the published dataset is converted from its output with the rule above.
+The dataset changed on 2026-10-12 (`SCHEMA_VERSION` 2): `frame` became `mark`, the relation `POS` became `DERIV`,
+the former `insertions` and `deletions` were split by the reused stretch into `insertions` and `new_text`, and
+`deletions` and `not_taken_up`, and `patterns` was added. The links and their confidences are unchanged.
 
 ## What these predictions are not
 

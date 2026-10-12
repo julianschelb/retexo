@@ -5,22 +5,31 @@ against, and the code's internal tags (``NOP`` for a copy, ``MORPH`` for an infl
 one self-contained record per pair, with the labels of the paper and no gold, so the predictions can be shared and read
 without the code that produced them.
 
-One record, in ``SCHEMA_VERSION`` 1::
+One record, in ``SCHEMA_VERSION`` 2 (the paper's operations of 2026-10-09)::
 
     {
       "id": "p0001", "benchmark_id": 1, "fold": 4, "reference_type": "cf.",
       "source": {"author": "verg", "work": "verg. aen.", "citation": "<verg. aen. 6.847.1>", "tokens": [...]},
       "reuse":  {"author": "hier", "work": "hier. epist.", "citation": "<hier. epist. 117.7.1.1>", "tokens": [...]},
       "links": [{"reuse": 5, "source": 2, "label": "COPY", "relation": null, "confidence": 0.9994}, ...],
-      "frame": [{"start": 0, "end": 6}],
-      "insertions": [0, 1, 2, ...],
-      "deletions": [0, 1, 3, ...]
+      "mark": [{"start": 0, "end": 6}],
+      "insertions": [6, 7],
+      "new_text": [0, 1, 2, ...],
+      "deletions": [3],
+      "not_taken_up": [0, 1, 5, ...],
+      "patterns": {"quote": [{"start": 9, "end": 14}], "reorder": [], "disperse": []}
     }
 
 Indices are word positions in ``tokens``. ``links`` has one entry per linked reuse word; ``label`` is one of ``COPY``,
-``INFLECT``, ``SUBST``, ``SPLIT`` and ``MERGE``, and a ``SUBST`` link may name its ``relation`` (``SYN``, ``POS``, ...).
-``frame`` lists the citing formulas as half-open ranges of reuse words, ``insertions`` the unlinked reuse words that are
-not part of one, and ``deletions`` the source words no link claims.
+``INFLECT``, ``SUBST``, ``SPLIT`` and ``MERGE``, and a ``SUBST`` link may name its ``relation`` (``SYN``, ``DERIV``,
+...). ``mark`` lists the citing formulas as half-open ranges of reuse words. The words without a link are split by the
+reused stretch, which runs from the first to the last linked word of a passage: ``insertions`` and ``new_text`` are the
+unlinked reuse words inside and outside it (``INS``, ``NEW``), ``deletions`` and ``not_taken_up`` the source words no
+link claims inside and outside it (``DEL``, ``OUT``). ``patterns`` holds the QUOTE runs and the REORDER and DISPERSE
+reuse words. All of these follow ``retexo.operations.unlinked``.
+
+``SCHEMA_VERSION`` 1 (until 2026-10-12) named the citing formulas ``frame``, the derivational relative ``POS``, and
+listed every unlinked word under ``insertions`` or ``deletions``.
 """
 
 from __future__ import annotations
@@ -29,7 +38,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 
-SCHEMA_VERSION = 1
+from retexo.baselines.labels import PAPER_RELATION
+from retexo.operations.unlinked import patterns, unlinked
+
+SCHEMA_VERSION = 2
 
 #: The code's tag for a link, and the label of the paper it stands for.
 LABEL_OF_TAG = {
@@ -63,11 +75,12 @@ LABELS = ("COPY", "INFLECT", "SUBST", "SPLIT", "MERGE")
 
 
 def label_of(tag: str) -> tuple[str, Optional[str]]:
-    """The label and the relation a code tag stands for; ``("SUBST", "SYN")`` for ``SYN``."""
+    """The label and the relation a code tag stands for; ``("SUBST", "SYN")`` for ``SYN``, ``("SUBST", "DERIV")``
+    for the code's ``POS``."""
     if tag in LABEL_OF_TAG:
         return LABEL_OF_TAG[tag], None
     if tag in RELATION_TAGS:
-        return "SUBST", tag
+        return "SUBST", PAPER_RELATION.get(tag, tag)
     raise ValueError(f"unknown link tag {tag!r}")
 
 
@@ -135,6 +148,10 @@ def convert_record(raw: Dict[str, Any], *, fold: Optional[int] = None) -> Dict[s
         raise ValueError(f"{raw['id']}: the deletions disagree with the links")
 
     frame_words = [1 if (frames[r] and links[r] < 0) else 0 for r in range(len(reuse))]
+    mark = _runs(frame_words)
+    script = [{"r": x["reuse"], "s": x["source"], "op": x["label"]} for x in out_links]
+    words = unlinked(len(reuse), len(source), script, mark)
+    found = patterns(reuse, script)
     meta = raw.get("record") or {}
     return {
         "id": raw["id"],
@@ -144,9 +161,16 @@ def convert_record(raw: Dict[str, Any], *, fold: Optional[int] = None) -> Dict[s
         "source": _side(raw, "source", source),
         "reuse": _side(raw, "reuse", reuse),
         "links": out_links,
-        "frame": _runs(frame_words),
-        "insertions": [r for r in range(len(reuse)) if links[r] < 0 and not frame_words[r]],
-        "deletions": deletions,
+        "mark": mark,
+        "insertions": [w["i"] for w in words["reuse"] if w["op"] == "INS"],
+        "new_text": [w["i"] for w in words["reuse"] if w["op"] == "NEW"],
+        "deletions": [w["i"] for w in words["source"] if w["op"] == "DEL"],
+        "not_taken_up": [w["i"] for w in words["source"] if w["op"] == "OUT"],
+        "patterns": {
+            "quote": found["QUOTE"],
+            "reorder": found["REORDER"],
+            "disperse": found["DISPERSE"],
+        },
     }
 
 

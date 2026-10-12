@@ -52,6 +52,12 @@ OPERATIONS = (
     "FRAME",
 )
 
+#: The paper's names of 2026-10-09 that the app shows for the code's spellings; corrections are saved in the code's
+#: spelling (``CODE_NAME``), so the correction files and their reader do not change.
+SHOWN_NAME = {"MORPH": "INFLECT", "POS": "DERIV", "FRAME": "MARK"}
+CODE_NAME = {shown: code for code, shown in SHOWN_NAME.items()}
+OPERATIONS_SHOWN = tuple(SHOWN_NAME.get(op, op) for op in OPERATIONS)
+
 #: What each operation means, shown in the app.
 GLOSSES = {
     "COPY": "the same word, unchanged (spelling variants count as unchanged)",
@@ -66,7 +72,7 @@ GLOSSES = {
     "SPLIT": "this word and its neighbour together render one source word",
     "MERGE": "this word alone renders two source words (name the first; note the second)",
     "SUBST": "a different word with no relation to the source word it replaces",
-    "INS": "the later author's own word, from nowhere in the source",
+    "INS": "the later author's own word, from nowhere in the source (the data call it INS inside the reused stretch and NEW outside it; the split follows from the links)",
     "FRAME": 'a word of the citing formula ("as Virgil says")',
 }
 
@@ -288,13 +294,17 @@ def silver_rows(
             src = links[t]
             op = (detail.get(t) or tags[t]) if src >= 0 else ("FRAME" if frame[t] else "INS")
             is_sure, comment = bool(sure[t]) if src >= 0 else True, ""
+        op = SHOWN_NAME.get(op, op)
         m_src, m_op, m_p, flag = "", "", "", ""
         if proposal is not None and not blind and t < len(proposal.links):
             m_src = proposal.links[t] if proposal.links[t] >= 0 else -1
-            m_op = proposal.op_at(t)
+            m_op = SHOWN_NAME.get(proposal.op_at(t), proposal.op_at(t))
             prob = proposal.p[t] if t < len(proposal.p) else None
             m_p = f"{prob:.2f}" if prob is not None else ""
-            disagree = (m_src != src) or (labels.canonical(m_op)[0] != labels.canonical(op)[0])
+            disagree = (m_src != src) or (
+                labels.canonical(CODE_NAME.get(m_op, m_op))[0]
+                != labels.canonical(CODE_NAME.get(op, op))[0]
+            )
             flag = ("disagrees " if disagree else "") + (
                 "unsure" if prob is not None and prob < UNSURE else ""
             )
@@ -320,8 +330,10 @@ def render_pair(record: Record, rows: List[List[Any]]) -> str:
     colours = {
         "COPY": "#2a7",
         "MORPH": "#27a",
+        "INFLECT": "#27a",
         "INS": "#999",
         "FRAME": "#a63",
+        "MARK": "#a63",
         "SPLIT": "#a2a",
         "MERGE": "#a2a",
     }
@@ -356,21 +368,24 @@ def validate(rows: List[List[Any]], record: Record) -> List[str]:
     used: Dict[int, int] = {}
     for row in rows:
         t, s, op = int(row[0]), row[2], str(row[3]).strip().upper()
+        op = CODE_NAME.get(op, op)
         try:
             s = int(s)
         except (TypeError, ValueError):
             problems.append(f"word {t}: source # must be an integer or -1")
             continue
         if op not in OPERATIONS:
-            problems.append(f"word {t}: operation {op!r} is not one of {', '.join(OPERATIONS)}")
+            problems.append(
+                f"word {t}: operation {op!r} is not one of {', '.join(OPERATIONS_SHOWN)}"
+            )
         if s >= record.n_source:
             problems.append(
                 f"word {t}: source # {s} is beyond the source ({record.n_source} words)"
             )
         if s >= 0 and op in ("INS", "FRAME"):
-            problems.append(f"word {t}: {op} cannot point at a source word")
+            problems.append(f"word {t}: {SHOWN_NAME.get(op, op)} cannot point at a source word")
         if s < 0 and op not in ("INS", "FRAME"):
-            problems.append(f"word {t}: {op} needs a source #")
+            problems.append(f"word {t}: {SHOWN_NAME.get(op, op)} needs a source #")
         if s >= 0 and op != "SPLIT":
             if s in used:
                 problems.append(
@@ -413,7 +428,7 @@ def build(session: Session):
                 "t": int(r[0]),
                 "word": str(r[1]),
                 "source": int(r[2]),
-                "op": str(r[3]).strip().upper(),
+                "op": CODE_NAME.get(str(r[3]).strip().upper(), str(r[3]).strip().upper()),
                 "sure": str(r[4]).strip().lower() != "possible",
                 "comment": str(r[5] or ""),
             }
@@ -465,7 +480,9 @@ def build(session: Session):
             save_btn = gr.Button("save pair", variant="primary", scale=1)
         message = gr.Markdown()
         with gr.Accordion("operations", open=False):
-            gr.Markdown("\n".join(f"- **{op}**: {GLOSSES[op]}" for op in OPERATIONS))
+            gr.Markdown(
+                "\n".join(f"- **{SHOWN_NAME.get(op, op)}**: {GLOSSES[op]}" for op in OPERATIONS)
+            )
         outputs = [pair_box, status, view, table, note, message]
         app.load(lambda: show(session.index), None, outputs)
         go.click(goto, [pair_box], outputs)

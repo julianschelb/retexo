@@ -36,28 +36,40 @@ def test_code_tags_become_the_papers_labels():
     assert label_of("NOP") == ("COPY", None)
     assert label_of("MORPH") == ("INFLECT", None)
     assert label_of("SYN") == ("SUBST", "SYN")
+    assert label_of("POS") == ("SUBST", "DERIV")
     assert label_of("SUBST") == ("SUBST", None)
     assert label_of("SPLIT") == ("SPLIT", None)
     with pytest.raises(ValueError):
         label_of("???")
 
 
-def test_every_reuse_word_is_linked_inserted_or_in_a_citing_formula(records):
+def test_every_reuse_word_is_linked_marked_inserted_or_new_text(records):
     for record in records:
         n = len(record["reuse"]["tokens"])
         linked = {link["reuse"] for link in record["links"]}
-        framed = {r for span in record["frame"] for r in range(span["start"], span["end"])}
-        inserted = set(record["insertions"])
-        assert linked | framed | inserted == set(range(n))
-        assert not (linked & framed) and not (linked & inserted) and not (framed & inserted)
+        marked = {r for span in record["mark"] for r in range(span["start"], span["end"])}
+        inserted, new = set(record["insertions"]), set(record["new_text"])
+        groups = [linked, marked, inserted, new]
+        assert set().union(*groups) == set(range(n))
+        assert sum(len(g) for g in groups) == n  # no word in two groups
 
 
-def test_deletions_are_the_source_words_no_link_claims(records):
+def test_insertions_lie_inside_the_reused_stretch_and_new_text_outside(records):
+    for record in records:
+        linked = sorted(link["reuse"] for link in record["links"])
+        for r in record["insertions"]:
+            assert linked[0] < r < linked[-1]
+        for r in record["new_text"]:
+            assert not linked or r < linked[0] or r > linked[-1]
+
+
+def test_deletions_and_text_not_taken_up_are_the_source_words_no_link_claims(records):
     for record in records:
         claimed = {link["source"] for link in record["links"]}
-        assert record["deletions"] == [
-            s for s in range(len(record["source"]["tokens"])) if s not in claimed
-        ]
+        unclaimed = [s for s in range(len(record["source"]["tokens"])) if s not in claimed]
+        assert sorted(record["deletions"] + record["not_taken_up"]) == unclaimed
+        for s in record["deletions"]:
+            assert min(claimed) < s < max(claimed)
 
 
 def test_labels_are_the_five_link_labels_and_a_relation_only_on_substitutions(records):
@@ -71,7 +83,7 @@ def test_labels_are_the_five_link_labels_and_a_relation_only_on_substitutions(re
 def test_fixture_covers_split_merge_frame_and_a_named_relation(records):
     labels = {link["label"] for r in records for link in r["links"]}
     assert {"COPY", "SPLIT", "MERGE"} <= labels
-    assert any(r["frame"] for r in records)
+    assert any(r["mark"] for r in records)
     assert any(link["relation"] == "SYN" for r in records for link in r["links"])
 
 
@@ -85,16 +97,20 @@ def test_no_gold_leaks_into_a_record(records):
             "source",
             "reuse",
             "links",
-            "frame",
+            "mark",
             "insertions",
+            "new_text",
             "deletions",
+            "not_taken_up",
+            "patterns",
         }
+        assert set(record["patterns"]) == {"quote", "reorder", "disperse"}
         assert set(record["source"]) == {"author", "work", "citation", "tokens"}
 
 
-def test_frame_ranges_are_half_open_like_the_raw_spans(raw):
+def test_mark_ranges_are_half_open_like_the_raw_spans(raw):
     for r in raw:
-        mine = [(s["start"], s["end"]) for s in convert_record(r)["frame"]]
+        mine = [(s["start"], s["end"]) for s in convert_record(r)["mark"]]
         assert mine == [(s["start"], s["end"]) for s in r["pred"]["frame_spans"]]
 
 

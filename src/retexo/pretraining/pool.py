@@ -35,7 +35,7 @@ from typing import Dict, Iterator, List, Optional, Sequence, Set, Tuple
 
 DEFAULT_ALLUSION = Path("runs/e32_allusion/selected.jsonl")
 DEFAULT_RANKED = Path("runs/e32_mine/ranked.jsonl")
-DEFAULT_GOLD = Path("data/gold_full/gold_2026-09-24.records.jsonl")
+DEFAULT_GOLD = Path("data/gold_full/gold_2026-10-12.records.jsonl")
 
 
 def _norm(text: str) -> str:

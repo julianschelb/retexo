@@ -37,6 +37,7 @@ from pathlib import Path
 from retexo.core.oracle import EditPlanOracle  # noqa: E402
 from retexo.core.scriba import Scriba  # noqa: E402
 from retexo.datasets.teacher import RelabellingTeacher  # noqa: E402
+from retexo.operations.unlinked import unlinked  # noqa: E402
 from retexo.resources import Resources  # noqa: E402
 
 
@@ -87,7 +88,10 @@ COLOR = {
     "ANT": "#cc3333",
     "REORDER": "#9966cc",
     "INS": "#cc7733",
+    "NEW": "#bbbbbb",
     "DEL": "#cc7733",
+    "OUT": "#bbbbbb",
+    "MARK": "#aaaaaa",
     "FRAME": "#aaaaaa",
     "QUOTE": "#22aa77",
     "COPY": "#8a8a8a",
@@ -217,10 +221,23 @@ class TypedPointerBackend:
         tags = []
         for t, s in enumerate(links):
             if s < 0:
-                tags.append("FRAME" if pred.frame and pred.frame[t] else "INS")
+                tags.append("")  # an unlinked word: MARK, INS or NEW, filled in below
             else:
                 canon, detail = self.labels.canonical(pred.tags[t] or "SUBST")
                 tags.append(detail if detail else self.labels.TO_LINK_TAG.get(canon, canon))
+        # the paper's operations of 2026-10-09 for the words without a link (retexo.operations.unlinked)
+        script = [{"r": t, "s": s, "op": tags[t]} for t, s in enumerate(links) if s >= 0]
+        marks = [
+            {"start": t, "end": t + 1}
+            for t, s in enumerate(links)
+            if s < 0 and pred.frame and pred.frame[t]
+        ]
+        words = unlinked(len(target), len(source), script, marks)
+        for w in words["reuse"]:
+            tags[w["i"]] = w["op"]
+        source_tags = [""] * len(source)
+        for w in words["source"]:
+            source_tags[w["i"]] = w["op"]
         argmax = [(row[0][0] if row else -1) for row in rows]
         return {
             "links": links,
@@ -230,6 +247,7 @@ class TypedPointerBackend:
             "head": tags,
             "scores": rows,
             "deleted": pred.dels or [0] * len(source),
+            "source_tags": source_tags,
         }
 
 
@@ -367,8 +385,10 @@ def render_diagram(resources, source, target, out):
             f"font-weight='{600 if kept else 400}'>{html.escape(token)}</text>"
         )
         if not kept:
+            unlinked_tag = (out.get("source_tags") or [""] * len(source))[j] or "DEL"
             parts.append(
-                f"<text x='{LEFT_X + 14}' y='{y}' fill='{COLOR['DEL']}' font-size='10'>DEL</text>"
+                f"<text x='{LEFT_X + 14}' y='{y}' fill='{COLOR.get(unlinked_tag, COLOR['DEL'])}' "
+                f"font-size='10'>{unlinked_tag}</text>"
             )
 
     for i, token in enumerate(target):
@@ -401,9 +421,11 @@ def _legend():
         f"<b style='color:{COLOR['COPY']}'>━ COPY</b> the same word &nbsp; "
         f"<b style='color:{COLOR['SUBST']}'>━ SUBST</b> a different word in "
         f"the same slot &nbsp; "
-        f"<b style='color:{COLOR['INS']}'>INS</b> no line — the citing "
-        f"author's own &nbsp; "
-        f"<b style='color:{COLOR['DEL']}'>DEL</b> nothing points at it"
+        f"<b style='color:{COLOR['MARK']}'>MARK</b> the citing formula &nbsp; "
+        f"<b style='color:{COLOR['INS']}'>INS</b> / <b style='color:{COLOR['NEW']}'>NEW</b> "
+        f"no line, inside / outside the reused stretch &nbsp; "
+        f"<b style='color:{COLOR['DEL']}'>DEL</b> / <b style='color:{COLOR['OUT']}'>OUT</b> "
+        f"nothing points at it, inside / outside the stretch"
         "&nbsp;·&nbsp; thicker line = more confident &nbsp;·&nbsp; "
         "hover a line for the morphology</div>"
     )
@@ -558,7 +580,9 @@ def render_summary(source, target, out):
         + card("COPY", counts.get("COPY", 0), COLOR["COPY"])
         + card("SUBST", counts.get("SUBST", 0), COLOR["SUBST"])
         + card("INS", counts.get("INS", 0), COLOR["INS"])
-        + card("DEL", len(source) - len(set(j for j in links if j >= 0)), COLOR["DEL"])
+        + card("NEW", counts.get("NEW", 0), COLOR["NEW"])
+        + card("DEL", (out.get("source_tags") or []).count("DEL"), COLOR["DEL"])
+        + card("OUT", (out.get("source_tags") or []).count("OUT"), COLOR["OUT"])
         + card("mean confidence", f"{mean_c:.2f}")
     )
 

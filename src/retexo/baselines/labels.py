@@ -81,9 +81,20 @@ INFLECTABLE = ("MORPH",) + LEXICAL
 PAPER_OPS = ("INS", "DEL", "COPY", "INFLECT", "SUBST", "SPLIT", "MERGE", "FRAME")
 PAPER_EDGE_OPS = ("COPY", "INFLECT", "SUBST", "SPLIT", "MERGE")
 #: SUBST details in the paper's closed list; the first three are code labels of their own.
-PAPER_SUBST_DETAILS = ("SYN", "POS", "NE-SUB", "SYN-DIST") + LEXICAL_DETAILS["SUBST"]
+PAPER_SUBST_DETAILS = ("SYN", "POS", "DERIV", "NE-SUB", "SYN-DIST") + LEXICAL_DETAILS["SUBST"]
 #: The paper format's version, written into ``provenance.format`` by the gold freeze.
 PAPER_FORMAT = "2026-09-24"
+
+#: The paper's operations of 2026-10-09 rename two of the code's spellings on disk: a citing formula is MARK
+#: (code: FRAME) and the derivational relative DERIV (code: POS). A record whose provenance carries
+#: ``operations`` is written in these names, together with its derived ``unlinked`` words and ``patterns``
+#: (``retexo.operations.unlinked``); the reader maps them back, so files of either revision load alike and
+#: the code keeps its own spelling.
+OPERATIONS_REVISION = "paper 2026-10-09"
+PAPER_SPAN_LABEL = {"FRAME": "MARK"}
+CODE_SPAN_LABEL = {"MARK": "FRAME"}
+PAPER_RELATION = {"POS": "DERIV"}
+CODE_RELATION = {"DERIV": "POS"}
 
 _GROUP = {
     "COPY": "form",
@@ -230,10 +241,11 @@ class Labels:
         return lexical if op == "MERGE" else Labels.join_detail(lexical, morph)
 
     @staticmethod
-    def to_paper(op: str, detail: Optional[str] = "") -> Tuple[str, str]:
+    def to_paper(op: str, detail: Optional[str] = "", *, revised: bool = False) -> Tuple[str, str]:
         """A code edge to the paper's spelling: MORPH becomes INFLECT; SYN, POS and NE-SUB
         become SUBST with the relation first in ``detail`` (``("SYN", "CASE")`` to
-        ``("SUBST", "SYN+CASE")``); SYN's own SYN-DIST detail replaces the SYN relation."""
+        ``("SUBST", "SYN+CASE")``); SYN's own SYN-DIST detail replaces the SYN relation.
+        With ``revised`` the relation takes its name of 2026-10-09 (POS is DERIV)."""
         detail = Labels.normalise_detail(op, detail)
         if op == "MORPH":
             return "INFLECT", detail
@@ -241,7 +253,8 @@ class Labels:
             parts = [p for p in detail.split("+") if p]
             if op == "SYN" and parts and parts[0] == "SYN-DIST":
                 return "SUBST", "+".join(parts)
-            return "SUBST", "+".join([op] + parts)
+            relation = PAPER_RELATION.get(op, op) if revised else op
+            return "SUBST", "+".join([relation] + parts)
         return op, detail
 
     @staticmethod
@@ -254,8 +267,8 @@ class Labels:
         if op == "SUBST" and detail:
             parts = [p.strip().upper() for p in detail.split("+") if p.strip()]
             head = parts[0]
-            if head in ("SYN", "POS", "NE-SUB"):
-                code = head
+            if head in ("SYN", "POS", "NE-SUB", "DERIV"):
+                code = CODE_RELATION.get(head, head)
                 rest = parts[1:]
                 return code, Labels.normalise_detail(code, "+".join(rest))
             if head == "SYN-DIST":

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from retexo.baselines import labels
+from retexo.operations.unlinked import patterns, unlinked
 
 # =============================================================================
 # Dataclasses
@@ -193,7 +194,13 @@ class RecordCodec:
                 )
             )
         spans = [
-            Span(int(sp["start"]), int(sp["end"]), str(sp.get("label", "FRAME")))
+            Span(
+                int(sp["start"]),
+                int(sp["end"]),
+                labels.CODE_SPAN_LABEL.get(
+                    str(sp.get("label", "FRAME")), str(sp.get("label", "FRAME"))
+                ),
+            )
             for sp in obj.get("spans", [])
         ]
         annotation = dict(obj.get("annotation", {}))
@@ -236,6 +243,8 @@ class RecordCodec:
         ``annotation``; every other record in the code spelling, as before.
         """
         paper = cls.paper_format(record)
+        # the paper's operations of 2026-10-09 (MARK, DERIV, the derived unlinked words and patterns)
+        revised = paper and bool(record.provenance.get("operations"))
         head: Dict[str, Any] = {"id": record.id, "level": record.level, "fold": record.fold}
         if record.benchmark_id is not None:
             head["benchmark_id"] = record.benchmark_id
@@ -244,8 +253,17 @@ class RecordCodec:
             "source": cls._side_json(record.source_meta, record.source_work, record.source_tokens),
             "reuse": cls._side_json(record.reuse_meta, record.reuse_work, record.reuse_tokens),
             "pair_label": record.pair_label,
-            "links": [cls._edge_json(e, paper=paper) for e in record.links],
-            "spans": [{"start": sp.start, "end": sp.end, "label": sp.label} for sp in record.spans],
+            "links": [cls._edge_json(e, paper=paper, revised=revised) for e in record.links],
+            "spans": [
+                {
+                    "start": sp.start,
+                    "end": sp.end,
+                    "label": labels.PAPER_SPAN_LABEL.get(sp.label, sp.label)
+                    if revised
+                    else sp.label,
+                }
+                for sp in record.spans
+            ],
             "provenance": dict(record.provenance),
         }
         if paper:
@@ -258,6 +276,11 @@ class RecordCodec:
             out["split"] = record.split
         if record.pred is not None:
             out["pred"] = record.pred
+        if revised:
+            out["unlinked"] = unlinked(
+                len(record.reuse_tokens), len(record.source_tokens), out["links"], out["spans"]
+            )
+            out["patterns"] = patterns(record.reuse_tokens, out["links"])
         return out
 
     @staticmethod
@@ -271,9 +294,11 @@ class RecordCodec:
         return side
 
     @staticmethod
-    def _edge_json(edge: Edge, *, paper: bool = False) -> Dict[str, Any]:
+    def _edge_json(edge: Edge, *, paper: bool = False, revised: bool = False) -> Dict[str, Any]:
         op, detail = (
-            labels.Labels.to_paper(edge.op, edge.detail) if paper else (edge.op, edge.detail)
+            labels.Labels.to_paper(edge.op, edge.detail, revised=revised)
+            if paper
+            else (edge.op, edge.detail)
         )
         out: Dict[str, Any] = {"r": edge.r, "s": edge.s, "op": op, "sure": bool(edge.sure)}
         if edge.sure_by:

@@ -51,7 +51,7 @@ _REQUIREMENTS = {
         "needs a spaCy English model: python -m spacy download en_core_web_sm",
     ),
     "annotation": (
-        (home() / "data" / "gold_full" / "gold_2026-09-24.records.jsonl").exists(),
+        (home() / "data" / "gold_full" / "gold_2026-10-12.records.jsonl").exists(),
         "needs the word-level annotation under $RETEXO_HOME/data/gold_full (not part of the repository)",
     ),
 }

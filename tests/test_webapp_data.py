@@ -81,8 +81,9 @@ def test_links_and_spans_follow_the_released_record(prepare, scripts, labels):
             (link["reuse"], link["source"], link["label"]) for link in released.links
         ]
         assert [(s["start"], s["end"]) for s in pred["frame_spans"]] == [
-            (s["start"], s["end"]) for s in released.frame
+            (s["start"], s["end"]) for s in released.mark
         ]
+        assert {s["label"] for s in pred["frame_spans"]} <= {"MARK"}
 
 
 def test_texts_come_from_the_labels_and_missing_ones_are_null(prepare, scripts, labels):
